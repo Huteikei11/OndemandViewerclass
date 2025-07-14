@@ -78,7 +78,7 @@
             
             <div class="question-form">
               <h4>新しい問題を追加</h4>
-              <%= form_with(model: [@video, Question.new], local: true, id: "new-question-form") do |form| %>
+              <%= form_with(model: [@video, Question.new], local: true, id: "new-question-form", onsubmit: "prepareFormSubmission()") do |form| %>
                 <div class="form-group">
                   <%= form.label :content, "問題文" %>
                   <%= form.text_area :content, rows: 3, class: "form-control" %>
@@ -113,7 +113,8 @@
                       <div class="option-item">
                         <input type="text" name="options[][content]" class="form-control option-content" placeholder="選択肢1">
                         <div class="option-correct">
-                          <input type="radio" name="options[][is_correct]" value="true"> 正解
+                          <input type="radio" name="option_correct" value="0" checked> 正解
+                          <input type="hidden" name="options[][is_correct]" value="true" class="is-correct-field">
                         </div>
                       </div>
                     </div>
@@ -141,8 +142,8 @@
             </div>
             
             <div class="questions-list mt-4">
-              <h4>設定済みの問題 (<%= @questions.count %>)</h4>
-              <% if @questions.any? %>
+              <h4>設定済みの問題 (<%= @questions&.count || 0 %>)</h4>
+              <% if @questions&.any? %>
                 <ul class="list-group">
                   <% @questions.each do |question| %>
                     <li class="list-group-item">
@@ -529,6 +530,12 @@ document.addEventListener('DOMContentLoaded', function() {
     currentTimeBtn.addEventListener('click', function() {
       timePositionInput.value = Math.floor(videoPlayer.currentTime);
     });
+    
+    // Make sure the video is loaded before we try to play it
+    videoPlayer.addEventListener('error', function(e) {
+      console.error('Video error:', e);
+      alert('動画の読み込み中にエラーが発生しました。ページをリロードしてください。');
+    });
   }
   
   // Question type selection
@@ -537,23 +544,30 @@ document.addEventListener('DOMContentLoaded', function() {
   const multipleChoiceOptions = document.getElementById('multiple-choice-options');
   const freeResponseOptions = document.getElementById('free-response-options');
   
+  // Function to set default answer based on question type
+  function handleQuestionTypeChange(selectedType) {
+    // Hide all option containers
+    trueFalseOptions.style.display = 'none';
+    multipleChoiceOptions.style.display = 'none';
+    freeResponseOptions.style.display = 'none';
+    
+    // Show the selected one
+    if (selectedType === 'true_false') {
+      trueFalseOptions.style.display = 'block';
+    } else if (selectedType === 'multiple_choice') {
+      multipleChoiceOptions.style.display = 'block';
+    } else if (selectedType === 'free_response') {
+      freeResponseOptions.style.display = 'block';
+    }
+  }
+  
   if (questionTypeSelect) {
+    // Set initial state
+    handleQuestionTypeChange(questionTypeSelect.value);
+    
+    // Add change event listener
     questionTypeSelect.addEventListener('change', function() {
-      const selectedType = this.value;
-      
-      // Hide all option containers
-      trueFalseOptions.style.display = 'none';
-      multipleChoiceOptions.style.display = 'none';
-      freeResponseOptions.style.display = 'none';
-      
-      // Show the selected one
-      if (selectedType === 'true_false') {
-        trueFalseOptions.style.display = 'block';
-      } else if (selectedType === 'multiple_choice') {
-        multipleChoiceOptions.style.display = 'block';
-      } else if (selectedType === 'free_response') {
-        freeResponseOptions.style.display = 'block';
-      }
+      handleQuestionTypeChange(this.value);
     });
   }
   
@@ -575,12 +589,62 @@ document.addEventListener('DOMContentLoaded', function() {
       optionItem.innerHTML = `
         <input type="text" name="options[][content]" class="form-control option-content" placeholder="選択肢${optionCount}">
         <div class="option-correct">
-          <input type="radio" name="options[][is_correct]" value="true"> 正解
+          <input type="radio" name="option_correct" value="${optionCount-1}"> 正解
+          <input type="hidden" name="options[][is_correct]" value="false" class="is-correct-field">
         </div>
       `;
       
       optionsContainer.appendChild(optionItem);
+      
+      // Add event listener to the new radio button
+      const newRadio = optionItem.querySelector('input[type="radio"]');
+      newRadio.addEventListener('change', updateCorrectAnswers);
     });
+    
+    // Update hidden is_correct fields based on selected radio button
+    function updateCorrectAnswers() {
+      const radioButtons = document.querySelectorAll('input[name="option_correct"]');
+      const isCorrectFields = document.querySelectorAll('.is-correct-field');
+      
+      for (let i = 0; i < isCorrectFields.length; i++) {
+        isCorrectFields[i].value = (radioButtons[i].checked) ? "true" : "false";
+      }
+    }
+    
+    // Add event listeners to existing radio buttons
+    const existingRadios = document.querySelectorAll('input[name="option_correct"]');
+    existingRadios.forEach(radio => {
+      radio.addEventListener('change', updateCorrectAnswers);
+    });
+  }
+  
+  // Prepare form before submission
+  function prepareFormSubmission() {
+    const selectedType = document.getElementById('question-type-select').value;
+    const answerField = document.querySelector('input[name="question[answer]"]') || 
+                        document.querySelector('select[name="question[answer]"]');
+    
+    if (selectedType === 'multiple_choice') {
+      // For multiple choice questions, get the selected option's content
+      const selectedRadio = document.querySelector('input[name="option_correct"]:checked');
+      if (selectedRadio) {
+        const optionIndex = parseInt(selectedRadio.value);
+        const optionContents = document.querySelectorAll('.option-content');
+        if (optionContents[optionIndex]) {
+          // Create a hidden field for answer if it doesn't exist
+          if (!answerField) {
+            const hiddenAnswer = document.createElement('input');
+            hiddenAnswer.type = 'hidden';
+            hiddenAnswer.name = 'question[answer]';
+            hiddenAnswer.value = 'multiple_choice';
+            document.getElementById('new-question-form').appendChild(hiddenAnswer);
+          }
+        }
+      }
+    }
+    
+    // Always return true to submit the form
+    return true;
   }
 });
 </script>

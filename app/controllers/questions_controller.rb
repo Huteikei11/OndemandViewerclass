@@ -5,24 +5,38 @@ class QuestionsController < ApplicationController
   def create
     @question = @video.questions.new(question_params)
     
+    # For multiple choice questions, set a placeholder answer
+    if @question.question_type == 'multiple_choice'
+      @question.answer = 'multiple_choice'
+    end
+    
     if @question.save
       if @question.question_type == 'multiple_choice' && params[:options].present?
         params[:options].each do |option|
+          is_correct = option[:is_correct] == "true"
           @question.options.create(
             content: option[:content],
-            is_correct: option[:is_correct]
+            is_correct: is_correct
           )
         end
       end
       
       redirect_to edit_video_path(@video), notice: 'Question was successfully added.'
     else
-      redirect_to edit_video_path(@video), alert: 'Failed to add question.'
+      error_messages = @question.errors.full_messages.join(', ')
+      redirect_to edit_video_path(@video), alert: "Failed to add question: #{error_messages}"
     end
   end
 
   def update
-    if @question.update(question_params)
+    question_attributes = question_params.dup
+    
+    # For multiple choice questions, set a placeholder answer
+    if question_attributes[:question_type] == 'multiple_choice'
+      question_attributes[:answer] = 'multiple_choice'
+    end
+    
+    if @question.update(question_attributes)
       # Update options if this is a multiple-choice question
       if @question.question_type == 'multiple_choice' && params[:options].present?
         # Delete existing options first
@@ -30,16 +44,18 @@ class QuestionsController < ApplicationController
         
         # Create new options
         params[:options].each do |option|
+          is_correct = option[:is_correct] == "true"
           @question.options.create(
             content: option[:content],
-            is_correct: option[:is_correct]
+            is_correct: is_correct
           )
         end
       end
       
       redirect_to edit_video_path(@video), notice: 'Question was successfully updated.'
     else
-      redirect_to edit_video_path(@video), alert: 'Failed to update question.'
+      error_messages = @question.errors.full_messages.join(', ')
+      redirect_to edit_video_path(@video), alert: "Failed to update question: #{error_messages}"
     end
   end
 

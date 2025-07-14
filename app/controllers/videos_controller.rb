@@ -30,12 +30,14 @@ class VideosController < ApplicationController
   end
 
   def edit
+    @questions = @video.questions.order(:time_position)
   end
 
   def update
     if @video.update(video_params)
       redirect_to @video, notice: 'Video was successfully updated.'
     else
+      @questions = @video.questions.order(:time_position)
       render :edit, status: :unprocessable_entity
     end
   end

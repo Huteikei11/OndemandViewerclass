@@ -7,6 +7,6 @@ class Question < ApplicationRecord
   validates :time_position, presence: true
   validates :question_type, presence: true, inclusion: { in: %w[true_false multiple_choice free_response] }
   
-  # Only validate answer for true_false and free_response questions
-  validates :answer, presence: true, if: -> { %w[true_false free_response].include?(question_type) }
+  # Validate answer presence for all question types
+  validates :answer, presence: true
 end
