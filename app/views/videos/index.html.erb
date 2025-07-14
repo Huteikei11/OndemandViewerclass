@@ -22,9 +22,9 @@
                   <%= link_to '視聴する', player_video_path(video), class: "btn btn-success" %>
                   <%= link_to '詳細', video_path(video), class: "btn btn-info" %>
                   <%= link_to '編集', edit_video_path(video), class: "btn btn-warning" %>
-                  <%= link_to '削除', video_path(video), 
+                  <%= button_to '削除', video_path(video), 
                       method: :delete, 
-                      data: { turbo_confirm: '本当に削除しますか？' }, 
+                      form: { data: { turbo_confirm: '本当に削除しますか？' } }, 
                       class: "btn btn-danger" %>
                 </div>
               </div>
@@ -173,5 +173,10 @@
   
   .mb-4 {
     margin-bottom: 1.5rem;
+  }
+  
+  .card-actions form {
+    display: inline-block;
+    margin-right: 5px;
   }
 </style>

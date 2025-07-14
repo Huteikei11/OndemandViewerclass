@@ -75,6 +75,6 @@ class QuestionsController < ApplicationController
   end
   
   def question_params
-    params.require(:question).permit(:content, :answer, :question_type, :time_position)
+    params.require(:question).permit(:content, :answer, :question_type, :time_position, :show_answer)
   end
 end

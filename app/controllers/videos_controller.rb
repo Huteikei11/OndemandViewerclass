@@ -12,6 +12,8 @@ class VideosController < ApplicationController
   # Player view for watching videos with questions
   def player
     @questions = @video.questions.order(:time_position)
+    # コンソールに問題データをログ出力
+    puts "デバッグ: 問題データ #{@questions.inspect}"
     @notes = @video.notes.order(:time_position)
   end
 

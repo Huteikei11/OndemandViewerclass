@@ -1,6 +1,7 @@
 <div class="video-player-container">
   <div class="video-section">
     <% if @video.video_file.attached? %>
+      <div class="question-indicator" id="question-indicator" style="display: none;">問題あり！</div>
       <video id="video-player" controls>
         <source src="<%= url_for(@video.video_file) %>" type="<%= @video.video_file.content_type %>">
         Your browser does not support the video tag.
@@ -31,6 +32,11 @@
       <div class="question-content" id="question-container">
         <div class="waiting-message" id="waiting-message">
           <p>動画を再生すると、問題が表示されます</p>
+          <% if @questions.any? %>
+            <p><strong>設定されている問題数: <%= @questions.count %></strong></p>
+          <% else %>
+            <p><strong>この動画には問題がありません</strong></p>
+          <% end %>
         </div>
         
         <div class="question-display" id="question-display" style="display: none;">
@@ -109,6 +115,26 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
+  }
+  
+  .question-indicator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(255, 193, 7, 0.9);
+    color: #000;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    z-index: 100;
+    display: none;
+    animation: fadeIn 0.5s;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   
   #video-player {
@@ -195,6 +221,13 @@
     font-size: 18px;
     margin-bottom: 20px;
     line-height: 1.5;
+  }
+  
+  .question-timestamp {
+    font-size: 14px;
+    color: #6c757d;
+    margin-bottom: 8px;
+    font-weight: bold;
   }
   
   .options {
@@ -338,11 +371,14 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const videoPlayer = document.getElementById('video-player');
-  const questions = <%= raw @questions.to_json(include: :options) %>;
+  // Initialize questions with a 'shown' property to track which ones have been displayed
+  const questions = <%= raw @questions.to_json(include: :options) %>.map(q => ({...q, shown: false}));
+  console.log('質問データ:', questions);
   
   const waitingMessage = document.getElementById('waiting-message');
   const questionDisplay = document.getElementById('question-display');
   const questionText = document.getElementById('question-text');
+  const questionIndicator = document.getElementById('question-indicator');
   
   const trueFalseForm = document.getElementById('true-false-form');
   const multipleChoiceForm = document.getElementById('multiple-choice-form');
@@ -360,76 +396,195 @@ document.addEventListener('DOMContentLoaded', function() {
   
   let activeQuestion = null;
   let videoCheckInterval;
+  let questionIndicatorTimeout;
   
   if (videoPlayer) {
     // Questions system
     videoCheckInterval = setInterval(checkVideoTime, 1000);
     
+    // Reset questions when video is seeked
+    videoPlayer.addEventListener('seeked', function() {
+      // Only reset questions if seeking backwards
+      const currentTime = videoPlayer.currentTime;
+      for (const question of questions) {
+        if (question.shown && question.time_position > currentTime) {
+          question.shown = false;
+        }
+      }
+      
+      // Hide the indicator until the next check
+      questionIndicator.style.display = 'none';
+      if (questionIndicatorTimeout) {
+        clearTimeout(questionIndicatorTimeout);
+      }
+    });
+    
+    // Reset all questions when video is restarted
+    videoPlayer.addEventListener('ended', function() {
+      for (const question of questions) {
+        question.shown = false;
+      }
+    });
+    
     function checkVideoTime() {
       if (!videoPlayer.paused) {
-        const currentTime = Math.floor(videoPlayer.currentTime);
+        const currentTime = videoPlayer.currentTime;
+        console.log('現在の再生位置:', currentTime);
         
-        // Check for questions at this time position
-        for (const question of questions) {
-          if (question.time_position === currentTime && activeQuestion === null) {
-            showQuestion(question);
-            videoPlayer.pause();
+        // Check for upcoming questions
+        const upcomingQuestionWindow = 5; // Show indicator 5 seconds before question
+        
+        let hasUpcomingQuestion = false;
+        for (let i = 0; i < questions.length; i++) {
+          const question = questions[i];
+          
+          // デバッグ用：すべての質問の状態を1秒ごとにチェック
+          if (Math.floor(currentTime) % 5 === 0) {
+            console.log(`質問${i+1}:`, question.content, '位置:', question.time_position, '表示済み:', question.shown);
+          }
+          
+          // Check if there's a question coming up soon but not yet shown
+          if (currentTime < question.time_position && 
+              currentTime >= question.time_position - upcomingQuestionWindow && 
+              !question.shown) {
+            hasUpcomingQuestion = true;
+            console.log('間もなく問題:', question.content);
+            // Show indicator if not already showing
+            if (questionIndicator.style.display !== 'block') {
+              questionIndicator.style.display = 'block';
+              
+              // Clear any existing timeout
+              if (questionIndicatorTimeout) {
+                clearTimeout(questionIndicatorTimeout);
+              }
+            }
+          }
+          
+          // If the current time is past or equal to the question time and within a small window (0.5s)
+          // and no question is currently active
+          if (currentTime >= question.time_position && 
+              currentTime <= question.time_position + 0.5 && 
+              activeQuestion === null && 
+              !question.shown) {
+            console.log('問題検出:', question);
+            console.log('現在の時間:', currentTime);
+            // Mark this question as shown so it doesn't appear again
+            question.shown = true;
+            // Hide the indicator
+            questionIndicator.style.display = 'none';
+            if (questionIndicatorTimeout) {
+              clearTimeout(questionIndicatorTimeout);
+            }
+            try {
+              showQuestion(question);
+              videoPlayer.pause();
+            } catch (error) {
+              console.error('問題表示中にエラーが発生しました:', error);
+            }
             break;
           }
+        }
+        
+        // If no upcoming questions, hide the indicator
+        if (!hasUpcomingQuestion && questionIndicator.style.display === 'block') {
+          // Set a small delay before hiding to prevent flickering
+          questionIndicatorTimeout = setTimeout(() => {
+            questionIndicator.style.display = 'none';
+          }, 500);
         }
       }
     }
     
     function showQuestion(question) {
+      console.log('問題表示:', question);
+      
+      // 問題データの検証
+      if (!question || !question.content) {
+        console.error('問題データが不正です:', question);
+        return;
+      }
+      
       activeQuestion = question;
       
-      // Hide waiting message, show question
-      waitingMessage.style.display = 'none';
-      questionDisplay.style.display = 'block';
-      
-      // Set question text
-      questionText.textContent = question.content;
-      
-      // Reset previous result message
-      resultMessage.style.display = 'none';
-      resultMessage.className = 'result-message';
-      
-      // Show appropriate form based on question type
-      trueFalseForm.style.display = 'none';
-      multipleChoiceForm.style.display = 'none';
-      freeResponseForm.style.display = 'none';
-      
-      if (question.question_type === 'true_false') {
-        trueFalseForm.style.display = 'block';
-        // Reset selection
-        const radios = trueFalseForm.querySelectorAll('input[type="radio"]');
-        radios.forEach(radio => radio.checked = false);
-      } 
-      else if (question.question_type === 'multiple_choice') {
-        multipleChoiceForm.style.display = 'block';
+      try {
+        // Hide waiting message, show question
+        waitingMessage.style.display = 'none';
+        questionDisplay.style.display = 'block';
         
-        // Clear previous options
-        mcOptions.innerHTML = '';
+        // Set question text with timestamp
+        const timeFormatted = formatTimePosition(question.time_position || 0);
+        console.log('フォーマット済み時間:', timeFormatted);
+        console.log('問題内容:', question.content);
         
-        // Add new options
-        question.options.forEach((option, index) => {
-          const label = document.createElement('label');
-          label.className = 'option-label';
+        // 問題文を表示
+        questionText.textContent = ''; // 一旦クリア
+        
+        const timestampDiv = document.createElement('div');
+        timestampDiv.className = 'question-timestamp';
+        timestampDiv.textContent = timeFormatted;
+        questionText.appendChild(timestampDiv);
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'question-content-text';
+        contentDiv.textContent = question.content;
+        questionText.appendChild(contentDiv);
+        
+        // Reset previous result message
+        resultMessage.style.display = 'none';
+        resultMessage.className = 'result-message';
+        
+        // Show appropriate form based on question type
+        trueFalseForm.style.display = 'none';
+        multipleChoiceForm.style.display = 'none';
+        freeResponseForm.style.display = 'none';
+        
+        if (question.question_type === 'true_false') {
+          trueFalseForm.style.display = 'block';
+          // Reset selection
+          const radios = trueFalseForm.querySelectorAll('input[type="radio"]');
+          radios.forEach(radio => radio.checked = false);
+        } 
+        else if (question.question_type === 'multiple_choice') {
+          multipleChoiceForm.style.display = 'block';
           
-          const input = document.createElement('input');
-          input.type = 'radio';
-          input.name = 'mc-answer';
-          input.value = option.id;
+          // Clear previous options
+          mcOptions.innerHTML = '';
           
-          label.appendChild(input);
-          label.appendChild(document.createTextNode(' ' + option.content));
-          mcOptions.appendChild(label);
-        });
-      } 
-      else if (question.question_type === 'free_response') {
-        freeResponseForm.style.display = 'block';
-        document.getElementById('free-response-answer').value = '';
+          // Add new options
+          if (question.options && question.options.length > 0) {
+            question.options.forEach((option, index) => {
+              if (!option || !option.content) return;
+              
+              const label = document.createElement('label');
+              label.className = 'option-label';
+              
+              const input = document.createElement('input');
+              input.type = 'radio';
+              input.name = 'mc-answer';
+              input.value = option.id;
+              
+              label.appendChild(input);
+              label.appendChild(document.createTextNode(' ' + option.content));
+              mcOptions.appendChild(label);
+            });
+          } else {
+            console.error('選択肢がありません:', question);
+          }
+        } 
+        else if (question.question_type === 'free_response') {
+          freeResponseForm.style.display = 'block';
+          document.getElementById('free-response-answer').value = '';
+        }
+      } catch (error) {
+        console.error('問題表示中にエラーが発生しました:', error);
       }
+    }
+    
+    // Helper function to format time position
+    function formatTimePosition(timeInSeconds) {
+      const minutes = Math.floor(timeInSeconds / 60);
+      const seconds = Math.floor(timeInSeconds % 60);
+      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
     
     // Handle true/false submission
@@ -459,10 +614,12 @@ document.addEventListener('DOMContentLoaded', function() {
     frSubmit.addEventListener('click', function() {
       const answer = document.getElementById('free-response-answer').value.trim();
       
-      if (answer && activeQuestion) {
+      // 記述問題では空欄も有効な回答として受け付ける
+      if (activeQuestion) {
+        // 空欄でも送信可能に変更
         submitAnswer(answer, null);
       } else {
-        alert('回答を入力してください');
+        alert('問題が表示されていません');
       }
     });
     
@@ -477,36 +634,77 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('option_id', optionId);
       }
       
+      // CSRFトークンを取得
+      const csrfToken = document.querySelector('meta[name="csrf-token"]');
+      const headers = {
+        'Accept': 'application/json'
+      };
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken.content;
+      }
+      
+      // Store the current question for reference after the request
+      const currentQuestion = activeQuestion;
+      
+      // 送信前にデバッグ情報
+      console.log('送信データ:', {
+        url: `/videos/<%= @video.id %>/questions/${currentQuestion.id}/user_responses`,
+        userAnswer: userAnswer,
+        optionId: optionId
+      });
+      
       // Send response to the server
-      fetch(`/videos/<%= @video.id %>/questions/${activeQuestion.id}/user_responses`, {
+      fetch(`/videos/<%= @video.id %>/questions/${currentQuestion.id}/user_responses`, {
         method: 'POST',
         body: formData,
-        headers: {
-          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
-        }
+        headers: headers
       })
-      .then(response => response.json())
+      .then(response => {
+        console.log('レスポンスステータス:', response.status);
+        console.log('レスポンスヘッダー:', {
+          contentType: response.headers.get('Content-Type'),
+          accept: response.headers.get('Accept')
+        });
+        
+        if (!response.ok) {
+          return response.text().then(text => {
+            console.error('エラーレスポンス:', text);
+            throw new Error(`Network response was not ok: ${response.status}`);
+          });
+        }
+        
+        // Check if the response is JSON
+        const contentType = response.headers.get('Content-Type');
+        if (!contentType || !contentType.includes('application/json')) {
+          return response.text().then(text => {
+            console.error('予期せぬレスポース形式:', contentType, text);
+            throw new Error('Expected JSON response but got ' + contentType);
+          });
+        }
+        
+        return response.json();
+      })
       .then(data => {
+        console.log('サーバーレスポンス:', data);
+        
         // Display result
         resultMessage.style.display = 'block';
         
         if (data.correct) {
           resultMessage.className = 'result-message correct';
           resultMessage.textContent = '正解です！';
+          
+          // 解答表示設定が有効な場合、正解も表示
+          if (data.show_answer && data.correct_answer) {
+            resultMessage.textContent += ` 正解: ${data.correct_answer}`;
+          }
         } else {
           resultMessage.className = 'result-message incorrect';
           resultMessage.textContent = '不正解です。';
           
-          // For multiple choice, show the correct answer
-          if (activeQuestion.question_type === 'multiple_choice') {
-            const correctOption = activeQuestion.options.find(opt => opt.is_correct);
-            if (correctOption) {
-              resultMessage.textContent += ` 正解: ${correctOption.content}`;
-            }
-          } 
-          // For true/false and free response, show the correct answer
-          else if (activeQuestion.answer) {
-            resultMessage.textContent += ` 正解: ${activeQuestion.answer}`;
+          // 解答表示設定が有効な場合のみ正解を表示
+          if (data.show_answer && data.correct_answer) {
+            resultMessage.textContent += ` 正解: ${data.correct_answer}`;
           }
         }
         
@@ -521,6 +719,13 @@ document.addEventListener('DOMContentLoaded', function() {
       .catch(error => {
         console.error('Error:', error);
         alert('回答の送信中にエラーが発生しました。');
+        // In case of error, still reset the question and continue playing
+        setTimeout(() => {
+          activeQuestion = null;
+          waitingMessage.style.display = 'block';
+          questionDisplay.style.display = 'none';
+          videoPlayer.play();
+        }, 1000);
       });
     }
     
