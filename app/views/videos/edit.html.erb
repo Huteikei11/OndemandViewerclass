@@ -529,15 +529,32 @@ document.addEventListener('DOMContentLoaded', function() {
   const currentTimeBtn = document.getElementById('current-time-btn');
   
   if (videoPlayer) {
+    // 動画の読み込み完了を待つ
+    videoPlayer.addEventListener('loadedmetadata', function() {
+      console.log('動画メタデータ読み込み完了');
+    });
+    
+    // 動画の再生可能状態を待つ
+    videoPlayer.addEventListener('canplay', function() {
+      console.log('動画再生可能');
+    });
+    
     videoPlayer.addEventListener('timeupdate', function() {
       const minutes = Math.floor(videoPlayer.currentTime / 60);
       const seconds = Math.floor(videoPlayer.currentTime % 60);
       currentTimeDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     });
     
-    currentTimeBtn.addEventListener('click', function() {
-      timePositionInput.value = Math.floor(videoPlayer.currentTime);
-    });
+    // 現在時間ボタンのイベントリスナー
+    if (currentTimeBtn) {
+      currentTimeBtn.addEventListener('click', function() {
+        if (videoPlayer.readyState >= 2) { // HAVE_CURRENT_DATA以上
+          timePositionInput.value = Math.floor(videoPlayer.currentTime);
+        } else {
+          alert('動画がまだ読み込まれていません。少し待ってから再試行してください。');
+        }
+      });
+    }
     
     // Make sure the video is loaded before we try to play it
     videoPlayer.addEventListener('error', function(e) {

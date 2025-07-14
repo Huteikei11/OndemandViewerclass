@@ -18,6 +18,9 @@ class QuestionsController < ApplicationController
         # 不正な値が設定されていた場合も'○'に修正
         @question.answer = '○'
       end
+    when 'free_response'
+      # 記述問題の場合、空の回答も許可する（バリデーション回避のため空文字を設定）
+      @question.answer = @question.answer.presence || ''
     end
     
     if @question.save
@@ -54,6 +57,9 @@ class QuestionsController < ApplicationController
         # 不正な値が設定されていた場合も'○'に修正
         question_attributes[:answer] = '○'
       end
+    when 'free_response'
+      # 記述問題の場合、空の回答も許可する（バリデーション回避のため空文字を設定）
+      question_attributes[:answer] = question_attributes[:answer].presence || ''
     end
     
     if @question.update(question_attributes)

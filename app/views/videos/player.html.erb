@@ -371,8 +371,24 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const videoPlayer = document.getElementById('video-player');
+  
+  // グローバルエラーハンドリングを追加
+  window.addEventListener('error', function(event) {
+    console.error('Caught global error:', event.error);
+  });
+  
+  // JSONデータの確認
+  let rawQuestionData;
+  try {
+    rawQuestionData = <%= raw @questions.to_json(include: :options) %>;
+    console.log('生の質問データを取得しました');
+  } catch (e) {
+    console.error('質問データの解析中にエラーが発生しました:', e);
+    rawQuestionData = [];
+  }
+  
   // Initialize questions with a 'shown' property to track which ones have been displayed
-  const questions = <%= raw @questions.to_json(include: :options) %>.map(q => ({...q, shown: false}));
+  const questions = (rawQuestionData || []).map(q => ({...q, shown: false}));
   console.log('質問データ:', questions);
   
   const waitingMessage = document.getElementById('waiting-message');
@@ -399,15 +415,50 @@ document.addEventListener('DOMContentLoaded', function() {
   let questionIndicatorTimeout;
   
   if (videoPlayer) {
-    // Questions system
-    videoCheckInterval = setInterval(checkVideoTime, 1000);
+    // 動画の読み込み状態をデバッグログで確認
+    console.log('初期動画状態:', {
+      readyState: videoPlayer.readyState,
+      paused: videoPlayer.paused,
+      duration: videoPlayer.duration,
+      currentSrc: videoPlayer.currentSrc
+    });
+    
+    // 動画の読み込み完了を待つ
+    videoPlayer.addEventListener('loadedmetadata', function() {
+      console.log('動画メタデータ読み込み完了');
+    });
+    
+    // 動画の再生可能状態を待つ
+    videoPlayer.addEventListener('canplay', function() {
+      console.log('動画再生可能:', {
+        readyState: videoPlayer.readyState,
+        duration: videoPlayer.duration
+      });
+      
+      // 動画が再生可能になったら問題チェック開始
+      if (!videoCheckInterval) {
+        console.log('問題チェックタイマー開始');
+        videoCheckInterval = setInterval(checkVideoTime, 1000);
+      }
+    });
+    
+    // 安全策として、DOMContentLoadedの後に少し遅延させて問題チェックを開始
+    setTimeout(() => {
+      if (!videoCheckInterval && videoPlayer.readyState >= 2) {
+        console.log('遅延問題チェックタイマー開始');
+        videoCheckInterval = setInterval(checkVideoTime, 1000);
+      }
+    }, 1000);
     
     // Reset questions when video is seeked
     videoPlayer.addEventListener('seeked', function() {
       // Only reset questions if seeking backwards
       const currentTime = videoPlayer.currentTime;
+      console.log('シーク位置変更:', currentTime);
+      
       for (const question of questions) {
         if (question.shown && question.time_position > currentTime) {
+          console.log(`質問リセット: ${question.content}`);
           question.shown = false;
         }
       }
@@ -427,8 +478,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     function checkVideoTime() {
-      if (!videoPlayer.paused) {
-        const currentTime = videoPlayer.currentTime;
+      // 動画が読み込まれていない場合は何もしない
+      if (videoPlayer.readyState < 2) {
+        console.log('動画がまだ十分に読み込まれていません:', videoPlayer.readyState);
+        return;
+      }
+      
+      const currentTime = videoPlayer.currentTime;
+      
+      // 再生中またはチェックする必要がある場合
+      if (!videoPlayer.paused || activeQuestion !== null) {
         console.log('現在の再生位置:', currentTime);
         
         // Check for upcoming questions
@@ -438,7 +497,7 @@ document.addEventListener('DOMContentLoaded', function() {
         for (let i = 0; i < questions.length; i++) {
           const question = questions[i];
           
-          // デバッグ用：すべての質問の状態を1秒ごとにチェック
+          // デバッグ用：すべての質問の状態を定期的にチェック
           if (Math.floor(currentTime) % 5 === 0) {
             console.log(`質問${i+1}:`, question.content, '位置:', question.time_position, '表示済み:', question.shown);
           }
