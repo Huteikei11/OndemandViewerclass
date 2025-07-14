@@ -1,0 +1,249 @@
+<div class="container">
+  <div class="header">
+    <h1><%= @video.title %></h1>
+    <div class="header-actions">
+      <%= link_to '視聴する', player_video_path(@video), class: "btn btn-success" %>
+      <%= link_to '編集', edit_video_path(@video), class: "btn btn-warning" %>
+      <%= link_to '戻る', videos_path, class: "btn btn-secondary" %>
+    </div>
+  </div>
+
+  <div class="video-details">
+    <div class="row">
+      <div class="col-md-8">
+        <div class="video-container">
+          <% if @video.video_file.attached? %>
+            <video controls>
+              <source src="<%= url_for(@video.video_file) %>" type="<%= @video.video_file.content_type %>">
+              Your browser does not support the video tag.
+            </video>
+          <% else %>
+            <div class="no-video">
+              <p>No video available</p>
+            </div>
+          <% end %>
+        </div>
+        
+        <div class="description">
+          <h3>講義説明</h3>
+          <p><%= @video.description %></p>
+        </div>
+      </div>
+      
+      <div class="col-md-4">
+        <div class="sidebar">
+          <% if @video.pdf_file.attached? %>
+            <div class="pdf-section">
+              <h3>講義資料</h3>
+              <div class="pdf-preview">
+                <%= link_to url_for(@video.pdf_file), target: "_blank", class: "pdf-link" do %>
+                  <div class="pdf-icon">
+                    <i class="fas fa-file-pdf"></i>
+                  </div>
+                  <span>PDFを開く</span>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+          
+          <div class="questions-section">
+            <h3>設定された問題 (<%= @questions.count %>)</h3>
+            <% if @questions.any? %>
+              <ul class="questions-list">
+                <% @questions.each do |question| %>
+                  <li class="question-item">
+                    <div class="question-time">
+                      <%= Time.at(question.time_position).utc.strftime("%M:%S") %>
+                    </div>
+                    <div class="question-content">
+                      <strong><%= truncate(question.content, length: 50) %></strong>
+                      <span class="badge <%= question_type_badge_class(question.question_type) %>">
+                        <%= question_type_display(question.question_type) %>
+                      </span>
+                    </div>
+                  </li>
+                <% end %>
+              </ul>
+            <% else %>
+              <p>まだ問題が設定されていません。</p>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+  }
+  
+  .header-actions .btn {
+    margin-left: 10px;
+  }
+  
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    margin-right: -15px;
+    margin-left: -15px;
+  }
+  
+  .col-md-8 {
+    flex: 0 0 66.666667%;
+    max-width: 66.666667%;
+    padding-right: 15px;
+    padding-left: 15px;
+  }
+  
+  .col-md-4 {
+    flex: 0 0 33.333333%;
+    max-width: 33.333333%;
+    padding-right: 15px;
+    padding-left: 15px;
+  }
+  
+  .video-container {
+    margin-bottom: 20px;
+    background-color: #000;
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  
+  .video-container video {
+    width: 100%;
+    display: block;
+  }
+  
+  .description {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 5px;
+  }
+  
+  .description h3 {
+    margin-top: 0;
+  }
+  
+  .sidebar {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 5px;
+  }
+  
+  .pdf-section {
+    margin-bottom: 30px;
+  }
+  
+  .pdf-preview {
+    background-color: #fff;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    text-align: center;
+  }
+  
+  .pdf-icon {
+    font-size: 48px;
+    color: #dc3545;
+    margin-bottom: 10px;
+  }
+  
+  .pdf-link {
+    text-decoration: none;
+    color: #007bff;
+  }
+  
+  .questions-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .question-item {
+    background-color: #fff;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    display: flex;
+  }
+  
+  .question-time {
+    background-color: #007bff;
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 3px;
+    margin-right: 10px;
+    font-family: monospace;
+  }
+  
+  .question-content {
+    flex: 1;
+  }
+  
+  .badge {
+    display: inline-block;
+    padding: .25em .4em;
+    font-size: 75%;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: .25rem;
+    margin-top: 5px;
+  }
+  
+  .no-video {
+    background-color: #343a40;
+    color: #fff;
+    padding: 50px;
+    text-align: center;
+    border-radius: 5px;
+  }
+  
+  .btn {
+    display: inline-block;
+    font-weight: 400;
+    color: #212529;
+    text-align: center;
+    vertical-align: middle;
+    cursor: pointer;
+    background-color: transparent;
+    border: 1px solid transparent;
+    padding: .375rem .75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: .25rem;
+    transition: color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+  }
+  
+  .btn-success {
+    color: #fff;
+    background-color: #28a745;
+    border-color: #28a745;
+  }
+  
+  .btn-warning {
+    color: #212529;
+    background-color: #ffc107;
+    border-color: #ffc107;
+  }
+  
+  .btn-secondary {
+    color: #fff;
+    background-color: #6c757d;
+    border-color: #6c757d;
+  }
+</style>

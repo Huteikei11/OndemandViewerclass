@@ -1,0 +1,177 @@
+<div class="container">
+  <div class="header">
+    <h1>オンデマンド講義 ビデオ一覧</h1>
+    <%= link_to '新しい講義ビデオを作成', new_video_path, class: "btn btn-primary" %>
+  </div>
+
+  <div class="video-list">
+    <% if @videos.present? %>
+      <div class="row">
+        <% @videos.each do |video| %>
+          <div class="col-md-4 mb-4">
+            <div class="card">
+              <% if video.video_file.attached? %>
+                <div class="card-img-top video-thumbnail">
+                  <%= image_tag "/icon.png", alt: video.title %>
+                </div>
+              <% end %>
+              <div class="card-body">
+                <h5 class="card-title"><%= video.title %></h5>
+                <p class="card-text"><%= truncate(video.description, length: 100) %></p>
+                <div class="card-actions">
+                  <%= link_to '視聴する', player_video_path(video), class: "btn btn-success" %>
+                  <%= link_to '詳細', video_path(video), class: "btn btn-info" %>
+                  <%= link_to '編集', edit_video_path(video), class: "btn btn-warning" %>
+                  <%= link_to '削除', video_path(video), 
+                      method: :delete, 
+                      data: { turbo_confirm: '本当に削除しますか？' }, 
+                      class: "btn btn-danger" %>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <div class="empty-state">
+        <p>まだ講義ビデオがありません。新しい講義ビデオを作成してください。</p>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<style>
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+  }
+  
+  .video-list {
+    margin-top: 20px;
+  }
+  
+  .video-thumbnail {
+    height: 180px;
+    background-color: #eee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .card-actions {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  
+  .card-actions .btn {
+    margin-right: 5px;
+    margin-bottom: 5px;
+  }
+  
+  .empty-state {
+    text-align: center;
+    padding: 50px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+  }
+  
+  .btn {
+    display: inline-block;
+    font-weight: 400;
+    color: #212529;
+    text-align: center;
+    vertical-align: middle;
+    cursor: pointer;
+    background-color: transparent;
+    border: 1px solid transparent;
+    padding: .375rem .75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: .25rem;
+    transition: color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+  }
+  
+  .btn-primary {
+    color: #fff;
+    background-color: #007bff;
+    border-color: #007bff;
+  }
+  
+  .btn-success {
+    color: #fff;
+    background-color: #28a745;
+    border-color: #28a745;
+  }
+  
+  .btn-info {
+    color: #fff;
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+  }
+  
+  .btn-warning {
+    color: #212529;
+    background-color: #ffc107;
+    border-color: #ffc107;
+  }
+  
+  .btn-danger {
+    color: #fff;
+    background-color: #dc3545;
+    border-color: #dc3545;
+  }
+  
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    margin-right: -15px;
+    margin-left: -15px;
+  }
+  
+  .col-md-4 {
+    flex: 0 0 33.333333%;
+    max-width: 33.333333%;
+    padding-right: 15px;
+    padding-left: 15px;
+  }
+  
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    word-wrap: break-word;
+    background-color: #fff;
+    background-clip: border-box;
+    border: 1px solid rgba(0,0,0,.125);
+    border-radius: .25rem;
+  }
+  
+  .card-body {
+    flex: 1 1 auto;
+    min-height: 1px;
+    padding: 1.25rem;
+  }
+  
+  .card-title {
+    margin-bottom: .75rem;
+  }
+  
+  .card-text {
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+  
+  .mb-4 {
+    margin-bottom: 1.5rem;
+  }
+</style>

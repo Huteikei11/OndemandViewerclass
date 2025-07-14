@@ -1,0 +1,596 @@
+<div class="video-player-container">
+  <div class="video-section">
+    <% if @video.video_file.attached? %>
+      <video id="video-player" controls>
+        <source src="<%= url_for(@video.video_file) %>" type="<%= @video.video_file.content_type %>">
+        Your browser does not support the video tag.
+      </video>
+    <% else %>
+      <div class="no-video">
+        <p>動画が利用できません</p>
+      </div>
+    <% end %>
+    
+    <div class="video-info">
+      <h1><%= @video.title %></h1>
+      <div class="video-actions">
+        <% if @video.pdf_file.attached? %>
+          <a href="<%= url_for(@video.pdf_file) %>" target="_blank" class="btn btn-primary">講義資料を開く</a>
+        <% end %>
+        <%= link_to '戻る', videos_path, class: "btn btn-secondary" %>
+      </div>
+    </div>
+  </div>
+  
+  <div class="side-panel">
+    <div class="question-section" id="question-section">
+      <div class="section-header">
+        <h3>問題</h3>
+      </div>
+      
+      <div class="question-content" id="question-container">
+        <div class="waiting-message" id="waiting-message">
+          <p>動画を再生すると、問題が表示されます</p>
+        </div>
+        
+        <div class="question-display" id="question-display" style="display: none;">
+          <div class="question-text" id="question-text"></div>
+          
+          <div class="question-form" id="true-false-form" style="display: none;">
+            <div class="options">
+              <label class="option-label">
+                <input type="radio" name="tf-answer" value="○"> ○
+              </label>
+              <label class="option-label">
+                <input type="radio" name="tf-answer" value="×"> ×
+              </label>
+            </div>
+            <button class="btn btn-primary" id="tf-submit">回答する</button>
+          </div>
+          
+          <div class="question-form" id="multiple-choice-form" style="display: none;">
+            <div class="options" id="mc-options"></div>
+            <button class="btn btn-primary" id="mc-submit">回答する</button>
+          </div>
+          
+          <div class="question-form" id="free-response-form" style="display: none;">
+            <textarea id="free-response-answer" rows="3" class="form-control" placeholder="回答を入力してください"></textarea>
+            <button class="btn btn-primary mt-2" id="fr-submit">回答する</button>
+          </div>
+          
+          <div class="result-message" id="result-message" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="notes-section">
+      <div class="section-header">
+        <h3>メモ</h3>
+        <button class="btn btn-sm btn-primary" id="save-note-btn">保存</button>
+      </div>
+      
+      <div class="notes-content">
+        <textarea id="note-textarea" rows="10" class="form-control" placeholder="ここにメモを入力できます..."></textarea>
+        
+        <div class="saved-notes" id="saved-notes">
+          <% if @notes.any? %>
+            <h4>保存したメモ</h4>
+            <ul class="notes-list">
+              <% @notes.each do |note| %>
+                <li class="note-item">
+                  <div class="note-time"><%= format_time_position(note.time_position) %></div>
+                  <div class="note-text"><%= note.content %></div>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f8f9fa;
+  }
+  
+  .video-player-container {
+    display: flex;
+    min-height: 100vh;
+    background-color: #000;
+  }
+  
+  .video-section {
+    flex: 3;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  #video-player {
+    width: 100%;
+    max-height: calc(100vh - 100px);
+  }
+  
+  .video-info {
+    padding: 15px;
+    background-color: #111;
+    color: #fff;
+  }
+  
+  .video-info h1 {
+    font-size: 20px;
+    margin: 0 0 10px 0;
+  }
+  
+  .video-actions {
+    display: flex;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  
+  .side-panel {
+    flex: 2;
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fa;
+    border-left: 1px solid #dee2e6;
+    overflow: hidden;
+    max-width: 450px;
+  }
+  
+  .question-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid #dee2e6;
+    overflow: hidden;
+  }
+  
+  .notes-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+  }
+  
+  .section-header h3 {
+    margin: 0;
+    font-size: 18px;
+  }
+  
+  .question-content, .notes-content {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+  }
+  
+  .waiting-message {
+    text-align: center;
+    padding: 50px 20px;
+    color: #6c757d;
+  }
+  
+  .question-display {
+    background-color: #fff;
+    border-radius: 5px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .question-text {
+    font-size: 18px;
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+  
+  .options {
+    margin-bottom: 15px;
+  }
+  
+  .option-label {
+    display: block;
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .option-label:hover {
+    background-color: #e0e0e0;
+  }
+  
+  .option-label input {
+    margin-right: 10px;
+  }
+  
+  .result-message {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: 4px;
+  }
+  
+  .result-message.correct {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+  
+  .result-message.incorrect {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+  
+  #note-textarea {
+    resize: none;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    width: 100%;
+  }
+  
+  .saved-notes {
+    margin-top: 20px;
+  }
+  
+  .notes-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .note-item {
+    background-color: #fff;
+    border-radius: 4px;
+    padding: 10px 15px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .note-time {
+    font-size: 12px;
+    color: #6c757d;
+    margin-bottom: 5px;
+  }
+  
+  .note-text {
+    white-space: pre-wrap;
+  }
+  
+  .no-video {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 400px;
+    color: #fff;
+    background-color: #343a40;
+  }
+  
+  .form-control {
+    display: block;
+    width: 100%;
+    padding: .375rem .75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: #495057;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ced4da;
+    border-radius: .25rem;
+    transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+  }
+  
+  .btn {
+    display: inline-block;
+    font-weight: 400;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+    user-select: none;
+    border: 1px solid transparent;
+    padding: .375rem .75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: .25rem;
+    transition: color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+    cursor: pointer;
+  }
+  
+  .btn-sm {
+    padding: .25rem .5rem;
+    font-size: .875rem;
+    line-height: 1.5;
+    border-radius: .2rem;
+  }
+  
+  .btn-primary {
+    color: #fff;
+    background-color: #007bff;
+    border-color: #007bff;
+  }
+  
+  .btn-secondary {
+    color: #fff;
+    background-color: #6c757d;
+    border-color: #6c757d;
+  }
+  
+  .mt-2 {
+    margin-top: .5rem;
+  }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const videoPlayer = document.getElementById('video-player');
+  const questions = <%= raw @questions.to_json(include: :options) %>;
+  
+  const waitingMessage = document.getElementById('waiting-message');
+  const questionDisplay = document.getElementById('question-display');
+  const questionText = document.getElementById('question-text');
+  
+  const trueFalseForm = document.getElementById('true-false-form');
+  const multipleChoiceForm = document.getElementById('multiple-choice-form');
+  const freeResponseForm = document.getElementById('free-response-form');
+  const mcOptions = document.getElementById('mc-options');
+  
+  const tfSubmit = document.getElementById('tf-submit');
+  const mcSubmit = document.getElementById('mc-submit');
+  const frSubmit = document.getElementById('fr-submit');
+  const resultMessage = document.getElementById('result-message');
+  
+  const noteTextarea = document.getElementById('note-textarea');
+  const saveNoteBtn = document.getElementById('save-note-btn');
+  const savedNotes = document.getElementById('saved-notes');
+  
+  let activeQuestion = null;
+  let videoCheckInterval;
+  
+  if (videoPlayer) {
+    // Questions system
+    videoCheckInterval = setInterval(checkVideoTime, 1000);
+    
+    function checkVideoTime() {
+      if (!videoPlayer.paused) {
+        const currentTime = Math.floor(videoPlayer.currentTime);
+        
+        // Check for questions at this time position
+        for (const question of questions) {
+          if (question.time_position === currentTime && activeQuestion === null) {
+            showQuestion(question);
+            videoPlayer.pause();
+            break;
+          }
+        }
+      }
+    }
+    
+    function showQuestion(question) {
+      activeQuestion = question;
+      
+      // Hide waiting message, show question
+      waitingMessage.style.display = 'none';
+      questionDisplay.style.display = 'block';
+      
+      // Set question text
+      questionText.textContent = question.content;
+      
+      // Reset previous result message
+      resultMessage.style.display = 'none';
+      resultMessage.className = 'result-message';
+      
+      // Show appropriate form based on question type
+      trueFalseForm.style.display = 'none';
+      multipleChoiceForm.style.display = 'none';
+      freeResponseForm.style.display = 'none';
+      
+      if (question.question_type === 'true_false') {
+        trueFalseForm.style.display = 'block';
+        // Reset selection
+        const radios = trueFalseForm.querySelectorAll('input[type="radio"]');
+        radios.forEach(radio => radio.checked = false);
+      } 
+      else if (question.question_type === 'multiple_choice') {
+        multipleChoiceForm.style.display = 'block';
+        
+        // Clear previous options
+        mcOptions.innerHTML = '';
+        
+        // Add new options
+        question.options.forEach((option, index) => {
+          const label = document.createElement('label');
+          label.className = 'option-label';
+          
+          const input = document.createElement('input');
+          input.type = 'radio';
+          input.name = 'mc-answer';
+          input.value = option.id;
+          
+          label.appendChild(input);
+          label.appendChild(document.createTextNode(' ' + option.content));
+          mcOptions.appendChild(label);
+        });
+      } 
+      else if (question.question_type === 'free_response') {
+        freeResponseForm.style.display = 'block';
+        document.getElementById('free-response-answer').value = '';
+      }
+    }
+    
+    // Handle true/false submission
+    tfSubmit.addEventListener('click', function() {
+      const selectedAnswer = document.querySelector('input[name="tf-answer"]:checked');
+      
+      if (selectedAnswer && activeQuestion) {
+        submitAnswer(selectedAnswer.value, null);
+      } else {
+        alert('回答を選択してください');
+      }
+    });
+    
+    // Handle multiple choice submission
+    mcSubmit.addEventListener('click', function() {
+      const selectedOption = document.querySelector('input[name="mc-answer"]:checked');
+      
+      if (selectedOption && activeQuestion) {
+        const optionId = selectedOption.value;
+        submitAnswer(null, optionId);
+      } else {
+        alert('回答を選択してください');
+      }
+    });
+    
+    // Handle free response submission
+    frSubmit.addEventListener('click', function() {
+      const answer = document.getElementById('free-response-answer').value.trim();
+      
+      if (answer && activeQuestion) {
+        submitAnswer(answer, null);
+      } else {
+        alert('回答を入力してください');
+      }
+    });
+    
+    function submitAnswer(userAnswer, optionId) {
+      const formData = new FormData();
+      
+      if (userAnswer) {
+        formData.append('user_response[user_answer]', userAnswer);
+      }
+      
+      if (optionId) {
+        formData.append('option_id', optionId);
+      }
+      
+      // Send response to the server
+      fetch(`/videos/<%= @video.id %>/questions/${activeQuestion.id}/user_responses`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        // Display result
+        resultMessage.style.display = 'block';
+        
+        if (data.correct) {
+          resultMessage.className = 'result-message correct';
+          resultMessage.textContent = '正解です！';
+        } else {
+          resultMessage.className = 'result-message incorrect';
+          resultMessage.textContent = '不正解です。';
+          
+          // For multiple choice, show the correct answer
+          if (activeQuestion.question_type === 'multiple_choice') {
+            const correctOption = activeQuestion.options.find(opt => opt.is_correct);
+            if (correctOption) {
+              resultMessage.textContent += ` 正解: ${correctOption.content}`;
+            }
+          } 
+          // For true/false and free response, show the correct answer
+          else if (activeQuestion.answer) {
+            resultMessage.textContent += ` 正解: ${activeQuestion.answer}`;
+          }
+        }
+        
+        // Reset active question after 3 seconds and resume video
+        setTimeout(() => {
+          activeQuestion = null;
+          waitingMessage.style.display = 'block';
+          questionDisplay.style.display = 'none';
+          videoPlayer.play();
+        }, 3000);
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('回答の送信中にエラーが発生しました。');
+      });
+    }
+    
+    // Note system
+    saveNoteBtn.addEventListener('click', function() {
+      const noteContent = noteTextarea.value.trim();
+      
+      if (noteContent) {
+        const formData = new FormData();
+        formData.append('note[content]', noteContent);
+        formData.append('note[time_position]', Math.floor(videoPlayer.currentTime));
+        
+        // Send note to the server
+        fetch(`/videos/<%= @video.id %>/notes`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          // Add the new note to the list
+          const notesList = document.querySelector('.notes-list') || document.createElement('ul');
+          
+          if (!notesList.classList.contains('notes-list')) {
+            notesList.className = 'notes-list';
+            
+            const heading = document.createElement('h4');
+            heading.textContent = '保存したメモ';
+            
+            savedNotes.innerHTML = '';
+            savedNotes.appendChild(heading);
+            savedNotes.appendChild(notesList);
+          }
+          
+          const noteItem = document.createElement('li');
+          noteItem.className = 'note-item';
+          
+          const noteTime = document.createElement('div');
+          noteTime.className = 'note-time';
+          
+          const minutes = Math.floor(data.time_position / 60);
+          const seconds = Math.floor(data.time_position % 60);
+          noteTime.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+          
+          const noteText = document.createElement('div');
+          noteText.className = 'note-text';
+          noteText.textContent = data.content;
+          
+          noteItem.appendChild(noteTime);
+          noteItem.appendChild(noteText);
+          notesList.appendChild(noteItem);
+          
+          // Clear the textarea
+          noteTextarea.value = '';
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('メモの保存中にエラーが発生しました。');
+        });
+      } else {
+        alert('メモを入力してください');
+      }
+    });
+    
+    // Clean up interval when leaving the page
+    window.addEventListener('beforeunload', function() {
+      clearInterval(videoCheckInterval);
+    });
+  }
+});
+</script>
