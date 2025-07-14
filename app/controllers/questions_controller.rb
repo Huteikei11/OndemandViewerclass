@@ -5,9 +5,19 @@ class QuestionsController < ApplicationController
   def create
     @question = @video.questions.new(question_params)
     
-    # For multiple choice questions, set a placeholder answer
-    if @question.question_type == 'multiple_choice'
+    # 問題タイプに応じた回答の処理
+    case @question.question_type
+    when 'multiple_choice'
+      # 選択問題の場合はプレースホルダーとして'multiple_choice'を設定
       @question.answer = 'multiple_choice'
+    when 'true_false'
+      # 〇×問題の場合、回答が空またはnilなら'○'をデフォルト値として設定
+      if @question.answer.blank?
+        @question.answer = '○'
+      elsif !['○', '×'].include?(@question.answer)
+        # 不正な値が設定されていた場合も'○'に修正
+        @question.answer = '○'
+      end
     end
     
     if @question.save
@@ -31,9 +41,19 @@ class QuestionsController < ApplicationController
   def update
     question_attributes = question_params.dup
     
-    # For multiple choice questions, set a placeholder answer
-    if question_attributes[:question_type] == 'multiple_choice'
+    # 問題タイプに応じた回答の処理
+    case question_attributes[:question_type]
+    when 'multiple_choice'
+      # 選択問題の場合はプレースホルダーとして'multiple_choice'を設定
       question_attributes[:answer] = 'multiple_choice'
+    when 'true_false'
+      # 〇×問題の場合、回答が空またはnilなら'○'をデフォルト値として設定
+      if question_attributes[:answer].blank?
+        question_attributes[:answer] = '○'
+      elsif !['○', '×'].include?(question_attributes[:answer])
+        # 不正な値が設定されていた場合も'○'に修正
+        question_attributes[:answer] = '○'
+      end
     end
     
     if @question.update(question_attributes)

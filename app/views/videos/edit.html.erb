@@ -649,6 +649,24 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
       }
+    } else if (selectedType === 'true_false') {
+      // 〇×問題の場合、回答が確実に送信されるようにする
+      const tfSelect = document.querySelector('#true-false-options select[name="question[answer]"]');
+      
+      // 選択フィールドが非表示になっている場合は、新しい隠しフィールドを作成
+      if (!tfSelect || tfSelect.offsetParent === null) {
+        // 既存の隠しフィールドを探す
+        let hiddenAnswer = document.querySelector('input[type="hidden"][name="question[answer]"]');
+        
+        // なければ作成
+        if (!hiddenAnswer) {
+          hiddenAnswer = document.createElement('input');
+          hiddenAnswer.type = 'hidden';
+          hiddenAnswer.name = 'question[answer]';
+          hiddenAnswer.value = '○'; // デフォルト値
+          document.getElementById('new-question-form').appendChild(hiddenAnswer);
+        }
+      }
     }
     
     // Always return true to submit the form

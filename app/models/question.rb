@@ -7,6 +7,9 @@ class Question < ApplicationRecord
   validates :time_position, presence: true
   validates :question_type, presence: true, inclusion: { in: %w[true_false multiple_choice free_response] }
   
-  # Validate answer presence for all question types
-  validates :answer, presence: true
+  # 選択問題以外は回答が必須
+  validates :answer, presence: true, unless: -> { question_type == 'multiple_choice' }
+  
+  # 〇×問題の場合、回答は○または×のみ有効
+  validates :answer, inclusion: { in: %w[○ ×] }, if: -> { question_type == 'true_false' }
 end
