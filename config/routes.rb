@@ -11,7 +11,7 @@ Rails.application.routes.draw do
   # Video resources
   resources :videos do
     # Nested resources for questions and notes
-    resources :questions, only: [:create, :update, :destroy] do
+    resources :questions, only: [:create, :edit, :update, :destroy] do
       resources :options, only: [:create, :update, :destroy]
       resources :user_responses, only: [:create]
     end

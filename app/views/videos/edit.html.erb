@@ -162,11 +162,11 @@
                             <%= question_type_display(question.question_type) %>
                           </span>
                           <div class="question-actions">
-                            <button class="btn btn-sm btn-outline-primary edit-question-btn">編集</button>
-                            <%= link_to '削除', 
+                            <button class="btn btn-sm btn-outline-primary edit-question-btn" data-question-id="<%= question.id %>">編集</button>
+                            <%= button_to '削除', 
                                 video_question_path(@video, question), 
                                 method: :delete, 
-                                data: { turbo_confirm: '本当に削除しますか？' }, 
+                                form: { data: { turbo_confirm: '本当に削除しますか？' } },
                                 class: "btn btn-sm btn-outline-danger" %>
                           </div>
                         </div>
@@ -203,6 +203,75 @@
             </div>
           <% end %>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 問題編集用モーダル(簡略版) -->
+<div id="direct-edit-question-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h4>問題を編集</h4>
+      <span class="modal-close">&times;</span>
+    </div>
+    
+    <div class="modal-body">
+      <!-- 簡易版の編集フォーム -->
+      <div class="direct-edit-container">
+        <form id="direct-edit-form" method="POST">
+          <input type="hidden" name="_method" value="PATCH">
+          <input type="hidden" name="authenticity_token" value="" id="edit-auth-token">
+          <input type="hidden" name="question_id" id="edit-question-id">
+          
+          <div class="form-group">
+            <label for="question_content">問題文</label>
+            <textarea name="question[content]" id="question_content" rows="3" class="form-control"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label for="question_time_position">表示時間 (秒)</label>
+            <input type="number" name="question[time_position]" id="question_time_position" class="form-control">
+          </div>
+          
+          <div class="form-group">
+            <label for="question_show_answer">解答表示</label>
+            <div>
+              <input type="checkbox" name="question[show_answer]" id="question_show_answer">
+              <label for="question_show_answer" class="checkbox-label">回答後に正解を表示する</label>
+            </div>
+          </div>
+          
+          <!-- 問題タイプによって表示を変える部分 -->
+          <div id="edit-question-type-container">
+            <!-- 〇×問題 -->
+            <div id="edit-true-false-options" class="question-type-options">
+              <div class="form-group">
+                <label>正解</label>
+                <div class="true-false-buttons">
+                  <label>
+                    <input type="radio" name="question[answer]" value="○"> ○
+                  </label>
+                  <label>
+                    <input type="radio" name="question[answer]" value="×"> ×
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 自由記述問題 -->
+            <div id="edit-free-response-options" class="question-type-options">
+              <div class="form-group">
+                <label for="question_answer">正解 (空欄可)</label>
+                <input type="text" name="question[answer]" id="question_answer" class="form-control">
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-actions mt-3 text-center">
+            <button type="submit" class="btn btn-primary">更新</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -501,6 +570,25 @@
     margin-top: 1.5rem;
   }
   
+  .true-false-buttons {
+    display: flex;
+    gap: 20px;
+  }
+  
+  .true-false-buttons label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+  
+  .question-type-options {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+  }
+  
   .alert {
     position: relative;
     padding: 0.75rem 1.25rem;
@@ -517,6 +605,113 @@
   
   .text-muted {
     color: #6c757d;
+  }
+  
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+  }
+  
+  .modal-content {
+    position: relative;
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 0;
+    width: 80%;
+    max-width: 700px;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+    animation: modalFadeIn 0.3s;
+  }
+  
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: translateY(-30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .modal-header {
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .modal-header h4 {
+    margin: 0;
+    font-size: 18px;
+  }
+  
+  .modal-close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  
+  .modal-close:hover {
+    color: #333;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .spinner-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 200px;
+  }
+  
+  .spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 2s linear infinite;
+    margin-bottom: 15px;
+  }
+  
+  .loading-text {
+    color: #666;
+    font-size: 14px;
+    text-align: center;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* 削除ボタン用のスタイル調整 */
+  .question-actions .btn-outline-danger {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    background-color: transparent;
+    border: 1px solid #dc3545;
+    border-radius: 0.2rem;
+    color: #dc3545;
+    font-weight: 400;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+    margin-left: 5px;
+  }
+  
+  .question-actions form {
+    display: inline;
   }
 </style>
 
@@ -688,6 +883,200 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Always return true to submit the form
     return true;
+  }
+  
+  // 注意: 以下のコードは古いモーダル用ですが、互換性のために残しておきます
+  // 実際には直接編集モーダルが使用されます（下部のスクリプトブロック参照）
+  const editQuestionButtons = document.querySelectorAll('.edit-question-btn');
+  console.log('編集ボタン数:', editQuestionButtons.length);
+  
+  // モーダルの取得
+  const directEditModal = document.getElementById('direct-edit-question-modal');
+  const modalClose = document.querySelector('#direct-edit-question-modal .modal-close');
+  const editForm = document.getElementById('direct-edit-form');
+  const editQuestionId = document.getElementById('edit-question-id');
+  const editAuthToken = document.getElementById('edit-auth-token');
+  
+  // 問題タイプのコンテナ取得
+  const editTrueFalseOptions = document.getElementById('edit-true-false-options');
+  const editFreeResponseOptions = document.getElementById('edit-free-response-options');
+  
+  // 問題タイプに応じた表示切替
+  function showEditQuestionTypeOptions(questionType, answer) {
+    // すべての問題タイプオプションを非表示
+    editTrueFalseOptions.style.display = 'none';
+    editFreeResponseOptions.style.display = 'none';
+    
+    // 問題タイプに応じた表示切替
+    if (questionType === 'true_false') {
+      editTrueFalseOptions.style.display = 'block';
+      // ラジオボタンの選択状態を設定
+      const radioButtons = editTrueFalseOptions.querySelectorAll('input[type="radio"]');
+      radioButtons.forEach(radio => {
+        if (radio.value === answer) {
+          radio.checked = true;
+        }
+      });
+    } else if (questionType === 'free_response') {
+      editFreeResponseOptions.style.display = 'block';
+      // テキストフィールドに値を設定
+      document.getElementById('question_answer').value = answer;
+    }
+    // multiple_choice は編集ダイアログでは未対応
+  }
+  
+  // 編集ボタンのクリックイベントを追加
+  editQuestionButtons.forEach(button => {
+    button.addEventListener('click', function(e) {
+      e.preventDefault();
+      const questionId = this.dataset.questionId;
+      
+      // フォームの設定
+      editQuestionId.value = questionId;
+      editAuthToken.value = document.querySelector('meta[name="csrf-token"]').content;
+      editForm.action = `/videos/<%= @video.id %>/questions/${questionId}`;
+      
+      // 問題データを取得して表示
+      fetch(`/videos/<%= @video.id %>/questions/${questionId}/edit`, {
+        headers: {
+          "Accept": "application/json"
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        // フォームに値を設定
+        document.getElementById('question_content').value = data.content;
+        document.getElementById('question_time_position').value = data.time_position;
+        document.getElementById('question_show_answer').checked = data.show_answer;
+        
+        // 問題タイプに応じた表示
+        showEditQuestionTypeOptions(data.question_type, data.answer);
+        
+        // モーダルを表示
+        directEditModal.style.display = 'block';
+      })
+      .catch(error => {
+        console.error('問題データの取得に失敗しました:', error);
+        alert('問題データの取得に失敗しました。再度お試しください。');
+      });
+    });
+  });
+  
+  // フォーム送信時の処理
+  if (editForm) {
+    editForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      // FormDataの作成
+      const formData = new FormData(this);
+      
+      // フォームの送信
+      fetch(this.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      })
+      .then(response => {
+        if (response.ok) {
+          // 成功時はページをリロード
+          window.location.reload();
+        } else {
+          return response.json().then(data => {
+            throw new Error(data.message || 'エラーが発生しました');
+          });
+        }
+      })
+      .catch(error => {
+        console.error('問題の更新に失敗しました:', error);
+        alert('問題の更新に失敗しました: ' + error.message);
+      });
+    });
+  }
+  
+  // モーダルを閉じる
+  if (modalClose) {
+    modalClose.addEventListener('click', function() {
+      directEditModal.style.display = 'none';
+    });
+  }
+  
+  // モーダルの外側をクリックしても閉じる
+  window.addEventListener('click', function(event) {
+    if (event.target === directEditModal) {
+      directEditModal.style.display = 'none';
+    }
+  });
+  
+  // 問題データを取得する関数
+  // 注意: 古い問題データ取得関数は使用されないため削除しました
+  // 現在は簡易版モーダルダイアログ（direct-edit-question-modal）が使用されます
+  
+  // 多肢選択問題の選択肢管理
+  function initEditMultipleChoiceOptions() {
+    const addOptionBtn = document.querySelector('#edit-question-form #add-option-btn');
+    const optionsContainer = document.querySelector('#edit-question-form #options-container');
+    
+    if (!addOptionBtn || !optionsContainer) return;
+    
+    // 選択肢の追加
+    addOptionBtn.addEventListener('click', function() {
+      const optionItems = optionsContainer.querySelectorAll('.option-item');
+      const optionCount = optionItems.length + 1;
+      
+      const optionItem = document.createElement('div');
+      optionItem.className = 'option-item';
+      
+      optionItem.innerHTML = `
+        <input type="text" name="options[][content]" class="form-control option-content" placeholder="選択肢${optionCount}">
+        <div class="option-correct">
+          <input type="radio" name="option_correct" value="${optionCount-1}"> 正解
+          <input type="hidden" name="options[][is_correct]" value="false" class="is-correct-field">
+        </div>
+        <button type="button" class="remove-option-btn btn btn-sm btn-outline-danger">削除</button>
+      `;
+      
+      optionsContainer.appendChild(optionItem);
+      
+      // ラジオボタンのイベントリスナー
+      const newRadio = optionItem.querySelector('input[type="radio"]');
+      newRadio.addEventListener('change', updateEditCorrectAnswers);
+      
+      // 削除ボタンのイベントリスナー
+      const removeBtn = optionItem.querySelector('.remove-option-btn');
+      removeBtn.addEventListener('click', function() {
+        optionItem.remove();
+        updateEditCorrectAnswers();
+      });
+    });
+    
+    // 既存の選択肢の削除ボタン
+    const existingRemoveButtons = document.querySelectorAll('#edit-question-form .remove-option-btn');
+    existingRemoveButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        this.closest('.option-item').remove();
+        updateEditCorrectAnswers();
+      });
+    });
+    
+    // 既存のラジオボタンにイベントリスナーを追加
+    const existingRadios = document.querySelectorAll('#edit-question-form input[name="option_correct"]');
+    existingRadios.forEach(radio => {
+      radio.addEventListener('change', updateEditCorrectAnswers);
+    });
+    
+    // 正解の更新
+    function updateEditCorrectAnswers() {
+      const radioButtons = document.querySelectorAll('#edit-question-form input[name="option_correct"]');
+      const isCorrectFields = document.querySelectorAll('#edit-question-form .is-correct-field');
+      
+      for (let i = 0; i < radioButtons.length; i++) {
+        if (i < isCorrectFields.length) {
+          isCorrectFields[i].value = (radioButtons[i].checked) ? "true" : "false";
+        }
+      }
+    }
   }
 });
 </script>

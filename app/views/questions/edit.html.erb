@@ -1,0 +1,113 @@
+<%= form_with(model: [@video, @question], id: "edit-question-form", local: true) do |form| %>
+  <div class="form-group">
+    <%= form.label :content, "問題文" %>
+    <%= form.text_area :content, rows: 3, class: "form-control" %>
+  </div>
+  
+  <div class="form-group">
+    <%= form.label :question_type, "問題タイプ" %>
+    <%= form.select :question_type, 
+        options_for_select([
+          ["○×問題", "true_false"], 
+          ["選択問題", "multiple_choice"], 
+          ["記述問題", "free_response"]
+        ], @question.question_type), 
+        {}, 
+        { class: "form-control", id: "question-type-select" } %>
+  </div>
+  
+  <div id="true-false-options" class="question-type-options" style="display:none;">
+    <div class="form-group">
+      <%= form.label :answer, "正解" %>
+      <%= form.select :answer, 
+          options_for_select([["○", "○"], ["×", "×"]], @question.answer), 
+          {}, 
+          { class: "form-control" } %>
+    </div>
+  </div>
+  
+  <div id="multiple-choice-options" class="question-type-options" style="display:none;">
+    <div class="form-group">
+      <label>選択肢</label>
+      <div id="options-container">
+        <% if @question.question_type == 'multiple_choice' && @question.options.any? %>
+          <% @question.options.each_with_index do |option, index| %>
+            <div class="option-item">
+              <input type="text" name="options[][content]" value="<%= option.content %>" class="form-control option-content" placeholder="選択肢<%= index + 1 %>">
+              <div class="option-correct">
+                <input type="radio" name="option_correct" value="<%= index %>" <%= 'checked' if option.is_correct %>> 正解
+                <input type="hidden" name="options[][is_correct]" value="<%= option.is_correct ? 'true' : 'false' %>" class="is-correct-field">
+              </div>
+              <% if @question.options.size > 1 %>
+                <button type="button" class="remove-option-btn btn btn-sm btn-outline-danger">削除</button>
+              <% end %>
+            </div>
+          <% end %>
+        <% else %>
+          <div class="option-item">
+            <input type="text" name="options[][content]" class="form-control option-content" placeholder="選択肢1">
+            <div class="option-correct">
+              <input type="radio" name="option_correct" value="0" checked> 正解
+              <input type="hidden" name="options[][is_correct]" value="true" class="is-correct-field">
+            </div>
+          </div>
+        <% end %>
+      </div>
+      <button type="button" id="add-option-btn" class="btn btn-sm btn-outline-secondary mt-2">選択肢を追加</button>
+    </div>
+  </div>
+  
+  <div id="free-response-options" class="question-type-options" style="display:none;">
+    <div class="form-group">
+      <%= form.label :answer, "正解 (キーワード)" %>
+      <%= form.text_field :answer, class: "form-control" %>
+    </div>
+  </div>
+  
+  <div class="form-group">
+    <%= form.label :time_position, "表示時間 (秒)" %>
+    <%= form.number_field :time_position, class: "form-control", id: "edit-time-position" %>
+  </div>
+  
+  <div class="form-group">
+    <%= form.label :show_answer, "解答表示" %>
+    <div>
+      <%= form.check_box :show_answer %>
+      <label for="question_show_answer" class="checkbox-label">回答後に正解を表示する</label>
+    </div>
+  </div>
+  
+  <div class="form-actions mt-3 text-center">
+    <%= form.submit "更新", class: "btn btn-primary" %>
+  </div>
+<% end %>
+
+<style>
+  #edit-question-form .form-group {
+    margin-bottom: 15px;
+  }
+  
+  #edit-question-form .option-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+  }
+  
+  #edit-question-form .option-correct {
+    white-space: nowrap;
+    margin-left: 10px;
+  }
+  
+  #edit-question-form .remove-option-btn {
+    margin-left: auto;
+  }
+  
+  .mt-3 {
+    margin-top: 1rem;
+  }
+  
+  .text-center {
+    text-align: center;
+  }
+</style>
