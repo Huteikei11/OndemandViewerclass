@@ -6,10 +6,10 @@ class Question < ApplicationRecord
   validates :content, presence: true
   validates :time_position, presence: true
   validates :question_type, presence: true, inclusion: { in: %w[true_false multiple_choice free_response] }
-  
+
   # 〇×問題のみ回答が必須
-  validates :answer, presence: true, if: -> { question_type == 'true_false' }
-  
+  validates :answer, presence: true, if: -> { question_type == "true_false" }
+
   # 〇×問題の場合、回答は○または×のみ有効
-  validates :answer, inclusion: { in: %w[○ ×] }, if: -> { question_type == 'true_false' }
+  validates :answer, inclusion: { in: %w[○ ×] }, if: -> { question_type == "true_false" }
 end

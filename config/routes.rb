@@ -7,19 +7,19 @@ Rails.application.routes.draw do
 
   # Root path
   root "videos#index"
-  
+
   # Video resources
   resources :videos do
     # Nested resources for questions and notes
-    resources :questions, only: [:create, :edit, :update, :destroy] do
-      resources :options, only: [:create, :update, :destroy]
-      resources :user_responses, only: [:create]
+    resources :questions, only: [ :create, :edit, :update, :destroy ] do
+      resources :options, only: [ :create, :update, :destroy ]
+      resources :user_responses, only: [ :create ]
     end
-    resources :notes, only: [:create, :update, :destroy]
-    
+    resources :notes, only: [ :create, :update, :destroy ]
+
     # Custom routes for player view
     member do
-      get 'player'
+      get "player"
     end
   end
 end
