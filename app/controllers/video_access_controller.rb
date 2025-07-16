@@ -5,9 +5,11 @@ class VideoAccessController < ApplicationController
     if user_signed_in?
       @public_videos = Video.public_videos
       @accessible_videos = current_user.accessible_videos.private_videos
+      @my_videos = current_user.created_videos
     else
       @public_videos = Video.public_videos
       @accessible_videos = []
+      @my_videos = []
     end
   end
 

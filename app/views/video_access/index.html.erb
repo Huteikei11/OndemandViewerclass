@@ -29,6 +29,36 @@
       <p>公開動画はありません。</p>
     <% end %>
 
+    <% if user_signed_in? && @my_videos.any? %>
+      <h2 class="mt-4">あなたが作成した動画</h2>
+      <div class="row">
+        <% @my_videos.each do |video| %>
+          <div class="col-md-4 mb-3">
+            <div class="card border-primary">
+              <div class="card-body">
+                <h5 class="card-title">
+                  <%= video.title %>
+                  <% if video.is_private %>
+                    <span class="badge bg-warning text-dark ms-2">限定公開</span>
+                  <% else %>
+                    <span class="badge bg-success ms-2">公開</span>
+                  <% end %>
+                </h5>
+                <p class="card-text"><%= truncate(video.description, length: 100) if video.description %></p>
+                <div class="d-flex flex-wrap gap-1">
+                  <%= link_to "視聴する", player_video_path(video), class: "btn btn-success btn-sm" %>
+                  <%= link_to "編集", edit_video_path(video), class: "btn btn-outline-primary btn-sm" %>
+                  <%= link_to "分析", video_management_analytics_path(video_id: video), class: "btn btn-outline-info btn-sm" %>
+                  <%= link_to "削除", video_path(video), data: { "turbo-method": :delete, "turbo-confirm": "本当に削除しますか？" }, 
+                      class: "btn btn-outline-danger btn-sm" %>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+
     <% if user_signed_in? && @accessible_videos.any? %>
       <h2 class="mt-4">アクセス可能な限定公開動画</h2>
       <div class="row">
