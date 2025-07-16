@@ -5,7 +5,7 @@ class VideosController < ApplicationController
   before_action :check_video_management, only: [:edit, :update, :destroy]
 
   def index
-    redirect_to video_access_index_path
+    redirect_to root_path
   end
 
   def show
@@ -49,7 +49,7 @@ class VideosController < ApplicationController
 
   def destroy
     @video.destroy
-    redirect_to video_access_index_path, notice: "動画が正常に削除されました。"
+    redirect_to root_path, notice: "動画が正常に削除されました。"
   end
 
   private
@@ -71,7 +71,7 @@ class VideosController < ApplicationController
 
   def check_video_management
     unless current_user.can_manage_video?(@video)
-      redirect_to video_access_index_path, alert: 'この動画を管理する権限がありません。'
+      redirect_to root_path, alert: 'この動画を管理する権限がありません。'
     end
   end
 

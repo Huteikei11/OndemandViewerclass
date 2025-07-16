@@ -18,7 +18,7 @@
                 <%= link_to "視聴する", player_video_path(video), class: "btn btn-success" %>
                 <% if user_signed_in? && current_user.can_manage_video?(video) %>
                   <%= link_to "編集", edit_video_path(video), class: "btn btn-outline-primary btn-sm" %>
-                  <%= link_to "分析", video_management_analytics_path(video: video), class: "btn btn-outline-info btn-sm" %>
+                  <%= link_to "分析", video_management_analytics_path(video_id: video), class: "btn btn-outline-info btn-sm" %>
                 <% end %>
               </div>
             </div>
@@ -41,7 +41,7 @@
                 <%= link_to "視聴する", player_video_path(video), class: "btn btn-success" %>
                 <% if current_user.can_manage_video?(video) %>
                   <%= link_to "編集", edit_video_path(video), class: "btn btn-outline-primary btn-sm" %>
-                  <%= link_to "分析", video_management_analytics_path(video: video), class: "btn btn-outline-info btn-sm" %>
+                  <%= link_to "分析", video_management_analytics_path(video_id: video), class: "btn btn-outline-info btn-sm" %>
                 <% end %>
               </div>
             </div>

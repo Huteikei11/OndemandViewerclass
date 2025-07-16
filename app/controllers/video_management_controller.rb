@@ -36,13 +36,13 @@ class VideoManagementController < ApplicationController
       
       if user
         if @video.video_managers.find_by(user: user)
-          redirect_to video_management_analytics_path(video: @video), alert: 'このユーザーは既に管理者です。'
+          redirect_to video_management_analytics_path(video_id: @video), alert: 'このユーザーは既に管理者です。'
         else
           @video.video_managers.create(user: user)
-          redirect_to video_management_analytics_path(video: @video), notice: '管理者を追加しました。'
+          redirect_to video_management_analytics_path(video_id: @video), notice: '管理者を追加しました。'
         end
       else
-        redirect_to video_management_add_manager_path(video: @video), alert: 'ユーザーが見つかりません。'
+        redirect_to video_management_add_manager_path(video_id: @video), alert: 'ユーザーが見つかりません。'
       end
     end
   end
@@ -55,7 +55,7 @@ class VideoManagementController < ApplicationController
 
   def check_management_permission
     unless current_user.can_manage_video?(@video)
-      redirect_to video_access_index_path, alert: 'この動画を管理する権限がありません。'
+      redirect_to root_path, alert: 'この動画を管理する権限がありません。'
     end
   end
 end
