@@ -1,0 +1,59 @@
+<div class="row">
+  <div class="col-12">
+    <h1>動画一覧</h1>
+    
+    <div class="mb-4">
+      <%= link_to "限定公開動画にアクセス", video_access_new_path, class: "btn btn-primary" %>
+    </div>
+
+    <% if @public_videos.any? %>
+      <h2>公開動画</h2>
+      <div class="row">
+        <% @public_videos.each do |video| %>
+          <div class="col-md-4 mb-3">
+            <div class="card">
+              <div class="card-body">
+                <h5 class="card-title"><%= video.title %></h5>
+                <p class="card-text"><%= truncate(video.description, length: 100) if video.description %></p>
+                <%= link_to "視聴する", player_video_path(video), class: "btn btn-success" %>
+                <% if user_signed_in? && current_user.can_manage_video?(video) %>
+                  <%= link_to "編集", edit_video_path(video), class: "btn btn-outline-primary btn-sm" %>
+                  <%= link_to "分析", video_management_analytics_path(video: video), class: "btn btn-outline-info btn-sm" %>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <p>公開動画はありません。</p>
+    <% end %>
+
+    <% if user_signed_in? && @accessible_videos.any? %>
+      <h2 class="mt-4">アクセス可能な限定公開動画</h2>
+      <div class="row">
+        <% @accessible_videos.each do |video| %>
+          <div class="col-md-4 mb-3">
+            <div class="card">
+              <div class="card-body">
+                <h5 class="card-title"><%= video.title %></h5>
+                <p class="card-text"><%= truncate(video.description, length: 100) if video.description %></p>
+                <%= link_to "視聴する", player_video_path(video), class: "btn btn-success" %>
+                <% if current_user.can_manage_video?(video) %>
+                  <%= link_to "編集", edit_video_path(video), class: "btn btn-outline-primary btn-sm" %>
+                  <%= link_to "分析", video_management_analytics_path(video: video), class: "btn btn-outline-info btn-sm" %>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% if user_signed_in? %>
+      <div class="mt-4">
+        <%= link_to "新しい動画をアップロード", new_video_path, class: "btn btn-primary" %>
+      </div>
+    <% end %>
+  </div>
+</div>

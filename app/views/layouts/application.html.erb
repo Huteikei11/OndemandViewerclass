@@ -19,20 +19,45 @@
 
     <%# Includes all stylesheet files in app/assets/stylesheets %>
     <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <%= javascript_importmap_tags %>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
   </head>
 
   <body>
-    <% if notice %>
-      <div class="alert alert-success">
-        <%= notice %>
+    <header class="navbar navbar-expand-lg navbar-dark bg-dark">
+      <div class="container">
+        <%= link_to "OnDemand Video Class", root_path, class: "navbar-brand" %>
+        
+        <div class="navbar-nav ms-auto">
+          <% if user_signed_in? %>
+            <span class="navbar-text me-3">
+              こんにちは、<%= current_user.name %>さん
+            </span>
+            <%= link_to "ログアウト", destroy_user_session_path, method: :delete, class: "nav-link" %>
+          <% else %>
+            <%= link_to "ログイン", new_user_session_path, class: "nav-link" %>
+            <%= link_to "新規登録", new_user_registration_path, class: "nav-link" %>
+          <% end %>
+        </div>
       </div>
-    <% end %>
-    <% if alert %>
-      <div class="alert alert-danger">
-        <%= alert %>
-      </div>
-    <% end %>
-    <%= yield %>
+    </header>
+
+    <main class="container mt-4">
+      <% if notice %>
+        <div class="alert alert-success alert-dismissible fade show">
+          <%= notice %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% end %>
+      <% if alert %>
+        <div class="alert alert-danger alert-dismissible fade show">
+          <%= alert %>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      <% end %>
+      
+      <%= yield %>
+    </main>
   </body>
 </html>

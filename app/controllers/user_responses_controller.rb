@@ -3,6 +3,8 @@ class UserResponsesController < ApplicationController
 
   def create
     @user_response = @question.user_responses.new
+    @user_response.user = current_user if user_signed_in?
+    @user_response.response_time = params[:user_response][:response_time].to_i if params[:user_response][:response_time]
 
     # Check if the answer is correct based on question type
     if @question.question_type == "true_false"
@@ -30,6 +32,7 @@ class UserResponsesController < ApplicationController
         option = @question.options.find_by(id: option_id)
         if option
           @user_response.user_answer = option.content
+          @user_response.selected_option_id = option.id
           @user_response.is_correct = option.is_correct
         else
           @user_response.user_answer = "選択なし"
@@ -47,7 +50,8 @@ class UserResponsesController < ApplicationController
       response_data = {
         user_response: @user_response,
         correct: @user_response.is_correct,
-        show_answer: @question.show_answer
+        show_answer: @question.show_answer,
+        response_time: @user_response.response_time_in_seconds
       }
 
       # 回答を表示する場合は正解情報を含める

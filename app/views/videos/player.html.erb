@@ -413,7 +413,8 @@ document.addEventListener('DOMContentLoaded', function() {
   let activeQuestion = null;
   let videoCheckInterval;
   let questionIndicatorTimeout;
-  
+  let questionStartTime = null; // 質問表示開始時間を記録
+
   if (videoPlayer) {
     // 動画の読み込み状態をデバッグログで確認
     console.log('初期動画状態:', {
@@ -557,6 +558,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function showQuestion(question) {
       console.log('問題表示:', question);
       
+      // 問題表示開始時間を記録
+      questionStartTime = Date.now();
+      
       // 問題データの検証
       if (!question || !question.content) {
         console.error('問題データが不正です:', question);
@@ -683,6 +687,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     function submitAnswer(userAnswer, optionId) {
+      // 回答時間を計算（ミリ秒）
+      const responseTime = questionStartTime ? Date.now() - questionStartTime : 0;
+      
       const formData = new FormData();
       
       if (userAnswer) {
@@ -692,6 +699,9 @@ document.addEventListener('DOMContentLoaded', function() {
       if (optionId) {
         formData.append('option_id', optionId);
       }
+      
+      // 回答時間を追加
+      formData.append('user_response[response_time]', responseTime.toString());
       
       // CSRFトークンを取得
       const csrfToken = document.querySelector('meta[name="csrf-token"]');
@@ -749,23 +759,32 @@ document.addEventListener('DOMContentLoaded', function() {
         // Display result
         resultMessage.style.display = 'block';
         
+        let resultText = '';
+        
         if (data.correct) {
           resultMessage.className = 'result-message correct';
-          resultMessage.textContent = '正解です！';
+          resultText = '正解です！';
           
           // 解答表示設定が有効な場合、正解も表示
           if (data.show_answer && data.correct_answer) {
-            resultMessage.textContent += ` 正解: ${data.correct_answer}`;
+            resultText += ` 正解: ${data.correct_answer}`;
           }
         } else {
           resultMessage.className = 'result-message incorrect';
-          resultMessage.textContent = '不正解です。';
+          resultText = '不正解です。';
           
           // 解答表示設定が有効な場合のみ正解を表示
           if (data.show_answer && data.correct_answer) {
-            resultMessage.textContent += ` 正解: ${data.correct_answer}`;
+            resultText += ` 正解: ${data.correct_answer}`;
           }
         }
+        
+        // 回答時間を表示
+        if (data.response_time) {
+          resultText += ` (回答時間: ${data.response_time.toFixed(1)}秒)`;
+        }
+        
+        resultMessage.textContent = resultText;
         
         // Reset active question after 3 seconds and resume video
         setTimeout(() => {

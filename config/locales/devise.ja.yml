@@ -1,0 +1,51 @@
+ja:
+  activerecord:
+    models:
+      user: ユーザー
+    attributes:
+      user:
+        name: 名前
+        email: メールアドレス
+        password: パスワード
+        password_confirmation: パスワード確認
+    errors:
+      models:
+        user:
+          attributes:
+            name:
+              blank: を入力してください
+              too_short: は%{count}文字以上で入力してください
+            email:
+              blank: を入力してください
+              invalid: の形式が正しくありません
+              taken: は既に使用されています
+            password:
+              blank: を入力してください
+              too_short: は%{count}文字以上で入力してください
+            password_confirmation:
+              confirmation: とパスワードの入力が一致しません
+  devise:
+    registrations:
+      user:
+        signed_up: アカウント登録が完了しました。
+        updated: アカウント情報を変更しました。
+        destroyed: アカウントを削除しました。またのご利用をお待ちしております。
+    sessions:
+      user:
+        signed_in: ログインしました。
+        signed_out: ログアウトしました。
+    passwords:
+      user:
+        send_instructions: パスワードの再設定について数分以内にメールでご連絡いたします。
+        updated: パスワードが正しく変更されました。
+    confirmations:
+      user:
+        send_instructions: アカウントの有効化について数分以内にメールでご連絡いたします。
+        confirmed: アカウントが有効化されました。
+    unlocks:
+      user:
+        send_instructions: アカウントの凍結解除について数分以内にメールでご連絡いたします。
+        unlocked: アカウントが凍結解除されました。
+  errors:
+    messages:
+      not_saved: "%{count}つのエラーが発生したため保存されませんでした"

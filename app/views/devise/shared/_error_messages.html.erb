@@ -1,0 +1,12 @@
+<% if resource.errors.any? %>
+  <div class="alert alert-danger" role="alert" data-turbo-cache="false">
+    <h6 class="alert-heading">
+      <%= pluralize(resource.errors.count, "つのエラー") %>があります:
+    </h6>
+    <ul class="mb-0">
+      <% resource.errors.full_messages.each do |message| %>
+        <li><%= message %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
