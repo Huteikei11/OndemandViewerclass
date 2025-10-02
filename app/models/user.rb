@@ -5,7 +5,7 @@ class User < ApplicationRecord
          :recoverable, :rememberable, :validatable
 
   # Associations
-  has_many :created_videos, class_name: 'Video', foreign_key: 'creator_id', dependent: :destroy
+  has_many :created_videos, class_name: "Video", foreign_key: "creator_id", dependent: :destroy
   has_many :video_managers, dependent: :destroy
   has_many :managed_videos, through: :video_managers, source: :video
   has_many :video_accesses, dependent: :destroy

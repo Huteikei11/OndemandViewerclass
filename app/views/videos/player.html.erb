@@ -2,6 +2,36 @@
   <div class="video-section">
     <% if @video.video_file.attached? %>
       <div class="question-indicator" id="question-indicator" style="display: none;">問題あり！</div>
+      
+      <!-- デバッグ情報パネル -->
+      <div class="debug-panel" id="debug-panel" style="display: none;">
+        <div class="debug-header">
+          目線追跡デバッグ情報
+          <button class="btn btn-sm btn-outline-light ms-2" id="toggle-camera-preview">カメラ</button>
+        </div>
+        <div class="debug-content">
+          <div>顔検出: <span id="face-detected">-</span></div>
+          <div>目線方向X: <span id="gaze-x">-</span></div>
+          <div>目線方向Y: <span id="gaze-y">-</span></div>
+          <div>目線方向: <span id="gaze-direction">-</span></div>
+          <div>正面向き割合: <span id="front-facing">-</span>%</div>
+          <div>最後の動き: <span id="last-movement">-</span>秒前</div>
+          <div>メモ入力回数: <span id="note-inputs">0</span></div>
+          
+          <!-- カメラプレビュー -->
+          <div class="camera-preview" id="camera-preview" style="display: none;">
+            <video id="debug-camera" width="160" height="120" autoplay muted></video>
+            <canvas id="debug-canvas" width="160" height="120"></canvas>
+          </div>
+          
+          <!-- 集中度変動ログ -->
+          <div class="concentration-log">
+            <div class="log-header">集中度変動ログ</div>
+            <div class="log-content" id="concentration-log"></div>
+          </div>
+        </div>
+      </div>
+      
       <video id="video-player" controls>
         <source src="<%= url_for(@video.video_file) %>" type="<%= @video.video_file.content_type %>">
         Your browser does not support the video tag.
@@ -18,7 +48,22 @@
         <% if @video.pdf_file.attached? %>
           <a href="<%= url_for(@video.pdf_file) %>" target="_blank" class="btn btn-primary">講義資料を開く</a>
         <% end %>
-        <%= link_to '戻る', videos_path, class: "btn btn-secondary" %>
+        <%= link_to '戻る', root_path, class: "btn btn-secondary" %>
+        
+        <!-- 集中度ゲージ -->
+        <div class="concentration-gauge" id="concentration-gauge">
+          <div class="gauge-header">
+            <span>集中度</span>
+            <button class="btn btn-sm btn-outline-light" id="toggle-debug-info">デバッグ</button>
+          </div>
+          <div class="gauge-bar">
+            <div class="gauge-level gauge-green" id="gauge-green"></div>
+            <div class="gauge-level gauge-yellow" id="gauge-yellow"></div>
+            <div class="gauge-level gauge-orange" id="gauge-orange"></div>
+            <div class="gauge-level gauge-red" id="gauge-red"></div>
+          </div>
+          <div class="gauge-score" id="gauge-score">100%</div>
+        </div>
       </div>
     </div>
   </div>
@@ -127,7 +172,7 @@
     padding: 5px 10px;
     border-radius: 4px;
     font-weight: bold;
-    z-index: 100;
+    z-index: 101;
     display: none;
     animation: fadeIn 0.5s;
   }
@@ -135,6 +180,160 @@
   @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
+  }
+  
+  /* 集中度ゲージ */
+  .concentration-gauge {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px;
+    border-radius: 8px;
+    margin-left: 10px;
+    min-width: 100px;
+  }
+  
+  .gauge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: bold;
+    width: 100%;
+  }
+  
+  .gauge-bar {
+    display: flex;
+    flex-direction: column;
+    height: 60px;
+    width: 20px;
+    border: 1px solid #555;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 5px;
+  }
+  
+  .gauge-level {
+    flex: 1;
+    transition: opacity 0.3s ease;
+    opacity: 0.3;
+  }
+  
+  .gauge-level.active {
+    opacity: 1;
+  }
+  
+  .gauge-green { background-color: #28a745; }
+  .gauge-yellow { background-color: #ffc107; }
+  .gauge-orange { background-color: #fd7e14; }
+  .gauge-red { background-color: #dc3545; }
+  
+  .gauge-score {
+    text-align: center;
+    font-size: 11px;
+    font-weight: bold;
+  }
+  
+  /* デバッグパネル */
+  .debug-panel {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(0, 0, 0, 0.95);
+    color: white;
+    padding: 10px;
+    border-radius: 8px;
+    z-index: 99;
+    max-width: 300px;
+    font-size: 11px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  
+  .debug-header {
+    font-weight: bold;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #555;
+    padding-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .debug-content div {
+    margin-bottom: 3px;
+  }
+  
+  .camera-preview {
+    margin-top: 10px;
+    border-top: 1px solid #555;
+    padding-top: 10px;
+  }
+  
+  .camera-preview video,
+  .camera-preview canvas {
+    border: 1px solid #555;
+    border-radius: 4px;
+    margin-bottom: 5px;
+  }
+  
+  .concentration-log {
+    margin-top: 10px;
+    border-top: 1px solid #555;
+    padding-top: 10px;
+  }
+  
+  .log-header {
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+  
+  .log-content {
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+  
+  .log-entry {
+    margin-bottom: 2px;
+    padding: 2px 4px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  
+  .log-entry:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+  
+  .log-entry.positive {
+    background-color: rgba(40, 167, 69, 0.3);
+  }
+  
+  .log-entry.negative {
+    background-color: rgba(220, 53, 69, 0.3);
+  }
+  
+  .log-entry.neutral {
+    background-color: rgba(108, 117, 125, 0.3);
+  }
+  
+  .log-main {
+    font-weight: bold;
+  }
+  
+  .log-detail {
+    margin-top: 3px;
+    padding-top: 3px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 9px;
+    line-height: 1.3;
+    color: rgba(255, 255, 255, 0.8);
   }
   
   #video-player {
@@ -156,6 +355,7 @@
   .video-actions {
     display: flex;
     justify-content: flex-start;
+    align-items: center;
     gap: 10px;
   }
   
@@ -377,6 +577,547 @@ document.addEventListener('DOMContentLoaded', function() {
     console.error('Caught global error:', event.error);
   });
   
+  // 集中度管理クラス
+  class ConcentrationTracker {
+    constructor() {
+      this.score = 100;
+      this.faceDetected = false;
+      this.gazeX = 0;
+      this.gazeY = 0;
+      this.frontFacingRatio = 100;
+      this.lastMovementTime = Date.now();
+      this.noteInputs = 0;
+      this.responseStartTime = null;
+      this.questionDisplayTime = null;
+      
+      this.initializeCamera();
+      this.initializeGauge();
+      this.initializeDebugPanel();
+      this.startTracking();
+    }
+    
+    async initializeCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { width: 320, height: 240 } 
+        });
+        
+        // 隠しvideo要素を作成してカメラ映像を表示
+        this.cameraVideo = document.createElement('video');
+        this.cameraVideo.srcObject = stream;
+        this.cameraVideo.autoplay = true;
+        this.cameraVideo.style.display = 'none';
+        document.body.appendChild(this.cameraVideo);
+        
+        // Canvas要素を作成して顔検出用に使用
+        this.canvas = document.createElement('canvas');
+        this.canvas.width = 320;
+        this.canvas.height = 240;
+        this.ctx = this.canvas.getContext('2d');
+        
+        console.log('カメラ初期化完了');
+      } catch (error) {
+        console.error('カメラアクセスエラー:', error);
+      }
+    }
+    
+    initializeGauge() {
+      this.gaugeElements = {
+        green: document.getElementById('gauge-green'),
+        yellow: document.getElementById('gauge-yellow'),
+        orange: document.getElementById('gauge-orange'),
+        red: document.getElementById('gauge-red'),
+        score: document.getElementById('gauge-score')
+      };
+    }
+    
+    initializeDebugPanel() {
+      const toggleButton = document.getElementById('toggle-debug-info');
+      const debugPanel = document.getElementById('debug-panel');
+      
+      toggleButton.addEventListener('click', () => {
+        debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
+      });
+      
+      // カメラプレビュー機能
+      const toggleCameraButton = document.getElementById('toggle-camera-preview');
+      const cameraPreview = document.getElementById('camera-preview');
+      const debugCamera = document.getElementById('debug-camera');
+      const debugCanvas = document.getElementById('debug-canvas');
+      
+      toggleCameraButton.addEventListener('click', () => {
+        if (cameraPreview.style.display === 'none') {
+          cameraPreview.style.display = 'block';
+          // カメラ映像をデバッグ用videoに表示
+          if (this.cameraVideo && this.cameraVideo.srcObject) {
+            debugCamera.srcObject = this.cameraVideo.srcObject;
+          }
+        } else {
+          cameraPreview.style.display = 'none';
+        }
+      });
+      
+      this.debugElements = {
+        faceDetected: document.getElementById('face-detected'),
+        gazeX: document.getElementById('gaze-x'),
+        gazeY: document.getElementById('gaze-y'),
+        gazeDirection: document.getElementById('gaze-direction'),
+        frontFacing: document.getElementById('front-facing'),
+        lastMovement: document.getElementById('last-movement'),
+        noteInputs: document.getElementById('note-inputs')
+      };
+      
+      // ログ機能の初期化
+      this.logElement = document.getElementById('concentration-log');
+      this.logs = [];
+    }
+    
+    startTracking() {
+      setInterval(() => {
+        this.updateFaceTracking();
+        this.calculateConcentration();
+        this.updateGauge();
+        this.updateDebugInfo();
+      }, 1000); // 1秒ごとに更新
+    }
+    
+    updateFaceTracking() {
+      if (!this.cameraVideo || !this.canvas) return;
+      
+      try {
+        // カメラ映像をcanvasに描画
+        this.ctx.drawImage(this.cameraVideo, 0, 0, 320, 240);
+        const imageData = this.ctx.getImageData(0, 0, 320, 240);
+        
+        // 簡易的な顔検出（実際の実装では顔検出ライブラリを使用）
+        this.faceDetected = this.detectFace(imageData);
+        
+        if (this.faceDetected) {
+          // 簡易的な目線方向計算
+          this.gazeX = Math.random() * 100 - 50; // -50 to 50
+          this.gazeY = Math.random() * 100 - 50; // -50 to 50
+          
+          // 正面向きかどうかの判定
+          const isFrontFacing = Math.abs(this.gazeX) < 20 && Math.abs(this.gazeY) < 20;
+          this.frontFacingRatio = isFrontFacing ? Math.min(100, this.frontFacingRatio + 5) : Math.max(0, this.frontFacingRatio - 3);
+          
+          // 動きがあった場合は記録
+          if (Math.abs(this.gazeX) > 10 || Math.abs(this.gazeY) > 10) {
+            this.lastMovementTime = Date.now();
+          }
+        }
+        
+        // デバッグCanvasに描画
+        this.updateDebugCanvas();
+        
+      } catch (error) {
+        console.error('顔追跡エラー:', error);
+      }
+    }
+    
+    updateDebugCanvas() {
+      const debugCanvas = document.getElementById('debug-canvas');
+      if (!debugCanvas) return;
+      
+      const debugCtx = debugCanvas.getContext('2d');
+      debugCtx.clearRect(0, 0, 160, 120);
+      
+      if (this.faceDetected) {
+        // 顔検出時は緑の枠を描画
+        debugCtx.strokeStyle = '#28a745';
+        debugCtx.lineWidth = 2;
+        debugCtx.strokeRect(40, 30, 80, 60);
+        
+        // 目線方向を矢印で表示
+        const centerX = 80;
+        const centerY = 60;
+        const gazeEndX = centerX + (this.gazeX / 50) * 30;
+        const gazeEndY = centerY + (this.gazeY / 50) * 20;
+        
+        debugCtx.strokeStyle = '#ffc107';
+        debugCtx.lineWidth = 3;
+        debugCtx.beginPath();
+        debugCtx.moveTo(centerX, centerY);
+        debugCtx.lineTo(gazeEndX, gazeEndY);
+        debugCtx.stroke();
+        
+        // 矢印の先端
+        debugCtx.fillStyle = '#ffc107';
+        debugCtx.beginPath();
+        debugCtx.arc(gazeEndX, gazeEndY, 3, 0, 2 * Math.PI);
+        debugCtx.fill();
+      } else {
+        // 顔未検出時は赤い×印を描画
+        debugCtx.strokeStyle = '#dc3545';
+        debugCtx.lineWidth = 3;
+        debugCtx.beginPath();
+        debugCtx.moveTo(60, 40);
+        debugCtx.lineTo(100, 80);
+        debugCtx.moveTo(100, 40);
+        debugCtx.lineTo(60, 80);
+        debugCtx.stroke();
+      }
+    }
+    
+    detectFace(imageData) {
+      // 簡易的な顔検出（明度ベース）
+      // 実際の実装では顔検出ライブラリを使用
+      const data = imageData.data;
+      let brightness = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        brightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
+      }
+      const avgBrightness = brightness / (data.length / 4);
+      return avgBrightness > 50; // 明度が50以上なら顔があると判定
+    }
+    
+    calculateConcentration() {
+      const oldScore = this.score;
+      let newScore = 100;
+      const reasons = [];
+      
+      // 顔が検出されない場合は大幅減点
+      if (!this.faceDetected) {
+        newScore -= 30;
+        reasons.push({ 
+          text: '顔未検出', 
+          change: -30, 
+          type: 'negative',
+          category: 'カメラ',
+          detail: 'カメラに顔が映っていません'
+        });
+      } else {
+        // 正面向きの割合で評価
+        newScore = this.frontFacingRatio;
+        
+        // 目線方向による評価（目線をそらすだけでは減点しない）
+        if (Math.abs(this.gazeX) < 20 && Math.abs(this.gazeY) < 20) {
+          // 正面注視時の加点は継続的な正面向きでのみ
+          const frontFacingBonus = Math.max(0, this.frontFacingRatio - 80);
+          if (frontFacingBonus > 0) {
+            newScore += frontFacingBonus * 0.1; // 小さな加点
+            reasons.push({ 
+              text: '集中注視', 
+              change: frontFacingBonus * 0.1, 
+              type: 'positive',
+              category: '目線',
+              detail: `継続的な正面注視により集中度が評価されました (正面率:${this.frontFacingRatio.toFixed(1)}%)`
+            });
+          }
+        }
+        // 目線をそらすこと自体は減点対象から除外
+        
+        // 問題表示後の目線の動き（右側への注視を評価）
+        if (this.questionDisplayTime && !this.responseStartTime) {
+          const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
+          if (timeFromQuestion < 10) { // 問題表示から10秒以内
+            if (this.gazeX > 15) { // 右側を見ている
+              const gazeBonus = 5;
+              newScore += gazeBonus;
+              reasons.push({ 
+                text: '問題確認', 
+                change: gazeBonus, 
+                type: 'positive',
+                category: '目線',
+                detail: '問題表示後に右側（問題エリア）を注視しています'
+              });
+            }
+          }
+        }
+        
+        // 一定時間動きがない場合は減点
+        const timeSinceMovement = (Date.now() - this.lastMovementTime) / 1000;
+        if (timeSinceMovement > 10) {
+          const penalty = Math.min(20, timeSinceMovement - 10);
+          newScore -= penalty;
+          reasons.push({ 
+            text: `目線停止`, 
+            change: -penalty, 
+            type: 'negative',
+            category: '目線',
+            detail: `${timeSinceMovement.toFixed(1)}秒間目線の動きがありません`
+          });
+        }
+        
+        // 出題から回答までの時間が長い場合は減点
+        if (this.questionDisplayTime && this.responseStartTime) {
+          const responseTime = (this.responseStartTime - this.questionDisplayTime) / 1000;
+          if (responseTime > 30) {
+            const penalty = Math.min(15, responseTime - 30);
+            newScore -= penalty;
+            reasons.push({ 
+              text: `回答遅延`, 
+              change: -penalty, 
+              type: 'negative',
+              category: '反応',
+              detail: `問題表示から回答まで${responseTime.toFixed(1)}秒かかりました`
+            });
+          } else if (responseTime < 5) {
+            const bonus = 3;
+            newScore += bonus;
+            reasons.push({ 
+              text: `素早い回答`, 
+              change: bonus, 
+              type: 'positive',
+              category: '反応',
+              detail: `問題表示から${responseTime.toFixed(1)}秒で回答しました`
+            });
+          }
+        }
+        
+        // メモ入力があった場合は加点
+        const noteBonus = Math.min(10, this.noteInputs * 2);
+        if (this.noteInputs > 0) {
+          newScore += noteBonus;
+          reasons.push({ 
+            text: `メモ活動`, 
+            change: noteBonus, 
+            type: 'positive',
+            category: 'メモ',
+            detail: `${this.noteInputs}回のメモ入力で学習意欲を評価`
+          });
+        }
+      }
+      
+      // スコアを0-100の範囲に制限
+      this.score = Math.max(0, Math.min(100, newScore));
+      
+      // ログに記録（スコアが変化した場合のみ）
+      if (Math.abs(this.score - oldScore) > 1) {
+        this.addLog(reasons, oldScore, this.score);
+      }
+    }
+    
+    addLog(reasons, oldScore, newScore) {
+      const timestamp = new Date().toLocaleTimeString();
+      const change = newScore - oldScore;
+      
+      // メインのログテキスト
+      let logText = `[${timestamp}] ${oldScore.toFixed(0)} → ${newScore.toFixed(0)} (${change > 0 ? '+' : ''}${change.toFixed(0)})`;
+      
+      // 詳細な原因情報
+      let detailText = '';
+      if (reasons.length > 0) {
+        const categoryGroups = {};
+        reasons.forEach(r => {
+          if (!categoryGroups[r.category]) {
+            categoryGroups[r.category] = [];
+          }
+          categoryGroups[r.category].push(r);
+        });
+        
+        const categoryTexts = Object.keys(categoryGroups).map(category => {
+          const items = categoryGroups[category];
+          const categoryChange = items.reduce((sum, item) => sum + item.change, 0);
+          const itemTexts = items.map(item => 
+            `${item.text}(${item.change > 0 ? '+' : ''}${item.change.toFixed(0)})`
+          ).join(', ');
+          
+          return `【${category}】${itemTexts}`;
+        });
+        
+        logText += ': ' + categoryTexts.join(' | ');
+        
+        // 詳細情報を別途作成
+        detailText = reasons.map(r => `• ${r.detail}`).join('\n');
+      }
+      
+      this.logs.unshift({
+        text: logText,
+        detail: detailText,
+        reasons: reasons,
+        type: change > 0 ? 'positive' : 'negative',
+        timestamp: Date.now(),
+        change: change
+      });
+      
+      // ログは最新20件まで保持
+      if (this.logs.length > 20) {
+        this.logs = this.logs.slice(0, 20);
+      }
+      
+      this.updateLogDisplay();
+    }
+    
+    updateLogDisplay() {
+      if (!this.logElement) return;
+      
+      this.logElement.innerHTML = this.logs.map((log, index) => {
+        const expandId = `log-expand-${index}`;
+        return `
+          <div class="log-entry ${log.type}" onclick="this.querySelector('.log-detail').style.display = this.querySelector('.log-detail').style.display === 'none' ? 'block' : 'none';">
+            <div class="log-main">${log.text}</div>
+            ${log.detail ? `<div class="log-detail" style="display: none;">${log.detail}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+    
+    updateGauge() {
+      // すべてのレベルをリセット
+      Object.values(this.gaugeElements).forEach(element => {
+        if (element && element.classList) {
+          element.classList.remove('active');
+        }
+      });
+      
+      // スコアに応じてゲージを更新
+      if (this.score >= 75) {
+        this.gaugeElements.green?.classList.add('active');
+      } else if (this.score >= 50) {
+        this.gaugeElements.yellow?.classList.add('active');
+      } else if (this.score >= 25) {
+        this.gaugeElements.orange?.classList.add('active');
+      } else {
+        this.gaugeElements.red?.classList.add('active');
+      }
+      
+      if (this.gaugeElements.score) {
+        this.gaugeElements.score.textContent = Math.round(this.score) + '%';
+      }
+    }
+    
+    updateDebugInfo() {
+      if (this.debugElements.faceDetected) {
+        this.debugElements.faceDetected.textContent = this.faceDetected ? '検出' : '未検出';
+      }
+      
+      // 目線方向を分かりやすく表示
+      if (this.debugElements.gazeX) {
+        const horizontalDirection = this.gazeX > 15 ? '右' : 
+                                   this.gazeX < -15 ? '左' : '中央';
+        this.debugElements.gazeX.textContent = `${this.gazeX.toFixed(1)} (${horizontalDirection})`;
+      }
+      if (this.debugElements.gazeY) {
+        const verticalDirection = this.gazeY > 15 ? '下' : 
+                                 this.gazeY < -15 ? '上' : '中央';
+        this.debugElements.gazeY.textContent = `${this.gazeY.toFixed(1)} (${verticalDirection})`;
+      }
+      
+      // 総合的な目線方向を表示
+      if (this.debugElements.gazeDirection) {
+        let direction = '';
+        
+        // 垂直方向を先に判定
+        if (this.gazeY < -15) direction += '上';
+        else if (this.gazeY > 15) direction += '下';
+        
+        // 水平方向を後に判定
+        if (this.gazeX < -15) direction += '左';
+        else if (this.gazeX > 15) direction += '右';
+        
+        // 正面の場合
+        if (!direction) direction = '正面';
+        
+        this.debugElements.gazeDirection.textContent = direction;
+      }
+      
+      if (this.debugElements.frontFacing) {
+        this.debugElements.frontFacing.textContent = this.frontFacingRatio.toFixed(1);
+      }
+      if (this.debugElements.lastMovement) {
+        const timeSince = (Date.now() - this.lastMovementTime) / 1000;
+        this.debugElements.lastMovement.textContent = timeSince.toFixed(1);
+      }
+      if (this.debugElements.noteInputs) {
+        this.debugElements.noteInputs.textContent = this.noteInputs;
+      }
+    }
+    
+    onQuestionDisplayed() {
+      this.questionDisplayTime = Date.now();
+      this.responseStartTime = null;
+      
+      // 問題表示をログに記録
+      const timestamp = new Date().toLocaleTimeString();
+      this.logs.unshift({
+        text: `[${timestamp}] 問題表示`,
+        detail: '新しい問題が表示されました。目線の動きと反応時間の計測を開始します。',
+        reasons: [{
+          text: '問題表示',
+          change: 0,
+          type: 'neutral',
+          category: 'イベント',
+          detail: '新しい問題が表示されました。目線の動きと反応時間の計測を開始します。'
+        }],
+        type: 'neutral',
+        timestamp: Date.now(),
+        change: 0
+      });
+      
+      // ログは最新20件まで保持
+      if (this.logs.length > 20) {
+        this.logs = this.logs.slice(0, 20);
+      }
+      
+      this.updateLogDisplay();
+    }
+    
+    onResponseStarted() {
+      this.responseStartTime = Date.now();
+      
+      // 回答開始をログに記録
+      const timestamp = new Date().toLocaleTimeString();
+      const responseTime = this.questionDisplayTime ? 
+        ((Date.now() - this.questionDisplayTime) / 1000).toFixed(1) : '不明';
+      
+      this.logs.unshift({
+        text: `[${timestamp}] 回答開始 (${responseTime}s後)`,
+        detail: `問題表示から${responseTime}秒後に回答を開始しました。`,
+        reasons: [{
+          text: '回答開始',
+          change: 0,
+          type: 'neutral',
+          category: 'イベント',
+          detail: `問題表示から${responseTime}秒後に回答を開始しました。`
+        }],
+        type: 'neutral',
+        timestamp: Date.now(),
+        change: 0
+      });
+      
+      // ログは最新20件まで保持
+      if (this.logs.length > 20) {
+        this.logs = this.logs.slice(0, 20);
+      }
+      
+      this.updateLogDisplay();
+    }
+    
+    onNoteInput() {
+      this.noteInputs++;
+      
+      // メモ入力を即座にログに記録
+      const timestamp = new Date().toLocaleTimeString();
+      const bonus = 2; // メモ1回につき2点
+      
+      this.logs.unshift({
+        text: `[${timestamp}] メモ入力 (+${bonus})`,
+        detail: `メモエリアに入力があり、学習意欲が評価されました（累計: ${this.noteInputs}回）`,
+        reasons: [{
+          text: 'メモ入力',
+          change: bonus,
+          type: 'positive',
+          category: 'メモ',
+          detail: `メモエリアに入力があり、学習意欲が評価されました（累計: ${this.noteInputs}回）`
+        }],
+        type: 'positive',
+        timestamp: Date.now(),
+        change: bonus
+      });
+      
+      // ログは最新20件まで保持
+      if (this.logs.length > 20) {
+        this.logs = this.logs.slice(0, 20);
+      }
+      
+      this.updateLogDisplay();
+    }
+  }
+  
+  // 集中度トラッカーを初期化
+  const concentrationTracker = new ConcentrationTracker();
+  
   // JSONデータの確認
   let rawQuestionData;
   try {
@@ -409,6 +1150,16 @@ document.addEventListener('DOMContentLoaded', function() {
   const noteTextarea = document.getElementById('note-textarea');
   const saveNoteBtn = document.getElementById('save-note-btn');
   const savedNotes = document.getElementById('saved-notes');
+  
+  // メモ入力時のイベント追加
+  let noteInputTimer;
+  noteTextarea.addEventListener('input', function() {
+    // 連続した入力をまとめるために500ms待つ
+    clearTimeout(noteInputTimer);
+    noteInputTimer = setTimeout(() => {
+      concentrationTracker.onNoteInput();
+    }, 500);
+  });
   
   let activeQuestion = null;
   let videoCheckInterval;
@@ -561,6 +1312,9 @@ document.addEventListener('DOMContentLoaded', function() {
       // 問題表示開始時間を記録
       questionStartTime = Date.now();
       
+      // 集中度トラッカーに問題表示を通知
+      concentrationTracker.onQuestionDisplayed();
+      
       // 問題データの検証
       if (!question || !question.content) {
         console.error('問題データが不正です:', question);
@@ -655,6 +1409,8 @@ document.addEventListener('DOMContentLoaded', function() {
       const selectedAnswer = document.querySelector('input[name="tf-answer"]:checked');
       
       if (selectedAnswer && activeQuestion) {
+        // 集中度トラッカーに回答開始を通知
+        concentrationTracker.onResponseStarted();
         submitAnswer(selectedAnswer.value, null);
       } else {
         alert('回答を選択してください');
@@ -666,6 +1422,8 @@ document.addEventListener('DOMContentLoaded', function() {
       const selectedOption = document.querySelector('input[name="mc-answer"]:checked');
       
       if (selectedOption && activeQuestion) {
+        // 集中度トラッカーに回答開始を通知
+        concentrationTracker.onResponseStarted();
         const optionId = selectedOption.value;
         submitAnswer(null, optionId);
       } else {
@@ -679,6 +1437,8 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // 記述問題では空欄も有効な回答として受け付ける
       if (activeQuestion) {
+        // 集中度トラッカーに回答開始を通知
+        concentrationTracker.onResponseStarted();
         // 空欄でも送信可能に変更
         submitAnswer(answer, null);
       } else {
@@ -812,6 +1572,9 @@ document.addEventListener('DOMContentLoaded', function() {
       const noteContent = noteTextarea.value.trim();
       
       if (noteContent) {
+        // 集中度トラッカーにメモ入力を通知
+        concentrationTracker.onNoteInput();
+        
         const formData = new FormData();
         formData.append('note[content]', noteContent);
         formData.append('note[time_position]', Math.floor(videoPlayer.currentTime));

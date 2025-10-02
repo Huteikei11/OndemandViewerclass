@@ -9,9 +9,9 @@ class UserResponse < ApplicationRecord
   # Methods
   def is_correct?
     case question.question_type
-    when 'true_false', 'free_response'
+    when "true_false", "free_response"
       user_answer == question.answer
-    when 'multiple_choice'
+    when "multiple_choice"
       # For multiple choice, check if the selected option is correct
       selected_option = question.options.find_by(id: selected_option_id)
       selected_option&.is_correct == true

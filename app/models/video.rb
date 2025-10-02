@@ -1,6 +1,6 @@
 class Video < ApplicationRecord
   # Associations
-  belongs_to :creator, class_name: 'User', optional: true
+  belongs_to :creator, class_name: "User", optional: true
   has_many :questions, dependent: :destroy
   has_many :notes, dependent: :destroy
   has_many :video_managers, dependent: :destroy
@@ -18,7 +18,7 @@ class Video < ApplicationRecord
   validates :password, presence: true, if: :is_private?
 
   # Scopes
-  scope :public_videos, -> { where(is_private: [false, nil]) }
+  scope :public_videos, -> { where(is_private: [ false, nil ]) }
   scope :private_videos, -> { where(is_private: true) }
 
   # Methods
@@ -29,7 +29,7 @@ class Video < ApplicationRecord
   def can_be_accessed_by?(user)
     return true unless is_private?
     return false unless user
-    
+
     creator == user || managers.include?(user) || authorized_users.include?(user)
   end
 

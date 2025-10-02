@@ -1,8 +1,8 @@
 class VideosController < ApplicationController
-  before_action :authenticate_user!, except: [:player]
-  before_action :set_video, only: [:show, :player, :edit, :update, :destroy]
-  before_action :check_video_access, only: [:player]
-  before_action :check_video_management, only: [:edit, :update, :destroy]
+  before_action :authenticate_user!, except: [ :player ]
+  before_action :set_video, only: [ :show, :player, :edit, :update, :destroy ]
+  before_action :check_video_access, only: [ :player ]
+  before_action :check_video_management, only: [ :edit, :update, :destroy ]
 
   def index
     redirect_to root_path
@@ -60,18 +60,18 @@ class VideosController < ApplicationController
 
   def check_video_access
     return if @video.can_be_accessed_by?(current_user)
-    
+
     # 未ログインユーザーの場合、セッションでの一時アクセスをチェック
     if !user_signed_in? && session[:temp_video_access]&.include?(@video.id)
       return
     end
-    
-    redirect_to video_access_new_path, alert: 'この動画にアクセスする権限がありません。'
+
+    redirect_to video_access_new_path, alert: "この動画にアクセスする権限がありません。"
   end
 
   def check_video_management
     unless current_user.can_manage_video?(@video)
-      redirect_to root_path, alert: 'この動画を管理する権限がありません。'
+      redirect_to root_path, alert: "この動画を管理する権限がありません。"
     end
   end
 
