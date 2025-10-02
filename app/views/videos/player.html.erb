@@ -1676,10 +1676,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         if (!response.ok) {
-          return response.text().then(text => {
-            console.error('エラーレスポンス:', text);
-            throw new Error(`Network response was not ok: ${response.status}`);
-          });
+          // エラーレスポンスの場合、JSONで詳細を取得
+          const contentType = response.headers.get('Content-Type');
+          if (contentType && contentType.includes('application/json')) {
+            return response.json().then(errorData => {
+              console.error('サーバーエラー詳細:', errorData);
+              const error = new Error(`Server error: ${response.status}`);
+              error.response = response;
+              error.data = errorData;
+              throw error;
+            });
+          } else {
+            return response.text().then(text => {
+              console.error('エラーレスポンス:', text);
+              const error = new Error(`Network response was not ok: ${response.status}`);
+              error.response = response;
+              throw error;
+            });
+          }
         }
         
         // Check if the response is JSON
@@ -1736,7 +1750,26 @@ document.addEventListener('DOMContentLoaded', function() {
       })
       .catch(error => {
         console.error('Error:', error);
-        alert('回答の送信中にエラーが発生しました。');
+        
+        let errorMessage = '回答の送信中にエラーが発生しました。';
+        
+        // サーバーからのエラーデータがある場合
+        if (error.data) {
+          console.error('Server error details:', error.data);
+          
+          if (error.data.errors && error.data.errors.length > 0) {
+            errorMessage += '\n詳細: ' + error.data.errors.join(', ');
+          }
+          
+          if (error.data.debug_info) {
+            console.log('Debug info:', error.data.debug_info);
+          }
+        } else if (error.message) {
+          errorMessage += '\n詳細: ' + error.message;
+        }
+        
+        alert(errorMessage);
+        
         // In case of error, still reset the question and continue playing
         setTimeout(() => {
           activeQuestion = null;

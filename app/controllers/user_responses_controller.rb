@@ -3,7 +3,12 @@ class UserResponsesController < ApplicationController
 
   def create
     @user_response = @question.user_responses.new
-    @user_response.user = current_user if user_signed_in?
+    
+    # ログインしている場合のみユーザーを設定
+    if user_signed_in?
+      @user_response.user = current_user
+    end
+    
     @user_response.response_time = params[:user_response][:response_time].to_i if params[:user_response][:response_time]
 
     # Check if the answer is correct based on question type
@@ -35,11 +40,11 @@ class UserResponsesController < ApplicationController
           @user_response.selected_option_id = option.id
           @user_response.is_correct = option.is_correct
         else
-          @user_response.user_answer = "選択なし"
+          @user_response.user_answer = "無効な選択"
           @user_response.is_correct = false
         end
       else
-        # オプションIDがない場合（通常はエラー）
+        # オプションIDがない場合
         @user_response.user_answer = "選択なし"
         @user_response.is_correct = false
       end
@@ -72,11 +77,22 @@ class UserResponsesController < ApplicationController
         }
       end
     else
+      # デバッグ用にエラー詳細をログに出力
+      Rails.logger.error "UserResponse validation errors: #{@user_response.errors.full_messages}"
+      
       respond_to do |format|
         format.html { redirect_to player_video_path(@question.video), alert: "Failed to record response." }
         format.json {
           response.content_type = "application/json"
-          render json: @user_response.errors, status: :unprocessable_entity
+          render json: { 
+            errors: @user_response.errors.full_messages,
+            debug_info: {
+              user_answer: @user_response.user_answer,
+              response_time: @user_response.response_time,
+              user_id: @user_response.user_id,
+              question_id: @user_response.question_id
+            }
+          }, status: :unprocessable_entity
         }
       end
     end

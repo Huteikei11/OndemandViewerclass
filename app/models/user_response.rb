@@ -1,6 +1,6 @@
 class UserResponse < ApplicationRecord
   belongs_to :question
-  belongs_to :user
+  belongs_to :user, optional: true
 
   # Validations
   validates :user_answer, presence: true, unless: -> { question&.question_type == "multiple_choice" }
