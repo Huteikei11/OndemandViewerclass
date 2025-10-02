@@ -3,12 +3,12 @@ class UserResponsesController < ApplicationController
 
   def create
     @user_response = @question.user_responses.new
-    
+
     # ログインしている場合のみユーザーを設定
     if user_signed_in?
       @user_response.user = current_user
     end
-    
+
     @user_response.response_time = params[:user_response][:response_time].to_i if params[:user_response][:response_time]
 
     # Check if the answer is correct based on question type
@@ -79,12 +79,12 @@ class UserResponsesController < ApplicationController
     else
       # デバッグ用にエラー詳細をログに出力
       Rails.logger.error "UserResponse validation errors: #{@user_response.errors.full_messages}"
-      
+
       respond_to do |format|
         format.html { redirect_to player_video_path(@question.video), alert: "Failed to record response." }
         format.json {
           response.content_type = "application/json"
-          render json: { 
+          render json: {
             errors: @user_response.errors.full_messages,
             debug_info: {
               user_answer: @user_response.user_answer,

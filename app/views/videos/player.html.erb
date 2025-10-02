@@ -1085,7 +1085,7 @@ document.addEventListener('DOMContentLoaded', function() {
         text: logText,
         detail: detailText,
         reasons: reasons,
-        type: change > 0 ? 'positive' : 'negative',
+        type: this.determineLogType(change, reasons),
         timestamp: Date.now(),
         change: change
       });
@@ -1096,6 +1096,28 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       this.updateLogDisplay();
+    }
+    
+    determineLogType(change, reasons) {
+      // スコア変化量で基本的な判定
+      if (change > 0) {
+        return 'positive';
+      } else if (change < 0) {
+        return 'negative';
+      } else {
+        // 変化量が0の場合、理由の内容で判定
+        if (reasons.length > 0) {
+          const positiveReasons = reasons.filter(r => r.type === 'positive');
+          const negativeReasons = reasons.filter(r => r.type === 'negative');
+          
+          if (positiveReasons.length > 0 && negativeReasons.length === 0) {
+            return 'positive'; // プラス要因のみ（スコア上限による制限）
+          } else if (negativeReasons.length > 0 && positiveReasons.length === 0) {
+            return 'negative'; // マイナス要因のみ
+          }
+        }
+        return 'neutral';
+      }
     }
     
     updateLogDisplay() {
