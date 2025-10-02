@@ -1340,6 +1340,17 @@ document.addEventListener('DOMContentLoaded', function() {
   // Initialize questions with a 'shown' property to track which ones have been displayed
   const questions = (rawQuestionData || []).map(q => ({...q, shown: false}));
   console.log('質問データ:', questions);
+  console.log('質問数:', questions.length);
+  
+  // 質問データの詳細ログ
+  questions.forEach((q, index) => {
+    console.log(`質問${index + 1}:`, {
+      id: q.id,
+      content: q.content,
+      time_position: q.time_position,
+      question_type: q.question_type
+    });
+  });
   
   const waitingMessage = document.getElementById('waiting-message');
   const questionDisplay = document.getElementById('question-display');
@@ -1401,6 +1412,17 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('問題チェックタイマー開始');
         videoCheckInterval = setInterval(checkVideoTime, 1000);
       }
+    });
+    
+    // 動画の時間更新イベントで問題をチェック（より頻繁なチェック）
+    videoPlayer.addEventListener('timeupdate', function() {
+      checkVideoTime();
+    });
+    
+    // 再生開始時の追加チェック
+    videoPlayer.addEventListener('play', function() {
+      console.log('動画再生開始');
+      checkVideoTime(); // 即座にチェック
     });
     
     // 安全策として、DOMContentLoadedの後に少し遅延させて問題チェックを開始
@@ -1480,14 +1502,15 @@ document.addEventListener('DOMContentLoaded', function() {
             }
           }
           
-          // If the current time is past or equal to the question time and within a small window (0.5s)
+          // If the current time is past or equal to the question time and within a larger window (2s)
           // and no question is currently active
           if (currentTime >= question.time_position && 
-              currentTime <= question.time_position + 0.5 && 
+              currentTime <= question.time_position + 2.0 && 
               activeQuestion === null && 
               !question.shown) {
             console.log('問題検出:', question);
-            console.log('現在の時間:', currentTime);
+            console.log('現在の時間:', currentTime, '問題時間:', question.time_position);
+            console.log('時間差:', currentTime - question.time_position);
             // Mark this question as shown so it doesn't appear again
             question.shown = true;
             // Hide the indicator
@@ -1496,10 +1519,14 @@ document.addEventListener('DOMContentLoaded', function() {
               clearTimeout(questionIndicatorTimeout);
             }
             try {
+              console.log('showQuestion関数を呼び出します');
               showQuestion(question);
               videoPlayer.pause();
+              console.log('動画を一時停止しました');
             } catch (error) {
               console.error('問題表示中にエラーが発生しました:', error);
+              // エラーが発生した場合はshownフラグをリセット
+              question.shown = false;
             }
             break;
           }
@@ -1516,13 +1543,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function showQuestion(question) {
-      console.log('問題表示:', question);
+      console.log('showQuestion関数開始:', question);
       
       // 問題表示開始時間を記録
       questionStartTime = Date.now();
       
       // 集中度トラッカーに問題表示を通知
-      concentrationTracker.onQuestionDisplayed();
+      if (window.concentrationTracker) {
+        concentrationTracker.onQuestionDisplayed();
+      } else {
+        console.warn('ConcentrationTrackerが利用できません');
+      }
       
       // 問題データの検証
       if (!question || !question.content) {
@@ -1530,12 +1561,32 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       
+      console.log('問題データ検証完了');
+      
       activeQuestion = question;
       
       try {
+        // UI要素の存在確認
+        if (!waitingMessage) {
+          console.error('waitingMessage要素が見つかりません');
+          return;
+        }
+        if (!questionDisplay) {
+          console.error('questionDisplay要素が見つかりません');
+          return;
+        }
+        if (!questionText) {
+          console.error('questionText要素が見つかりません');
+          return;
+        }
+        
+        console.log('UI要素の存在確認完了');
+        
         // Hide waiting message, show question
         waitingMessage.style.display = 'none';
         questionDisplay.style.display = 'block';
+        
+        console.log('UI表示切り替え完了');
         
         // Set question text with timestamp
         const timeFormatted = formatTimePosition(question.time_position || 0);
