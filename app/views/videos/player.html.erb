@@ -732,6 +732,7 @@ document.addEventListener('DOMContentLoaded', function() {
       this.lastNoteCount = 0;
       this.responseStartTime = null;
       this.questionDisplayTime = null;
+      this.responseProcessed = false; // 反応時間処理済みフラグを追加
       
       this.initializeCamera();
       this.initializeGauge();
@@ -740,6 +741,9 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // グローバル関数としてタブ切り替えを登録
       window.showDebugTab = this.showDebugTab.bind(this);
+      
+      // グローバルアクセス用にインスタンスを登録
+      window.concentrationTracker = this;
     }
     
     async initializeCamera() {
@@ -996,7 +1000,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // 出題から回答までの時間が長い場合は減点
-        if (this.questionDisplayTime && this.responseStartTime) {
+        if (this.questionDisplayTime && this.responseStartTime && !this.responseProcessed) {
           const responseTime = (this.responseStartTime - this.questionDisplayTime) / 1000;
           if (responseTime > 30) {
             const penalty = Math.min(15, responseTime - 30);
@@ -1019,6 +1023,8 @@ document.addEventListener('DOMContentLoaded', function() {
               detail: `問題表示から${responseTime.toFixed(1)}秒で回答しました`
             });
           }
+          // 一度処理したらフラグを立てる
+          this.responseProcessed = true;
         }
         
       }
@@ -1229,6 +1235,7 @@ document.addEventListener('DOMContentLoaded', function() {
     onQuestionDisplayed() {
       this.questionDisplayTime = Date.now();
       this.responseStartTime = null;
+      this.responseProcessed = false; // 新しい問題でフラグをリセット
       
       // 問題表示をログに記録
       const timestamp = new Date().toLocaleTimeString();
@@ -1765,6 +1772,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Reset active question after 3 seconds and resume video
         setTimeout(() => {
           activeQuestion = null;
+          
+          // ConcentrationTrackerのタイミング変数もリセット
+          if (window.concentrationTracker) {
+            window.concentrationTracker.questionDisplayTime = null;
+            window.concentrationTracker.responseStartTime = null;
+            window.concentrationTracker.responseProcessed = false;
+          }
+          
           waitingMessage.style.display = 'block';
           questionDisplay.style.display = 'none';
           videoPlayer.play();
@@ -1795,6 +1810,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // In case of error, still reset the question and continue playing
         setTimeout(() => {
           activeQuestion = null;
+          
+          // ConcentrationTrackerのタイミング変数もリセット
+          if (window.concentrationTracker) {
+            window.concentrationTracker.questionDisplayTime = null;
+            window.concentrationTracker.responseStartTime = null;
+            window.concentrationTracker.responseProcessed = false;
+          }
+          
           waitingMessage.style.display = 'block';
           questionDisplay.style.display = 'none';
           videoPlayer.play();
