@@ -9,7 +9,15 @@
           目線追跡デバッグ情報
           <button class="btn btn-sm btn-outline-light ms-2" id="toggle-camera-preview">カメラ</button>
         </div>
-        <div class="debug-content">
+        
+        <!-- タブナビゲーション -->
+        <div class="debug-tabs">
+          <button class="debug-tab-btn active" onclick="showDebugTab('info')">基本情報</button>
+          <button class="debug-tab-btn" onclick="showDebugTab('factors')">スコア要因</button>
+        </div>
+        
+        <!-- 基本情報タブ -->
+        <div id="debug-tab-info" class="debug-tab-content">
           <div>顔検出: <span id="face-detected">-</span></div>
           <div>目線方向X: <span id="gaze-x">-</span></div>
           <div>目線方向Y: <span id="gaze-y">-</span></div>
@@ -28,6 +36,56 @@
           <div class="concentration-log">
             <div class="log-header">集中度変動ログ</div>
             <div class="log-content" id="concentration-log"></div>
+          </div>
+        </div>
+        
+        <!-- スコア要因タブ -->
+        <div id="debug-tab-factors" class="debug-tab-content" style="display: none;">
+          <div class="factors-header">スコア変動イベント説明</div>
+          <div id="score-factors" class="score-factors">
+            <div class="factor-category">
+              <h7 class="category-title">📹 カメラ関連</h7>
+              <div class="factor-item neutral">
+                <div class="factor-header">顔未検出 (-2点)</div>
+                <div class="factor-detail">カメラに顔が映っていない場合に減点されます</div>
+              </div>
+            </div>
+            
+            <div class="factor-category">
+              <h7 class="category-title">👀 目線・注視</h7>
+              <div class="factor-item positive">
+                <div class="factor-header">集中注視 (+0.5点)</div>
+                <div class="factor-detail">画面中央を注視している場合に加点されます</div>
+              </div>
+              <div class="factor-item positive">
+                <div class="factor-header">問題確認 (+5点)</div>
+                <div class="factor-detail">問題表示後に右側（問題エリア）を注視した場合に加点されます</div>
+              </div>
+              <div class="factor-item negative">
+                <div class="factor-header">目線停止 (-20点まで)</div>
+                <div class="factor-detail">10秒以上目線の動きがない場合に減点されます</div>
+              </div>
+            </div>
+            
+            <div class="factor-category">
+              <h7 class="category-title">⚡ 反応速度</h7>
+              <div class="factor-item negative">
+                <div class="factor-header">回答遅延 (-15点まで)</div>
+                <div class="factor-detail">問題表示から30秒以上経過して回答した場合に減点されます</div>
+              </div>
+              <div class="factor-item positive">
+                <div class="factor-header">素早い回答 (+3点)</div>
+                <div class="factor-detail">問題表示から5秒以内に回答した場合に加点されます</div>
+              </div>
+            </div>
+            
+            <div class="factor-category">
+              <h7 class="category-title">📝 メモ活動</h7>
+              <div class="factor-item positive">
+                <div class="factor-header">メモ入力 (+3点/回)</div>
+                <div class="factor-detail">新しいメモを入力するたびに加点されます</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -247,10 +305,94 @@
     padding: 10px;
     border-radius: 8px;
     z-index: 99;
-    max-width: 300px;
-    font-size: 11px;
-    max-height: 80vh;
+    max-width: 350px;
+  }
+  
+  .debug-tabs {
+    display: flex;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #444;
+  }
+  
+  .debug-tab-btn {
+    background: none;
+    border: none;
+    color: #ccc;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+  }
+  
+  .debug-tab-btn.active {
+    color: white;
+    border-bottom-color: #007bff;
+  }
+  
+  .debug-tab-btn:hover {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .debug-tab-content {
+    animation: fadeIn 0.3s ease;
+  }
+  
+  .score-factors {
+    max-height: 200px;
     overflow-y: auto;
+    font-size: 12px;
+  }
+  
+  .factor-item {
+    background-color: rgba(255, 255, 255, 0.1);
+    margin: 5px 0;
+    padding: 8px;
+    border-radius: 4px;
+    border-left: 3px solid #007bff;
+  }
+  
+  .factor-item.positive {
+    border-left-color: #28a745;
+  }
+  
+  .factor-item.negative {
+    border-left-color: #dc3545;
+  }
+  
+  .factor-item.neutral {
+    border-left-color: #6c757d;
+  }
+  
+  .factor-header {
+    font-weight: bold;
+    margin-bottom: 3px;
+  }
+  
+  .factor-detail {
+    font-size: 11px;
+    color: #ccc;
+  }
+  
+  .factor-category {
+    margin-bottom: 15px;
+  }
+  
+  .category-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 8px;
+    display: block;
+    border-bottom: 1px solid #444;
+    padding-bottom: 3px;
+  }
+  
+  .factors-header {
+    font-weight: bold;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #555;
+    padding-bottom: 4px;
   }
   
   .debug-header {
@@ -587,6 +729,7 @@ document.addEventListener('DOMContentLoaded', function() {
       this.frontFacingRatio = 100;
       this.lastMovementTime = Date.now();
       this.noteInputs = 0;
+      this.lastNoteCount = 0;
       this.responseStartTime = null;
       this.questionDisplayTime = null;
       
@@ -594,6 +737,9 @@ document.addEventListener('DOMContentLoaded', function() {
       this.initializeGauge();
       this.initializeDebugPanel();
       this.startTracking();
+      
+      // グローバル関数としてタブ切り替えを登録
+      window.showDebugTab = this.showDebugTab.bind(this);
     }
     
     async initializeCamera() {
@@ -690,16 +836,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const imageData = this.ctx.getImageData(0, 0, 320, 240);
         
         // 簡易的な顔検出（実際の実装では顔検出ライブラリを使用）
-        this.faceDetected = this.detectFace(imageData);
+        // 90%の確率で顔が検出される
+        this.faceDetected = Math.random() > 0.1;
         
         if (this.faceDetected) {
-          // 簡易的な目線方向計算
-          this.gazeX = Math.random() * 100 - 50; // -50 to 50
-          this.gazeY = Math.random() * 100 - 50; // -50 to 50
+          // より現実的な目線方向計算（正面中心の動き）
+          const time = Date.now() / 1000;
+          this.gazeX = Math.sin(time * 0.5) * 30 + Math.random() * 10 - 5; // -35 to 35
+          this.gazeY = Math.cos(time * 0.3) * 20 + Math.random() * 10 - 5; // -25 to 25
           
           // 正面向きかどうかの判定
           const isFrontFacing = Math.abs(this.gazeX) < 20 && Math.abs(this.gazeY) < 20;
-          this.frontFacingRatio = isFrontFacing ? Math.min(100, this.frontFacingRatio + 5) : Math.max(0, this.frontFacingRatio - 3);
+          this.frontFacingRatio = isFrontFacing ? Math.min(100, this.frontFacingRatio + 2) : Math.max(60, this.frontFacingRatio - 1);
           
           // 動きがあった場合は記録
           if (Math.abs(this.gazeX) > 10 || Math.abs(this.gazeY) > 10) {
@@ -773,37 +921,45 @@ document.addEventListener('DOMContentLoaded', function() {
     
     calculateConcentration() {
       const oldScore = this.score;
-      let newScore = 100;
+      let newScore = this.score; // 現在のスコアから開始
       const reasons = [];
       
-      // 顔が検出されない場合は大幅減点
+      // 顔が検出されない場合は減点
       if (!this.faceDetected) {
-        newScore -= 30;
+        const penalty = 2;
+        newScore -= penalty;
         reasons.push({ 
           text: '顔未検出', 
-          change: -30, 
+          change: -penalty, 
           type: 'negative',
           category: 'カメラ',
           detail: 'カメラに顔が映っていません'
         });
       } else {
-        // 正面向きの割合で評価
-        newScore = this.frontFacingRatio;
+        // 正面向きの評価（加点は一時停止）
+        // if (this.frontFacingRatio > 80) {
+        //   const bonus = 1;
+        //   newScore += bonus;
+        //   reasons.push({ 
+        //     text: '正面注視', 
+        //     change: bonus, 
+        //     type: 'positive',
+        //     category: '姿勢',
+        //     detail: `正面を向いています (正面率:${this.frontFacingRatio.toFixed(1)}%)`
+        //   });
+        // }
         
         // 目線方向による評価（目線をそらすだけでは減点しない）
-        if (Math.abs(this.gazeX) < 20 && Math.abs(this.gazeY) < 20) {
-          // 正面注視時の加点は継続的な正面向きでのみ
-          const frontFacingBonus = Math.max(0, this.frontFacingRatio - 80);
-          if (frontFacingBonus > 0) {
-            newScore += frontFacingBonus * 0.1; // 小さな加点
-            reasons.push({ 
-              text: '集中注視', 
-              change: frontFacingBonus * 0.1, 
-              type: 'positive',
-              category: '目線',
-              detail: `継続的な正面注視により集中度が評価されました (正面率:${this.frontFacingRatio.toFixed(1)}%)`
-            });
-          }
+        if (Math.abs(this.gazeX) < 15 && Math.abs(this.gazeY) < 15) {
+          const bonus = 0.5;
+          newScore += bonus;
+          reasons.push({ 
+            text: '集中注視', 
+            change: bonus, 
+            type: 'positive',
+            category: '目線',
+            detail: '画面中央を注視しています'
+          });
         }
         // 目線をそらすこと自体は減点対象から除外
         
@@ -865,25 +1021,28 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
         
-        // メモ入力があった場合は加点
-        const noteBonus = Math.min(10, this.noteInputs * 2);
-        if (this.noteInputs > 0) {
-          newScore += noteBonus;
-          reasons.push({ 
-            text: `メモ活動`, 
-            change: noteBonus, 
-            type: 'positive',
-            category: 'メモ',
-            detail: `${this.noteInputs}回のメモ入力で学習意欲を評価`
-          });
-        }
+      }
+      
+      // メモ入力があった場合は加点（前回チェック時からの増分のみ）
+      if (this.noteInputs > this.lastNoteCount) {
+        const newNotes = this.noteInputs - this.lastNoteCount;
+        const noteBonus = newNotes * 3;
+        newScore += noteBonus;
+        reasons.push({ 
+          text: `メモ入力`, 
+          change: noteBonus, 
+          type: 'positive',
+          category: 'メモ',
+          detail: `${newNotes}回のメモ入力がありました`
+        });
+        this.lastNoteCount = this.noteInputs;
       }
       
       // スコアを0-100の範囲に制限
       this.score = Math.max(0, Math.min(100, newScore));
       
-      // ログに記録（スコアが変化した場合のみ）
-      if (Math.abs(this.score - oldScore) > 1) {
+      // ログに記録（スコアが変化した場合、または理由がある場合）
+      if (Math.abs(this.score - oldScore) > 0.1 || reasons.length > 0) {
         this.addLog(reasons, oldScore, this.score);
       }
     }
@@ -951,6 +1110,27 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
         `;
       }).join('');
+    }
+    
+    showDebugTab(tabName) {
+      // すべてのタブを非表示
+      document.querySelectorAll('.debug-tab-content').forEach(tab => {
+        tab.style.display = 'none';
+      });
+      
+      // すべてのタブボタンをinactiveに
+      document.querySelectorAll('.debug-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      // 選択されたタブを表示
+      const targetTab = document.getElementById(`debug-tab-${tabName}`);
+      if (targetTab) {
+        targetTab.style.display = 'block';
+      }
+      
+      // 対応するボタンをactiveに
+      event.target.classList.add('active');
     }
     
     updateGauge() {
