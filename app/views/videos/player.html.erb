@@ -18,6 +18,7 @@
         
         <!-- 基本情報タブ -->
         <div id="debug-tab-info" class="debug-tab-content">
+          <div>検出方式: <span id="detection-method">初期化中...</span></div>
           <div>顔検出: <span id="face-detected">-</span></div>
           <div>目線方向X: <span id="gaze-x">-</span></div>
           <div>目線方向Y: <span id="gaze-y">-</span></div>
@@ -710,6 +711,12 @@
   }
 </style>
 
+<!-- MediaPipe Face Mesh ライブラリ -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const videoPlayer = document.getElementById('video-player');
@@ -734,6 +741,12 @@ document.addEventListener('DOMContentLoaded', function() {
       this.questionDisplayTime = null;
       this.responseProcessed = false; // 反応時間処理済みフラグを追加
       
+      // MediaPipe関連の初期化
+      this.faceMesh = null;
+      this.camera = null;
+      this.useMediaPipe = true; // MediaPipeを使用するかのフラグ
+      this.mediaPipeInitialized = false;
+      
       this.initializeCamera();
       this.initializeGauge();
       this.initializeDebugPanel();
@@ -748,26 +761,90 @@ document.addEventListener('DOMContentLoaded', function() {
     
     async initializeCamera() {
       try {
+        console.log('カメラ初期化開始...');
+        
         const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: 320, height: 240 } 
+          video: { 
+            width: 640, 
+            height: 480,
+            facingMode: 'user'
+          } 
         });
         
         // 隠しvideo要素を作成してカメラ映像を表示
         this.cameraVideo = document.createElement('video');
         this.cameraVideo.srcObject = stream;
         this.cameraVideo.autoplay = true;
+        this.cameraVideo.muted = true;
         this.cameraVideo.style.display = 'none';
         document.body.appendChild(this.cameraVideo);
         
         // Canvas要素を作成して顔検出用に使用
         this.canvas = document.createElement('canvas');
-        this.canvas.width = 320;
-        this.canvas.height = 240;
+        this.canvas.width = 640;
+        this.canvas.height = 480;
         this.ctx = this.canvas.getContext('2d');
+        
+        // MediaPipeの初期化
+        await this.initializeMediaPipe();
         
         console.log('カメラ初期化完了');
       } catch (error) {
         console.error('カメラアクセスエラー:', error);
+        console.log('MediaPipeを無効にしてフォールバックモードで続行');
+        this.useMediaPipe = false;
+      }
+    }
+    
+    async initializeMediaPipe() {
+      try {
+        console.log('MediaPipe初期化開始...');
+        
+        // MediaPipeライブラリが読み込まれているかチェック
+        if (typeof FaceMesh === 'undefined') {
+          throw new Error('MediaPipe FaceMeshライブラリが読み込まれていません');
+        }
+        
+        // FaceMeshモデルの初期化
+        this.faceMesh = new FaceMesh({
+          locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+          }
+        });
+        
+        // FaceMeshの設定
+        this.faceMesh.setOptions({
+          maxNumFaces: 1,
+          refineLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+        
+        // 結果処理のコールバック設定
+        this.faceMesh.onResults(this.onFaceMeshResults.bind(this));
+        
+        // カメラからの映像送信開始
+        if (typeof Camera !== 'undefined') {
+          this.camera = new Camera(this.cameraVideo, {
+            onFrame: async () => {
+              if (this.faceMesh && this.mediaPipeInitialized) {
+                await this.faceMesh.send({ image: this.cameraVideo });
+              }
+            },
+            width: 640,
+            height: 480
+          });
+          
+          await this.camera.start();
+        }
+        
+        this.mediaPipeInitialized = true;
+        console.log('MediaPipe初期化完了');
+        
+      } catch (error) {
+        console.error('MediaPipe初期化エラー:', error);
+        this.useMediaPipe = false;
+        console.log('フォールバックモードに切り替え');
       }
     }
     
@@ -808,6 +885,7 @@ document.addEventListener('DOMContentLoaded', function() {
       });
       
       this.debugElements = {
+        detectionMethod: document.getElementById('detection-method'),
         faceDetected: document.getElementById('face-detected'),
         gazeX: document.getElementById('gaze-x'),
         gazeY: document.getElementById('gaze-y'),
@@ -822,6 +900,92 @@ document.addEventListener('DOMContentLoaded', function() {
       this.logs = [];
     }
     
+    onFaceMeshResults(results) {
+      try {
+        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+          this.faceDetected = true;
+          const landmarks = results.multiFaceLandmarks[0];
+          
+          // 視線方向を計算
+          this.calculateGazeFromLandmarks(landmarks);
+          
+        } else {
+          this.faceDetected = false;
+          // 顔が検出されない場合はデフォルト値
+          this.gazeX = 0;
+          this.gazeY = 0;
+        }
+        
+        // 正面向き割合の更新
+        this.updateFrontFacingRatio();
+        
+      } catch (error) {
+        console.error('FaceMesh結果処理エラー:', error);
+        this.faceDetected = false;
+      }
+    }
+    
+    calculateGazeFromLandmarks(landmarks) {
+      try {
+        // 主要な顔の特徴点を取得
+        const leftEye = this.getEyeCenter(landmarks, [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]);
+        const rightEye = this.getEyeCenter(landmarks, [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]);
+        const noseTip = landmarks[1]; // 鼻先
+        const faceCenter = landmarks[9]; // 顔の中心
+        
+        // 目の中心点を計算
+        const eyeCenter = {
+          x: (leftEye.x + rightEye.x) / 2,
+          y: (leftEye.y + rightEye.y) / 2
+        };
+        
+        // 顔の向きを基準とした視線方向を計算
+        const faceWidth = Math.abs(leftEye.x - rightEye.x);
+        const faceHeight = Math.abs(landmarks[10].y - landmarks[152].y); // 額から顎まで
+        
+        // 正規化された視線方向（-1 to 1の範囲）
+        const normalizedGazeX = (eyeCenter.x - faceCenter.x) / (faceWidth * 0.5);
+        const normalizedGazeY = (eyeCenter.y - faceCenter.y) / (faceHeight * 0.5);
+        
+        // スケールして最終的な値に変換（-50 to 50の範囲）
+        this.gazeX = Math.max(-50, Math.min(50, normalizedGazeX * 50));
+        this.gazeY = Math.max(-50, Math.min(50, normalizedGazeY * 50));
+        
+        // 動きがあった場合は記録
+        if (Math.abs(this.gazeX) > 10 || Math.abs(this.gazeY) > 10) {
+          this.lastMovementTime = Date.now();
+        }
+        
+      } catch (error) {
+        console.error('視線計算エラー:', error);
+        // エラー時はデフォルト値
+        this.gazeX = 0;
+        this.gazeY = 0;
+      }
+    }
+    
+    getEyeCenter(landmarks, eyeIndices) {
+      let sumX = 0, sumY = 0;
+      for (const index of eyeIndices) {
+        if (landmarks[index]) {
+          sumX += landmarks[index].x;
+          sumY += landmarks[index].y;
+        }
+      }
+      return {
+        x: sumX / eyeIndices.length,
+        y: sumY / eyeIndices.length
+      };
+    }
+    
+    updateFrontFacingRatio() {
+      // 正面向きかどうかの判定
+      const isFrontFacing = Math.abs(this.gazeX) < 20 && Math.abs(this.gazeY) < 20;
+      this.frontFacingRatio = isFrontFacing ? 
+        Math.min(100, this.frontFacingRatio + 2) : 
+        Math.max(60, this.frontFacingRatio - 1);
+    }
+    
     startTracking() {
       setInterval(() => {
         this.updateFaceTracking();
@@ -832,32 +996,40 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     updateFaceTracking() {
+      // MediaPipeが使用可能で初期化済みの場合は、MediaPipeに処理を委ねる
+      if (this.useMediaPipe && this.mediaPipeInitialized) {
+        // MediaPipeのonFaceMeshResultsメソッドで処理されるため、ここでは何もしない
+        console.log('MediaPipeで視線検出中...');
+        return;
+      }
+      
+      // フォールバック: 従来のシミュレーション方式
       if (!this.cameraVideo || !this.canvas) return;
       
       try {
-        // カメラ映像をcanvasに描画
-        this.ctx.drawImage(this.cameraVideo, 0, 0, 320, 240);
-        const imageData = this.ctx.getImageData(0, 0, 320, 240);
+        console.log('フォールバックモードで視線検出中...');
         
-        // 簡易的な顔検出（実際の実装では顔検出ライブラリを使用）
-        // 90%の確率で顔が検出される
-        this.faceDetected = Math.random() > 0.1;
+        // カメラ映像をcanvasに描画
+        this.ctx.drawImage(this.cameraVideo, 0, 0, 640, 480);
+        const imageData = this.ctx.getImageData(0, 0, 640, 480);
+        
+        // 簡易的な顔検出（フォールバック）
+        this.faceDetected = this.detectFace(imageData);
         
         if (this.faceDetected) {
-          // より現実的な目線方向計算（正面中心の動き）
+          // シミュレーション方式の目線方向計算
           const time = Date.now() / 1000;
           this.gazeX = Math.sin(time * 0.5) * 30 + Math.random() * 10 - 5; // -35 to 35
           this.gazeY = Math.cos(time * 0.3) * 20 + Math.random() * 10 - 5; // -25 to 25
-          
-          // 正面向きかどうかの判定
-          const isFrontFacing = Math.abs(this.gazeX) < 20 && Math.abs(this.gazeY) < 20;
-          this.frontFacingRatio = isFrontFacing ? Math.min(100, this.frontFacingRatio + 2) : Math.max(60, this.frontFacingRatio - 1);
           
           // 動きがあった場合は記録
           if (Math.abs(this.gazeX) > 10 || Math.abs(this.gazeY) > 10) {
             this.lastMovementTime = Date.now();
           }
         }
+        
+        // 正面向き割合の更新
+        this.updateFrontFacingRatio();
         
         // デバッグCanvasに描画
         this.updateDebugCanvas();
@@ -1186,8 +1358,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     updateDebugInfo() {
+      // 検出方式の表示
+      if (this.debugElements.detectionMethod) {
+        const method = this.useMediaPipe && this.mediaPipeInitialized ? 'MediaPipe (実際の視線検出)' : 'フォールバック (シミュレーション)';
+        this.debugElements.detectionMethod.textContent = method;
+      }
+      
       if (this.debugElements.faceDetected) {
-        this.debugElements.faceDetected.textContent = this.faceDetected ? '検出' : '未検出';
+        const detectionMethod = this.useMediaPipe && this.mediaPipeInitialized ? 'MediaPipe' : 'フォールバック';
+        this.debugElements.faceDetected.textContent = this.faceDetected ? `検出 (${detectionMethod})` : `未検出 (${detectionMethod})`;
       }
       
       // 目線方向を分かりやすく表示
@@ -1459,6 +1638,20 @@ document.addEventListener('DOMContentLoaded', function() {
         question.shown = false;
       }
     });
+    
+    // 初回の問題チェックを動画と質問データの両方が揃ったタイミングで実行
+    let initialQuestionCheckDone = false;
+    function tryInitialQuestionCheck() {
+      if (!initialQuestionCheckDone && videoPlayer.readyState >= 2 && questions.length > 0) {
+        console.log('初回の問題チェックを強制実行します');
+        checkVideoTime();
+        initialQuestionCheckDone = true;
+      }
+    }
+    
+    document.addEventListener('DOMContentLoaded', tryInitialQuestionCheck);
+    videoPlayer.addEventListener('loadedmetadata', tryInitialQuestionCheck);
+    videoPlayer.addEventListener('canplay', tryInitialQuestionCheck);
     
     function checkVideoTime() {
       // 動画が読み込まれていない場合は何もしない
