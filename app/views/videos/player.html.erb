@@ -29,8 +29,11 @@
           
           <!-- カメラプレビュー -->
           <div class="camera-preview" id="camera-preview" style="display: none;">
-            <video id="debug-camera" width="160" height="120" autoplay muted></video>
-            <canvas id="debug-canvas" width="160" height="120"></canvas>
+            <div class="camera-container" style="position: relative; display: inline-block;">
+              <video id="debug-camera" width="320" height="240" autoplay muted></video>
+              <canvas id="gaze-overlay-canvas" width="320" height="240" 
+                      style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
+            </div>
           </div>
           
           <!-- 集中度変動ログ -->
@@ -740,6 +743,7 @@ document.addEventListener('DOMContentLoaded', function() {
       this.responseStartTime = null;
       this.questionDisplayTime = null;
       this.responseProcessed = false; // 反応時間処理済みフラグを追加
+      this.gazeOverlayInterval = null; // 視線オーバーレイ更新インターバル
       
       // MediaPipe関連の初期化
       this.faceMesh = null;
@@ -870,7 +874,6 @@ document.addEventListener('DOMContentLoaded', function() {
       const toggleCameraButton = document.getElementById('toggle-camera-preview');
       const cameraPreview = document.getElementById('camera-preview');
       const debugCamera = document.getElementById('debug-camera');
-      const debugCanvas = document.getElementById('debug-canvas');
       
       toggleCameraButton.addEventListener('click', () => {
         if (cameraPreview.style.display === 'none') {
@@ -879,8 +882,19 @@ document.addEventListener('DOMContentLoaded', function() {
           if (this.cameraVideo && this.cameraVideo.srcObject) {
             debugCamera.srcObject = this.cameraVideo.srcObject;
           }
+          // 視線オーバーレイを更新開始
+          this.startGazeOverlayUpdates();
         } else {
           cameraPreview.style.display = 'none';
+          // 視線オーバーレイを停止
+          this.stopGazeOverlayUpdates();
+          
+          // オーバーレイキャンバスをクリア
+          const overlay = document.getElementById('gazeOverlay');
+          if (overlay) {
+            const ctx = overlay.getContext('2d');
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+          }
         }
       });
       
@@ -986,6 +1000,24 @@ document.addEventListener('DOMContentLoaded', function() {
         Math.max(60, this.frontFacingRatio - 1);
     }
     
+    startGazeOverlayUpdates() {
+      // 視線オーバーレイの更新を開始（30fps）
+      if (this.gazeOverlayInterval) {
+        clearInterval(this.gazeOverlayInterval);
+      }
+      this.gazeOverlayInterval = setInterval(() => {
+        this.updateGazeOverlay();
+      }, 33); // 約30fps
+    }
+    
+    stopGazeOverlayUpdates() {
+      // 視線オーバーレイの更新を停止
+      if (this.gazeOverlayInterval) {
+        clearInterval(this.gazeOverlayInterval);
+        this.gazeOverlayInterval = null;
+      }
+    }
+    
     startTracking() {
       setInterval(() => {
         this.updateFaceTracking();
@@ -1032,54 +1064,125 @@ document.addEventListener('DOMContentLoaded', function() {
         this.updateFrontFacingRatio();
         
         // デバッグCanvasに描画
-        this.updateDebugCanvas();
-        
+        this.updateGazeOverlay();
+
       } catch (error) {
         console.error('顔追跡エラー:', error);
       }
     }
     
-    updateDebugCanvas() {
-      const debugCanvas = document.getElementById('debug-canvas');
-      if (!debugCanvas) return;
+    updateGazeOverlay() {
+      const overlayCanvas = document.getElementById('gaze-overlay-canvas');
+      if (!overlayCanvas) return;
       
-      const debugCtx = debugCanvas.getContext('2d');
-      debugCtx.clearRect(0, 0, 160, 120);
+      const ctx = overlayCanvas.getContext('2d');
+      ctx.clearRect(0, 0, 320, 240);
       
       if (this.faceDetected) {
-        // 顔検出時は緑の枠を描画
-        debugCtx.strokeStyle = '#28a745';
-        debugCtx.lineWidth = 2;
-        debugCtx.strokeRect(40, 30, 80, 60);
+        // カメラ映像の中心を基準点とする
+        const centerX = 160; // 320/2
+        const centerY = 120; // 240/2
         
-        // 目線方向を矢印で表示
-        const centerX = 80;
-        const centerY = 60;
-        const gazeEndX = centerX + (this.gazeX / 50) * 30;
-        const gazeEndY = centerY + (this.gazeY / 50) * 20;
+        // 目線方向を正規化ベクトルとして計算
+        // gazeX, gazeYの範囲は-50〜50なので、これを正規化
+        const magnitude = Math.sqrt(this.gazeX * this.gazeX + this.gazeY * this.gazeY);
         
-        debugCtx.strokeStyle = '#ffc107';
-        debugCtx.lineWidth = 3;
-        debugCtx.beginPath();
-        debugCtx.moveTo(centerX, centerY);
-        debugCtx.lineTo(gazeEndX, gazeEndY);
-        debugCtx.stroke();
-        
-        // 矢印の先端
-        debugCtx.fillStyle = '#ffc107';
-        debugCtx.beginPath();
-        debugCtx.arc(gazeEndX, gazeEndY, 3, 0, 2 * Math.PI);
-        debugCtx.fill();
+        if (magnitude > 0) {
+          // 正規化ベクトル
+          const normalizedX = this.gazeX / magnitude;
+          const normalizedY = this.gazeY / magnitude;
+          
+          // 矢印の長さ（画面サイズに比例）
+          const arrowLength = Math.min(magnitude * 2, 80); // 最大80ピクセル
+          
+          // 矢印の終点
+          const endX = centerX + normalizedX * arrowLength;
+          const endY = centerY + normalizedY * arrowLength;
+          
+          // 矢印本体を描画
+          ctx.strokeStyle = '#00ff00'; // 明るい緑
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(centerX, centerY);
+          ctx.lineTo(endX, endY);
+          ctx.stroke();
+          
+          // 矢印の先端を描画
+          if (arrowLength > 10) {
+            const arrowHeadLength = 15;
+            const arrowHeadAngle = Math.PI / 6; // 30度
+            
+            // 矢印の角度
+            const angle = Math.atan2(normalizedY, normalizedX);
+            
+            // 矢印の先端の2つの線
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(
+              endX - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
+              endY - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
+            );
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(
+              endX - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
+              endY - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
+            );
+            ctx.stroke();
+          }
+          
+          // 中心点を表示
+          ctx.fillStyle = '#ff0000'; // 赤い中心点
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, 4, 0, 2 * Math.PI);
+          ctx.fill();
+          
+          // ベクトル情報をテキストで表示
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '12px Arial';
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 2;
+          
+          const vectorText = `V(${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)})`;
+          const magnitudeText = `|V|=${magnitude.toFixed(1)}`;
+          
+          // テキストに縁取りを付けて見やすくする
+          ctx.strokeText(vectorText, 10, 20);
+          ctx.fillText(vectorText, 10, 20);
+          ctx.strokeText(magnitudeText, 10, 40);
+          ctx.fillText(magnitudeText, 10, 40);
+        } else {
+          // 中心点のみ表示（視線が正面の場合）
+          ctx.fillStyle = '#00ff00';
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, 6, 0, 2 * Math.PI);
+          ctx.fill();
+          
+          // 正面視線のテキスト
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '12px Arial';
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 2;
+          ctx.strokeText('正面視線', 10, 20);
+          ctx.fillText('正面視線', 10, 20);
+        }
       } else {
-        // 顔未検出時は赤い×印を描画
-        debugCtx.strokeStyle = '#dc3545';
-        debugCtx.lineWidth = 3;
-        debugCtx.beginPath();
-        debugCtx.moveTo(60, 40);
-        debugCtx.lineTo(100, 80);
-        debugCtx.moveTo(100, 40);
-        debugCtx.lineTo(60, 80);
-        debugCtx.stroke();
+        // 顔未検出時の表示
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 3;
+        ctx.font = '16px Arial';
+        ctx.fillStyle = '#ffffff';
+        
+        // X印を描画
+        ctx.beginPath();
+        ctx.moveTo(140, 100);
+        ctx.lineTo(180, 140);
+        ctx.moveTo(180, 100);
+        ctx.lineTo(140, 140);
+        ctx.stroke();
+        
+        // テキスト表示
+        ctx.strokeText('顔未検出', 130, 160);
+        ctx.fillText('顔未検出', 130, 160);
       }
     }
     
