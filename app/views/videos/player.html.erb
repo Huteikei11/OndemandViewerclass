@@ -27,6 +27,12 @@
           <div>最後の動き: <span id="last-movement">-</span>秒前</div>
           <div>メモ入力回数: <span id="note-inputs">0</span></div>
           
+          <!-- 眼球データ詳細 -->
+          <div class="eyeball-details" style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+            <div style="font-weight: bold; color: #4fc3f7; margin-bottom: 5px;">🔍 眼球追跡データ</div>
+            <pre id="eyeball-details" style="font-size: 9px; line-height: 1.2; margin: 0; white-space: pre-wrap;">眼球データ待機中...</pre>
+          </div>
+          
           <!-- カメラプレビュー -->
           <div class="camera-preview" id="camera-preview" style="display: none;">
             <div class="camera-container" style="position: relative; display: inline-block;">
@@ -819,8 +825,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // FaceMeshの設定
         this.faceMesh.setOptions({
           maxNumFaces: 1,
-          refineLandmarks: true,
-          minDetectionConfidence: 0.5,
+          refineLandmarks: true, // より詳細なランドマーク検出を有効
+          minDetectionConfidence: 0.7, // 検出精度を向上
           minTrackingConfidence: 0.5
         });
         
@@ -906,7 +912,8 @@ document.addEventListener('DOMContentLoaded', function() {
         gazeDirection: document.getElementById('gaze-direction'),
         frontFacing: document.getElementById('front-facing'),
         lastMovement: document.getElementById('last-movement'),
-        noteInputs: document.getElementById('note-inputs')
+        noteInputs: document.getElementById('note-inputs'),
+        eyeballDetails: document.getElementById('eyeball-details')
       };
       
       // ログ機能の初期化
@@ -941,38 +948,175 @@ document.addEventListener('DOMContentLoaded', function() {
     
     calculateGazeFromLandmarks(landmarks) {
       try {
-        // 主要な顔の特徴点を取得
-        const leftEye = this.getEyeCenter(landmarks, [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]);
-        const rightEye = this.getEyeCenter(landmarks, [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]);
-        const noseTip = landmarks[1]; // 鼻先
-        const faceCenter = landmarks[9]; // 顔の中心
+        // 眼球の詳細なランドマークを取得
+        const leftEyeData = this.getDetailedEyeData(landmarks, 'left');
+        const rightEyeData = this.getDetailedEyeData(landmarks, 'right');
         
-        // 目の中心点を計算
-        const eyeCenter = {
-          x: (leftEye.x + rightEye.x) / 2,
-          y: (leftEye.y + rightEye.y) / 2
-        };
-        
-        // 顔の向きを基準とした視線方向を計算
-        const faceWidth = Math.abs(leftEye.x - rightEye.x);
-        const faceHeight = Math.abs(landmarks[10].y - landmarks[152].y); // 額から顎まで
-        
-        // 正規化された視線方向（-1 to 1の範囲）
-        const normalizedGazeX = (eyeCenter.x - faceCenter.x) / (faceWidth * 0.5);
-        const normalizedGazeY = (eyeCenter.y - faceCenter.y) / (faceHeight * 0.5);
-        
-        // スケールして最終的な値に変換（-50 to 50の範囲）
-        this.gazeX = Math.max(-50, Math.min(50, normalizedGazeX * 50));
-        this.gazeY = Math.max(-50, Math.min(50, normalizedGazeY * 50));
+        // 両目のデータが有効な場合のみ処理
+        if (leftEyeData.isValid && rightEyeData.isValid) {
+          // 両目の眼球位置の平均を計算
+          const avgPupilX = (leftEyeData.pupilRatio.x + rightEyeData.pupilRatio.x) / 2;
+          const avgPupilY = (leftEyeData.pupilRatio.y + rightEyeData.pupilRatio.y) / 2;
+          
+          // 眼球の動きを視線方向に変換（-1 to 1の範囲）
+          // 左右の動き: 負の値が左、正の値が右
+          const normalizedGazeX = (avgPupilX - 0.5) * 2;
+          // 上下の動き: 負の値が上、正の値が下
+          const normalizedGazeY = (avgPupilY - 0.5) * 2;
+          
+          // スケールして最終的な値に変換（-50 to 50の範囲）
+          this.gazeX = Math.max(-50, Math.min(50, normalizedGazeX * 50));
+          this.gazeY = Math.max(-50, Math.min(50, normalizedGazeY * 50));
+          
+          // 眼球の詳細データを保存（デバッグ用）
+          this.eyeballData = {
+            left: leftEyeData,
+            right: rightEyeData,
+            avgPupilRatio: { x: avgPupilX, y: avgPupilY },
+            rawGaze: { x: normalizedGazeX, y: normalizedGazeY }
+          };
+        } else {
+          // フォールバック: 顔の向きベースの計算
+          this.calculateGazeFromFaceOrientation(landmarks);
+        }
         
         // 動きがあった場合は記録
-        if (Math.abs(this.gazeX) > 10 || Math.abs(this.gazeY) > 10) {
+        if (Math.abs(this.gazeX) > 5 || Math.abs(this.gazeY) > 5) {
           this.lastMovementTime = Date.now();
         }
         
       } catch (error) {
         console.error('視線計算エラー:', error);
         // エラー時はデフォルト値
+        this.gazeX = 0;
+        this.gazeY = 0;
+      }
+    }
+    
+    getDetailedEyeData(landmarks, eye) {
+      try {
+        let eyeIndices, irisIndices;
+        
+        if (eye === 'left') {
+          // 左目のランドマーク（468点Face Meshより）
+          eyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
+          // 左目の虹彩周辺のランドマーク
+          irisIndices = [468, 469, 470, 471, 472]; // MediaPipe iris landmarksの一部
+        } else {
+          // 右目のランドマーク
+          eyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+          // 右目の虹彩周辺のランドマーク
+          irisIndices = [473, 474, 475, 476, 477]; // MediaPipe iris landmarksの一部
+        }
+        
+        // 目のバウンディングボックスを計算
+        const eyePoints = eyeIndices.map(i => landmarks[i]).filter(p => p);
+        if (eyePoints.length === 0) {
+          return { isValid: false };
+        }
+        
+        const minX = Math.min(...eyePoints.map(p => p.x));
+        const maxX = Math.max(...eyePoints.map(p => p.x));
+        const minY = Math.min(...eyePoints.map(p => p.y));
+        const maxY = Math.max(...eyePoints.map(p => p.y));
+        
+        const eyeWidth = maxX - minX;
+        const eyeHeight = maxY - minY;
+        const eyeCenter = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+        
+        // 瞳孔位置の推定（虹彩中心または目の重心）
+        let pupilCenter;
+        
+        // 虹彩ランドマークが利用可能な場合
+        const irisPoints = irisIndices.map(i => landmarks[i]).filter(p => p);
+        if (irisPoints.length > 0) {
+          // 虹彩の中心を計算
+          pupilCenter = {
+            x: irisPoints.reduce((sum, p) => sum + p.x, 0) / irisPoints.length,
+            y: irisPoints.reduce((sum, p) => sum + p.y, 0) / irisPoints.length
+          };
+        } else {
+          // フォールバック: 目の内側の点を使用して瞳孔位置を推定
+          const innerCorner = eye === 'left' ? landmarks[133] : landmarks[362];
+          const outerCorner = eye === 'left' ? landmarks[33] : landmarks[263];
+          const upperLid = eye === 'left' ? landmarks[159] : landmarks[386];
+          const lowerLid = eye === 'left' ? landmarks[145] : landmarks[374];
+          
+          if (innerCorner && outerCorner && upperLid && lowerLid) {
+            // 目の開閉度を計算
+            const eyeOpenness = Math.abs(upperLid.y - lowerLid.y);
+            const eyeWidth = Math.abs(outerCorner.x - innerCorner.x);
+            const openRatio = eyeOpenness / (eyeWidth * 0.3); // 正常な開眼時の比率
+            
+            // 目が十分開いている場合のみ瞳孔位置を推定
+            if (openRatio > 0.3) {
+              // まぶたの曲線から瞳孔位置を推定
+              const lidCenterX = (innerCorner.x + outerCorner.x) / 2;
+              const lidCenterY = (upperLid.y + lowerLid.y) / 2;
+              
+              // 目の形状に基づく微調整
+              // 通常、瞳孔は目の中央よりわずかに内側寄りにある
+              const adjustX = eye === 'left' ? 0.45 : 0.55; // 左目は内側寄り、右目は外側寄り
+              const adjustY = 0.4; // 瞳孔は通常上まぶた寄り
+              
+              pupilCenter = {
+                x: innerCorner.x + (outerCorner.x - innerCorner.x) * adjustX,
+                y: upperLid.y + (lowerLid.y - upperLid.y) * adjustY
+              };
+            } else {
+              // 目が閉じている場合は中央を使用
+              pupilCenter = eyeCenter;
+            }
+          } else {
+            pupilCenter = eyeCenter;
+          }
+        }
+        
+        // 瞳孔の相対位置を計算（0-1の範囲）
+        const pupilRatio = {
+          x: eyeWidth > 0 ? (pupilCenter.x - minX) / eyeWidth : 0.5,
+          y: eyeHeight > 0 ? (pupilCenter.y - minY) / eyeHeight : 0.5
+        };
+        
+        // 結果を返す
+        return {
+          isValid: true,
+          eyeCenter,
+          pupilCenter,
+          pupilRatio,
+          eyeBounds: { minX, maxX, minY, maxY, width: eyeWidth, height: eyeHeight },
+          confidence: irisPoints.length > 0 ? 0.9 : 0.6 // 虹彩データがある場合は高い信頼度
+        };
+        
+      } catch (error) {
+        console.error(`${eye}目のデータ取得エラー:`, error);
+        return { isValid: false };
+      }
+    }
+    
+    calculateGazeFromFaceOrientation(landmarks) {
+      // フォールバック: 従来の顔の向きベースの計算
+      try {
+        const leftEye = this.getEyeCenter(landmarks, [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]);
+        const rightEye = this.getEyeCenter(landmarks, [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]);
+        const faceCenter = landmarks[9];
+        
+        const eyeCenter = {
+          x: (leftEye.x + rightEye.x) / 2,
+          y: (leftEye.y + rightEye.y) / 2
+        };
+        
+        const faceWidth = Math.abs(leftEye.x - rightEye.x);
+        const faceHeight = Math.abs(landmarks[10].y - landmarks[152].y);
+        
+        const normalizedGazeX = (eyeCenter.x - faceCenter.x) / (faceWidth * 0.5);
+        const normalizedGazeY = (eyeCenter.y - faceCenter.y) / (faceHeight * 0.5);
+        
+        this.gazeX = Math.max(-50, Math.min(50, normalizedGazeX * 50));
+        this.gazeY = Math.max(-50, Math.min(50, normalizedGazeY * 50));
+        
+      } catch (error) {
+        console.error('フォールバック視線計算エラー:', error);
         this.gazeX = 0;
         this.gazeY = 0;
       }
@@ -1463,7 +1607,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateDebugInfo() {
       // 検出方式の表示
       if (this.debugElements.detectionMethod) {
-        const method = this.useMediaPipe && this.mediaPipeInitialized ? 'MediaPipe (実際の視線検出)' : 'フォールバック (シミュレーション)';
+        const method = this.useMediaPipe && this.mediaPipeInitialized ? 'MediaPipe (実際の眼球追跡)' : 'フォールバック (顔の向き)';
         this.debugElements.detectionMethod.textContent = method;
       }
       
@@ -1500,6 +1644,24 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!direction) direction = '正面';
         
         this.debugElements.gazeDirection.textContent = direction;
+      }
+      
+      // 眼球データの詳細表示（MediaPipe使用時のみ）
+      if (this.eyeballData && this.debugElements.eyeballDetails) {
+        const data = this.eyeballData;
+        let details = '';
+        
+        if (data.left.isValid && data.right.isValid) {
+          details += `左目瞳孔: (${(data.left.pupilRatio.x * 100).toFixed(1)}%, ${(data.left.pupilRatio.y * 100).toFixed(1)}%)\n`;
+          details += `右目瞳孔: (${(data.right.pupilRatio.x * 100).toFixed(1)}%, ${(data.right.pupilRatio.y * 100).toFixed(1)}%)\n`;
+          details += `平均瞳孔: (${(data.avgPupilRatio.x * 100).toFixed(1)}%, ${(data.avgPupilRatio.y * 100).toFixed(1)}%)\n`;
+          details += `生視線値: (${data.rawGaze.x.toFixed(3)}, ${data.rawGaze.y.toFixed(3)})\n`;
+          details += `信頼度: L=${(data.left.confidence * 100).toFixed(0)}% R=${(data.right.confidence * 100).toFixed(0)}%`;
+        } else {
+          details = '眼球データ取得失敗 - フォールバックモード';
+        }
+        
+        this.debugElements.eyeballDetails.textContent = details;
       }
       
       if (this.debugElements.frontFacing) {
