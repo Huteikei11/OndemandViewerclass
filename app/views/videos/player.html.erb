@@ -751,6 +751,13 @@ document.addEventListener('DOMContentLoaded', function() {
       this.responseProcessed = false; // 反応時間処理済みフラグを追加
       this.gazeOverlayInterval = null; // 視線オーバーレイ更新インターバル
       
+      // 眼球動きの変化量追跡
+      this.previousGaze = { x: 0, y: 0, timestamp: Date.now() };
+      this.gazeVelocity = { x: 0, y: 0 }; // ピクセル/秒
+      this.gazeAcceleration = { x: 0, y: 0 }; // ピクセル/秒²
+      this.previousVelocity = { x: 0, y: 0, timestamp: Date.now() };
+      this.eyeMovementHistory = []; // 最近の動きの履歴（5フレーム分）
+      
       // MediaPipe関連の初期化
       this.faceMesh = null;
       this.camera = null;
@@ -985,11 +992,17 @@ document.addEventListener('DOMContentLoaded', function() {
           this.lastMovementTime = Date.now();
         }
         
+        // 眼球動きの変化量を計算
+        this.calculateGazeMovementDelta();
+        
       } catch (error) {
         console.error('視線計算エラー:', error);
         // エラー時はデフォルト値
         this.gazeX = 0;
         this.gazeY = 0;
+        // 変化量もリセット
+        this.gazeVelocity = { x: 0, y: 0 };
+        this.gazeAcceleration = { x: 0, y: 0 };
       }
     }
     
@@ -1133,6 +1146,66 @@ document.addEventListener('DOMContentLoaded', function() {
       return {
         x: sumX / eyeIndices.length,
         y: sumY / eyeIndices.length
+      };
+    }
+    
+    calculateGazeMovementDelta() {
+      const currentTime = Date.now();
+      const currentGaze = { x: this.gazeX, y: this.gazeY };
+      
+      // 前回の記録からの時間差（秒）
+      const deltaTime = (currentTime - this.previousGaze.timestamp) / 1000;
+      
+      if (deltaTime > 0 && deltaTime < 1.0) { // 1秒以内の変化のみ有効
+        // 速度計算（ピクセル/秒）
+        const velocityX = (currentGaze.x - this.previousGaze.x) / deltaTime;
+        const velocityY = (currentGaze.y - this.previousGaze.y) / deltaTime;
+        
+        // 速度の履歴を更新
+        const prevVelocityTime = (currentTime - this.previousVelocity.timestamp) / 1000;
+        
+        if (prevVelocityTime > 0 && prevVelocityTime < 1.0) {
+          // 加速度計算（ピクセル/秒²）
+          this.gazeAcceleration.x = (velocityX - this.previousVelocity.x) / prevVelocityTime;
+          this.gazeAcceleration.y = (velocityY - this.previousVelocity.y) / prevVelocityTime;
+        }
+        
+        // 現在の速度を記録
+        this.gazeVelocity.x = velocityX;
+        this.gazeVelocity.y = velocityY;
+        
+        // 前回の速度を更新
+        this.previousVelocity = { 
+          x: velocityX, 
+          y: velocityY, 
+          timestamp: currentTime 
+        };
+        
+        // 動き履歴を更新（最新5フレーム分）
+        this.eyeMovementHistory.push({
+          position: { ...currentGaze },
+          velocity: { x: velocityX, y: velocityY },
+          acceleration: { ...this.gazeAcceleration },
+          timestamp: currentTime
+        });
+        
+        // 履歴の長さを制限
+        if (this.eyeMovementHistory.length > 5) {
+          this.eyeMovementHistory.shift();
+        }
+      } else {
+        // 時間差が大きい場合は速度をリセット
+        this.gazeVelocity.x = 0;
+        this.gazeVelocity.y = 0;
+        this.gazeAcceleration.x = 0;
+        this.gazeAcceleration.y = 0;
+      }
+      
+      // 前回の位置を更新
+      this.previousGaze = { 
+        x: currentGaze.x, 
+        y: currentGaze.y, 
+        timestamp: currentTime 
       };
     }
     
@@ -1286,7 +1359,7 @@ document.addEventListener('DOMContentLoaded', function() {
           ctx.strokeStyle = '#000000';
           ctx.lineWidth = 2;
           
-          const vectorText = `V(${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)})`;
+          const vectorText = `視線V(${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)})`;
           const magnitudeText = `|V|=${magnitude.toFixed(1)}`;
           
           // テキストに縁取りを付けて見やすくする
@@ -1309,6 +1382,10 @@ document.addEventListener('DOMContentLoaded', function() {
           ctx.strokeText('正面視線', 10, 20);
           ctx.fillText('正面視線', 10, 20);
         }
+        
+        // 眼球動きの変化量ベクトルを描画
+        this.drawMovementVectors(ctx, centerX, centerY);
+        
       } else {
         // 顔未検出時の表示
         ctx.strokeStyle = '#ff0000';
@@ -1328,6 +1405,132 @@ document.addEventListener('DOMContentLoaded', function() {
         ctx.strokeText('顔未検出', 130, 160);
         ctx.fillText('顔未検出', 130, 160);
       }
+    }
+    
+    drawMovementVectors(ctx, centerX, centerY) {
+      // 速度ベクトルの描画（青色）
+      const velocityMagnitude = Math.sqrt(this.gazeVelocity.x * this.gazeVelocity.x + this.gazeVelocity.y * this.gazeVelocity.y);
+      
+      if (velocityMagnitude > 1) { // 閾値以上の速度のみ表示
+        const velocityScale = 2; // 速度ベクトルの表示スケール
+        const velocityLength = Math.min(velocityMagnitude * velocityScale, 60);
+        
+        // 正規化された速度ベクトル
+        const normalizedVelX = this.gazeVelocity.x / velocityMagnitude;
+        const normalizedVelY = this.gazeVelocity.y / velocityMagnitude;
+        
+        // 速度ベクトルの終点
+        const velEndX = centerX + normalizedVelX * velocityLength;
+        const velEndY = centerY + normalizedVelY * velocityLength;
+        
+        // 速度ベクトルを描画（青色）
+        ctx.strokeStyle = '#0099ff';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([5, 3]); // 破線で表示
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(velEndX, velEndY);
+        ctx.stroke();
+        
+        // 速度ベクトルの矢印
+        if (velocityLength > 15) {
+          const arrowHeadLength = 10;
+          const arrowHeadAngle = Math.PI / 5;
+          const velAngle = Math.atan2(normalizedVelY, normalizedVelX);
+          
+          ctx.beginPath();
+          ctx.moveTo(velEndX, velEndY);
+          ctx.lineTo(
+            velEndX - arrowHeadLength * Math.cos(velAngle - arrowHeadAngle),
+            velEndY - arrowHeadLength * Math.sin(velAngle - arrowHeadAngle)
+          );
+          ctx.moveTo(velEndX, velEndY);
+          ctx.lineTo(
+            velEndX - arrowHeadLength * Math.cos(velAngle + arrowHeadAngle),
+            velEndY - arrowHeadLength * Math.sin(velAngle + arrowHeadAngle)
+          );
+          ctx.stroke();
+        }
+        
+        ctx.setLineDash([]); // 破線を解除
+      }
+      
+      // 加速度ベクトルの描画（オレンジ色）
+      const accelMagnitude = Math.sqrt(this.gazeAcceleration.x * this.gazeAcceleration.x + this.gazeAcceleration.y * this.gazeAcceleration.y);
+      
+      if (accelMagnitude > 5) { // 閾値以上の加速度のみ表示
+        const accelScale = 0.5; // 加速度ベクトルの表示スケール
+        const accelLength = Math.min(accelMagnitude * accelScale, 40);
+        
+        // 正規化された加速度ベクトル
+        const normalizedAccelX = this.gazeAcceleration.x / accelMagnitude;
+        const normalizedAccelY = this.gazeAcceleration.y / accelMagnitude;
+        
+        // 加速度ベクトルの終点（少しオフセットして表示）
+        const offsetX = 20;
+        const offsetY = 20;
+        const accelStartX = centerX + offsetX;
+        const accelStartY = centerY + offsetY;
+        const accelEndX = accelStartX + normalizedAccelX * accelLength;
+        const accelEndY = accelStartY + normalizedAccelY * accelLength;
+        
+        // 加速度ベクトルを描画（オレンジ色）
+        ctx.strokeStyle = '#ff6600';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 2]); // 細かい破線
+        ctx.beginPath();
+        ctx.moveTo(accelStartX, accelStartY);
+        ctx.lineTo(accelEndX, accelEndY);
+        ctx.stroke();
+        
+        // 加速度ベクトルの矢印
+        if (accelLength > 10) {
+          const arrowHeadLength = 8;
+          const arrowHeadAngle = Math.PI / 4;
+          const accelAngle = Math.atan2(normalizedAccelY, normalizedAccelX);
+          
+          ctx.beginPath();
+          ctx.moveTo(accelEndX, accelEndY);
+          ctx.lineTo(
+            accelEndX - arrowHeadLength * Math.cos(accelAngle - arrowHeadAngle),
+            accelEndY - arrowHeadLength * Math.sin(accelAngle - arrowHeadAngle)
+          );
+          ctx.moveTo(accelEndX, accelEndY);
+          ctx.lineTo(
+            accelEndX - arrowHeadLength * Math.cos(accelAngle + arrowHeadAngle),
+            accelEndY - arrowHeadLength * Math.sin(accelAngle + arrowHeadAngle)
+          );
+          ctx.stroke();
+        }
+        
+        ctx.setLineDash([]); // 破線を解除
+      }
+      
+      // 変化量の数値情報を表示
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1;
+      
+      const velocityText = `速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s`;
+      const accelText = `加速度: (${this.gazeAcceleration.x.toFixed(1)}, ${this.gazeAcceleration.y.toFixed(1)}) px/s²`;
+      const velocityMagText = `|速度|=${velocityMagnitude.toFixed(1)}`;
+      const accelMagText = `|加速度|=${accelMagnitude.toFixed(1)}`;
+      
+      // 右側に変化量情報を表示
+      ctx.strokeText(velocityText, 10, 60);
+      ctx.fillText(velocityText, 10, 60);
+      ctx.strokeText(velocityMagText, 10, 75);
+      ctx.fillText(velocityMagText, 10, 75);
+      ctx.strokeText(accelText, 10, 90);
+      ctx.fillText(accelText, 10, 90);
+      ctx.strokeText(accelMagText, 10, 105);
+      ctx.fillText(accelMagText, 10, 105);
+      
+      // 凡例を表示
+      ctx.font = '9px Arial';
+      ctx.strokeText('━ 視線方向(緑) ┅ 速度(青) ┄ 加速度(橙)', 10, 220);
+      ctx.fillText('━ 視線方向(緑) ┅ 速度(青) ┄ 加速度(橙)', 10, 220);
     }
     
     detectFace(imageData) {
@@ -1656,9 +1859,18 @@ document.addEventListener('DOMContentLoaded', function() {
           details += `右目瞳孔: (${(data.right.pupilRatio.x * 100).toFixed(1)}%, ${(data.right.pupilRatio.y * 100).toFixed(1)}%)\n`;
           details += `平均瞳孔: (${(data.avgPupilRatio.x * 100).toFixed(1)}%, ${(data.avgPupilRatio.y * 100).toFixed(1)}%)\n`;
           details += `生視線値: (${data.rawGaze.x.toFixed(3)}, ${data.rawGaze.y.toFixed(3)})\n`;
-          details += `信頼度: L=${(data.left.confidence * 100).toFixed(0)}% R=${(data.right.confidence * 100).toFixed(0)}%`;
+          details += `信頼度: L=${(data.left.confidence * 100).toFixed(0)}% R=${(data.right.confidence * 100).toFixed(0)}%\n\n`;
+          
+          // 変化量情報を追加
+          details += `【動きの変化量】\n`;
+          details += `速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s\n`;
+          details += `速度大きさ: ${Math.sqrt(this.gazeVelocity.x * this.gazeVelocity.x + this.gazeVelocity.y * this.gazeVelocity.y).toFixed(1)} px/s\n`;
+          details += `加速度: (${this.gazeAcceleration.x.toFixed(1)}, ${this.gazeAcceleration.y.toFixed(1)}) px/s²\n`;
+          details += `加速度大きさ: ${Math.sqrt(this.gazeAcceleration.x * this.gazeAcceleration.x + this.gazeAcceleration.y * this.gazeAcceleration.y).toFixed(1)} px/s²\n`;
+          details += `動き履歴: ${this.eyeMovementHistory.length}/5フレーム`;
         } else {
-          details = '眼球データ取得失敗 - フォールバックモード';
+          details = '眼球データ取得失敗 - フォールバックモード\n';
+          details += `変化量: 速度(${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) 加速度(${this.gazeAcceleration.x.toFixed(1)}, ${this.gazeAcceleration.y.toFixed(1)})`;
         }
         
         this.debugElements.eyeballDetails.textContent = details;
