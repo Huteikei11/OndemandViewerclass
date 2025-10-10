@@ -758,6 +758,13 @@ document.addEventListener('DOMContentLoaded', function() {
       this.previousVelocity = { x: 0, y: 0, timestamp: Date.now() };
       this.eyeMovementHistory = []; // 最近の動きの履歴（5フレーム分）
       
+      // 視線データのスムージング用
+      this.gazeRawHistory = []; // 生の視線データ履歴（10フレーム分）
+      this.gazeSmoothed = { x: 0, y: 0 }; // スムージング後の視線データ
+      this.smoothingWindowSize = 8; // 移動平均のウィンドウサイズ
+      this.noiseThreshold = 3; // ノイズ除去の閾値（ピクセル）
+      this.lastValidGaze = { x: 0, y: 0, timestamp: Date.now() }; // 最後の有効な視線データ
+      
       // MediaPipe関連の初期化
       this.faceMesh = null;
       this.camera = null;
@@ -992,7 +999,10 @@ document.addEventListener('DOMContentLoaded', function() {
           this.lastMovementTime = Date.now();
         }
         
-        // 眼球動きの変化量を計算
+        // 視線データのスムージング処理
+        this.applySmoothingToGaze();
+        
+        // 眼球動きの変化量を計算（スムージング後のデータを使用）
         this.calculateGazeMovementDelta();
         
       } catch (error) {
@@ -1149,35 +1159,138 @@ document.addEventListener('DOMContentLoaded', function() {
       };
     }
     
+    applySmoothingToGaze() {
+      const currentTime = Date.now();
+      
+      // 生の視線データを履歴に追加
+      this.gazeRawHistory.push({
+        x: this.gazeX,
+        y: this.gazeY,
+        timestamp: currentTime
+      });
+      
+      // 履歴のサイズを制限
+      if (this.gazeRawHistory.length > this.smoothingWindowSize) {
+        this.gazeRawHistory.shift();
+      }
+      
+      // ノイズ除去: 極端な値を検出して除去
+      const filteredHistory = this.removeNoiseFromGazeData();
+      
+      if (filteredHistory.length >= 3) {
+        // 移動平均を計算
+        const smoothedX = filteredHistory.reduce((sum, data) => sum + data.x, 0) / filteredHistory.length;
+        const smoothedY = filteredHistory.reduce((sum, data) => sum + data.y, 0) / filteredHistory.length;
+        
+        // 重み付き平均（新しいデータにより大きな重みを付ける）
+        const weights = filteredHistory.map((_, index) => Math.pow(1.2, index)); // 新しいデータほど重い
+        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+        
+        const weightedX = filteredHistory.reduce((sum, data, index) => sum + data.x * weights[index], 0) / totalWeight;
+        const weightedY = filteredHistory.reduce((sum, data, index) => sum + data.y * weights[index], 0) / totalWeight;
+        
+        // スムージング結果を保存
+        this.gazeSmoothed.x = weightedX;
+        this.gazeSmoothed.y = weightedY;
+        
+        // スムージング後のデータで元の値を更新
+        this.gazeX = weightedX;
+        this.gazeY = weightedY;
+        
+        // 有効なデータとして記録
+        this.lastValidGaze = { x: weightedX, y: weightedY, timestamp: currentTime };
+      } else if (this.lastValidGaze.timestamp > 0 && (currentTime - this.lastValidGaze.timestamp) < 500) {
+        // データが不足している場合は前回の有効なデータを使用（0.5秒以内）
+        this.gazeX = this.lastValidGaze.x;
+        this.gazeY = this.lastValidGaze.y;
+      }
+    }
+    
+    removeNoiseFromGazeData() {
+      if (this.gazeRawHistory.length < 3) {
+        return this.gazeRawHistory;
+      }
+      
+      const filtered = [];
+      
+      for (let i = 0; i < this.gazeRawHistory.length; i++) {
+        const current = this.gazeRawHistory[i];
+        let isNoise = false;
+        
+        // 前後のデータと比較してノイズを検出
+        if (i > 0 && i < this.gazeRawHistory.length - 1) {
+          const prev = this.gazeRawHistory[i - 1];
+          const next = this.gazeRawHistory[i + 1];
+          
+          // 前後のデータとの差が閾値を超える場合はノイズと判定
+          const diffPrev = Math.sqrt(Math.pow(current.x - prev.x, 2) + Math.pow(current.y - prev.y, 2));
+          const diffNext = Math.sqrt(Math.pow(current.x - next.x, 2) + Math.pow(current.y - next.y, 2));
+          const diffPrevNext = Math.sqrt(Math.pow(prev.x - next.x, 2) + Math.pow(prev.y - next.y, 2));
+          
+          // 現在の値が前後から大きく離れている場合はノイズ
+          if (diffPrev > this.noiseThreshold && diffNext > this.noiseThreshold && diffPrevNext < this.noiseThreshold) {
+            isNoise = true;
+          }
+        }
+        
+        // 極端に大きな値もノイズとして除去
+        if (Math.abs(current.x) > 100 || Math.abs(current.y) > 100) {
+          isNoise = true;
+        }
+        
+        if (!isNoise) {
+          filtered.push(current);
+        }
+      }
+      
+      return filtered.length > 0 ? filtered : this.gazeRawHistory;
+    }
+    
     calculateGazeMovementDelta() {
       const currentTime = Date.now();
-      const currentGaze = { x: this.gazeX, y: this.gazeY };
+      const currentGaze = { x: this.gazeX, y: this.gazeY }; // すでにスムージング済み
       
       // 前回の記録からの時間差（秒）
       const deltaTime = (currentTime - this.previousGaze.timestamp) / 1000;
       
       if (deltaTime > 0 && deltaTime < 1.0) { // 1秒以内の変化のみ有効
         // 速度計算（ピクセル/秒）
-        const velocityX = (currentGaze.x - this.previousGaze.x) / deltaTime;
-        const velocityY = (currentGaze.y - this.previousGaze.y) / deltaTime;
+        let velocityX = (currentGaze.x - this.previousGaze.x) / deltaTime;
+        let velocityY = (currentGaze.y - this.previousGaze.y) / deltaTime;
         
-        // 速度の履歴を更新
+        // 速度値の異常チェック（急激な変化を制限）
+        const maxVelocity = 200; // 最大速度制限（ピクセル/秒）
+        velocityX = Math.max(-maxVelocity, Math.min(maxVelocity, velocityX));
+        velocityY = Math.max(-maxVelocity, Math.min(maxVelocity, velocityY));
+        
+        // 速度にもスムージングを適用（前回の速度との平均）
+        const velocitySmoothing = 0.3; // スムージング係数
+        this.gazeVelocity.x = this.gazeVelocity.x * (1 - velocitySmoothing) + velocityX * velocitySmoothing;
+        this.gazeVelocity.y = this.gazeVelocity.y * (1 - velocitySmoothing) + velocityY * velocitySmoothing;
+        
+        // 加速度計算
         const prevVelocityTime = (currentTime - this.previousVelocity.timestamp) / 1000;
         
         if (prevVelocityTime > 0 && prevVelocityTime < 1.0) {
           // 加速度計算（ピクセル/秒²）
-          this.gazeAcceleration.x = (velocityX - this.previousVelocity.x) / prevVelocityTime;
-          this.gazeAcceleration.y = (velocityY - this.previousVelocity.y) / prevVelocityTime;
+          let accelX = (this.gazeVelocity.x - this.previousVelocity.x) / prevVelocityTime;
+          let accelY = (this.gazeVelocity.y - this.previousVelocity.y) / prevVelocityTime;
+          
+          // 加速度値の異常チェック
+          const maxAcceleration = 500; // 最大加速度制限
+          accelX = Math.max(-maxAcceleration, Math.min(maxAcceleration, accelX));
+          accelY = Math.max(-maxAcceleration, Math.min(maxAcceleration, accelY));
+          
+          // 加速度にもスムージングを適用
+          const accelSmoothing = 0.4;
+          this.gazeAcceleration.x = this.gazeAcceleration.x * (1 - accelSmoothing) + accelX * accelSmoothing;
+          this.gazeAcceleration.y = this.gazeAcceleration.y * (1 - accelSmoothing) + accelY * accelSmoothing;
         }
-        
-        // 現在の速度を記録
-        this.gazeVelocity.x = velocityX;
-        this.gazeVelocity.y = velocityY;
         
         // 前回の速度を更新
         this.previousVelocity = { 
-          x: velocityX, 
-          y: velocityY, 
+          x: this.gazeVelocity.x, 
+          y: this.gazeVelocity.y, 
           timestamp: currentTime 
         };
         
@@ -1861,6 +1974,14 @@ document.addEventListener('DOMContentLoaded', function() {
           details += `生視線値: (${data.rawGaze.x.toFixed(3)}, ${data.rawGaze.y.toFixed(3)})\n`;
           details += `信頼度: L=${(data.left.confidence * 100).toFixed(0)}% R=${(data.right.confidence * 100).toFixed(0)}%\n\n`;
           
+          // スムージング情報を追加
+          details += `【スムージング処理】\n`;
+          details += `スムージング後: (${this.gazeSmoothed.x.toFixed(1)}, ${this.gazeSmoothed.y.toFixed(1)})\n`;
+          details += `生データ履歴: ${this.gazeRawHistory.length}/${this.smoothingWindowSize}フレーム\n`;
+          const filteredCount = this.removeNoiseFromGazeData().length;
+          details += `ノイズ除去後: ${filteredCount}フレーム\n`;
+          details += `ノイズ除去率: ${this.gazeRawHistory.length > 0 ? ((this.gazeRawHistory.length - filteredCount) / this.gazeRawHistory.length * 100).toFixed(1) : 0}%\n\n`;
+          
           // 変化量情報を追加
           details += `【動きの変化量】\n`;
           details += `速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s\n`;
@@ -1870,6 +1991,7 @@ document.addEventListener('DOMContentLoaded', function() {
           details += `動き履歴: ${this.eyeMovementHistory.length}/5フレーム`;
         } else {
           details = '眼球データ取得失敗 - フォールバックモード\n';
+          details += `スムージング後: (${this.gazeSmoothed.x.toFixed(1)}, ${this.gazeSmoothed.y.toFixed(1)})\n`;
           details += `変化量: 速度(${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) 加速度(${this.gazeAcceleration.x.toFixed(1)}, ${this.gazeAcceleration.y.toFixed(1)})`;
         }
         
