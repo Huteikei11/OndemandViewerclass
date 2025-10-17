@@ -69,7 +69,7 @@
               </div>
               <div class="factor-item positive">
                 <div class="factor-header">問題確認 (+5点)</div>
-                <div class="factor-detail">問題表示後に右側（問題エリア）を注視した場合に加点されます</div>
+                <div class="factor-detail">問題表示後3秒以内に右向きの視線速度が10px/s以上になった場合に加点されます</div>
               </div>
               <div class="factor-item negative">
                 <div class="factor-header">目線停止 (-20点まで)</div>
@@ -430,6 +430,7 @@
     border: 1px solid #555;
     border-radius: 4px;
     margin-bottom: 5px;
+    transform: scaleX(-1); /* 左右反転 */
   }
   
   .concentration-log {
@@ -749,6 +750,7 @@ document.addEventListener('DOMContentLoaded', function() {
       this.responseStartTime = null;
       this.questionDisplayTime = null;
       this.responseProcessed = false; // 反応時間処理済みフラグを追加
+      this.questionConfirmed = false; // 問題確認済みフラグを追加
       this.gazeOverlayInterval = null; // 視線オーバーレイ更新インターバル
       
       // 眼球動きの変化量追跡
@@ -973,9 +975,10 @@ document.addEventListener('DOMContentLoaded', function() {
           const avgPupilY = (leftEyeData.pupilRatio.y + rightEyeData.pupilRatio.y) / 2;
           
           // 眼球の動きを視線方向に変換（-1 to 1の範囲）
-          // 左右の動き: 負の値が左、正の値が右
-          const normalizedGazeX = (avgPupilX - 0.5) * 2;
-          // 上下の動き: 負の値が上、正の値が下
+          // カメラ映像が左右反転されているため、X座標も反転
+          // 左右の動き: 負の値が右、正の値が左（反転）
+          const normalizedGazeX = -((avgPupilX - 0.5) * 2);
+          // 上下の動き: 負の値が上、正の値が下（変更なし）
           const normalizedGazeY = (avgPupilY - 0.5) * 2;
           
           // スケールして最終的な値に変換（-50 to 50の範囲）
@@ -1132,7 +1135,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const faceWidth = Math.abs(leftEye.x - rightEye.x);
         const faceHeight = Math.abs(landmarks[10].y - landmarks[152].y);
         
-        const normalizedGazeX = (eyeCenter.x - faceCenter.x) / (faceWidth * 0.5);
+        // カメラ映像が左右反転されているため、X座標も反転
+        const normalizedGazeX = -((eyeCenter.x - faceCenter.x) / (faceWidth * 0.5));
         const normalizedGazeY = (eyeCenter.y - faceCenter.y) / (faceHeight * 0.5);
         
         this.gazeX = Math.max(-50, Math.min(50, normalizedGazeX * 50));
@@ -1408,6 +1412,11 @@ document.addEventListener('DOMContentLoaded', function() {
       const ctx = overlayCanvas.getContext('2d');
       ctx.clearRect(0, 0, 320, 240);
       
+      // キャンバスを左右反転（ビデオに合わせる）
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.translate(-320, 0);
+      
       if (this.faceDetected) {
         // カメラ映像の中心を基準点とする
         const centerX = 160; // 320/2
@@ -1466,7 +1475,11 @@ document.addEventListener('DOMContentLoaded', function() {
           ctx.arc(centerX, centerY, 4, 0, 2 * Math.PI);
           ctx.fill();
           
-          // ベクトル情報をテキストで表示
+          // ベクトル情報をテキストで表示（テキストは反転させない）
+          ctx.save();
+          ctx.scale(-1, 1);
+          ctx.translate(-320, 0);
+          
           ctx.fillStyle = '#ffffff';
           ctx.font = '12px Arial';
           ctx.strokeStyle = '#000000';
@@ -1480,6 +1493,8 @@ document.addEventListener('DOMContentLoaded', function() {
           ctx.fillText(vectorText, 10, 20);
           ctx.strokeText(magnitudeText, 10, 40);
           ctx.fillText(magnitudeText, 10, 40);
+          
+          ctx.restore();
         } else {
           // 中心点のみ表示（視線が正面の場合）
           ctx.fillStyle = '#00ff00';
@@ -1487,13 +1502,19 @@ document.addEventListener('DOMContentLoaded', function() {
           ctx.arc(centerX, centerY, 6, 0, 2 * Math.PI);
           ctx.fill();
           
-          // 正面視線のテキスト
+          // 正面視線のテキスト（テキストは反転させない）
+          ctx.save();
+          ctx.scale(-1, 1);
+          ctx.translate(-320, 0);
+          
           ctx.fillStyle = '#ffffff';
           ctx.font = '12px Arial';
           ctx.strokeStyle = '#000000';
           ctx.lineWidth = 2;
           ctx.strokeText('正面視線', 10, 20);
           ctx.fillText('正面視線', 10, 20);
+          
+          ctx.restore();
         }
         
         // 眼球動きの変化量ベクトルを描画
@@ -1514,10 +1535,19 @@ document.addEventListener('DOMContentLoaded', function() {
         ctx.lineTo(140, 140);
         ctx.stroke();
         
-        // テキスト表示
+        // テキスト表示（テキストは反転させない）
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.translate(-320, 0);
+        
         ctx.strokeText('顔未検出', 130, 160);
         ctx.fillText('顔未検出', 130, 160);
+        
+        ctx.restore();
       }
+      
+      // キャンバス変換を復元
+      ctx.restore();
     }
     
     drawMovementVectors(ctx, centerX, centerY) {
@@ -1619,7 +1649,11 @@ document.addEventListener('DOMContentLoaded', function() {
         ctx.setLineDash([]); // 破線を解除
       }
       
-      // 変化量の数値情報を表示
+      // 変化量の数値情報を表示（テキストは反転させない）
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.translate(-320, 0);
+      
       ctx.fillStyle = '#ffffff';
       ctx.font = '10px Arial';
       ctx.strokeStyle = '#000000';
@@ -1644,6 +1678,8 @@ document.addEventListener('DOMContentLoaded', function() {
       ctx.font = '9px Arial';
       ctx.strokeText('━ 視線方向(緑) ┅ 速度(青) ┄ 加速度(橙)', 10, 220);
       ctx.fillText('━ 視線方向(緑) ┅ 速度(青) ┄ 加速度(橙)', 10, 220);
+      
+      ctx.restore();
     }
     
     detectFace(imageData) {
@@ -1702,19 +1738,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         // 目線をそらすこと自体は減点対象から除外
         
-        // 問題表示後の目線の動き（右側への注視を評価）
-        if (this.questionDisplayTime && !this.responseStartTime) {
+        // 問題表示後の目線の動き（右向きの視線速度を評価）
+        if (this.questionDisplayTime && !this.responseStartTime && !this.questionConfirmed) {
           const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
-          if (timeFromQuestion < 10) { // 問題表示から10秒以内
-            if (this.gazeX > 15) { // 右側を見ている
+          if (timeFromQuestion < 3) { // 問題表示から3秒以内
+            // 右向きの視線速度をチェック（10px/s以上の右向き速度）
+            if (this.gazeVelocity.x > 10) {
               const gazeBonus = 5;
               newScore += gazeBonus;
+              this.questionConfirmed = true; // フラグを立てて一度だけ実行
               reasons.push({ 
                 text: '問題確認', 
                 change: gazeBonus, 
                 type: 'positive',
                 category: '目線',
-                detail: '問題表示後に右側（問題エリア）を注視しています'
+                detail: `問題表示後${timeFromQuestion.toFixed(1)}秒で右向き速度${this.gazeVelocity.x.toFixed(1)}px/sを検出しました`
               });
             }
           }
@@ -2014,6 +2052,7 @@ document.addEventListener('DOMContentLoaded', function() {
       this.questionDisplayTime = Date.now();
       this.responseStartTime = null;
       this.responseProcessed = false; // 新しい問題でフラグをリセット
+      this.questionConfirmed = false; // 問題確認フラグもリセット
       
       // 問題表示をログに記録
       const timestamp = new Date().toLocaleTimeString();

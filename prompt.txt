@@ -60,6 +60,6 @@
 6. 設定可能なパラメータ
 smoothingWindowSize: 8フレーム（約0.27秒）
 noiseThreshold: 3ピクセル
-
-これにより、MediaPipeの視線検出の瞬間的な誤差やノイズが大幅に軽減され、より安定した速度・加速度計算が可能になります。velocitySmoothing: 30%係数
+velocitySmoothing: 30%係数
 accelSmoothing: 40%係数
+これにより、MediaPipeの視線検出の瞬間的な誤差やノイズが大幅に軽減され、より安定した速度・加速度計算が可能になります。
