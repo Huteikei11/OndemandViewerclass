@@ -767,6 +767,12 @@ document.addEventListener('DOMContentLoaded', function() {
       this.noiseThreshold = 3; // ノイズ除去の閾値（ピクセル）
       this.lastValidGaze = { x: 0, y: 0, timestamp: Date.now() }; // 最後の有効な視線データ
       
+      // 顔の向きの追跡
+      this.headPoseX = 0; // 顔の水平方向の向き（-50 to 50）
+      this.headPoseY = 0; // 顔の垂直方向の向き（-50 to 50）
+      this.previousHeadPose = { x: 0, y: 0, timestamp: Date.now() };
+      this.headPoseVelocity = { x: 0, y: 0 }; // 顔の向きの変化速度
+      
       // MediaPipe関連の初期化
       this.faceMesh = null;
       this.camera = null;
@@ -1008,6 +1014,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // 眼球動きの変化量を計算（スムージング後のデータを使用）
         this.calculateGazeMovementDelta();
         
+        // 顔の向きを計算
+        this.calculateHeadPoseFromLandmarks(landmarks);
+        
       } catch (error) {
         console.error('視線計算エラー:', error);
         // エラー時はデフォルト値
@@ -1015,7 +1024,9 @@ document.addEventListener('DOMContentLoaded', function() {
         this.gazeY = 0;
         // 変化量もリセット
         this.gazeVelocity = { x: 0, y: 0 };
-        this.gazeAcceleration = { x: 0, y: 0 };
+        this.headPoseX = 0;
+        this.headPoseY = 0;
+        this.headPoseVelocity = { x: 0, y: 0 };
       }
     }
     
@@ -1210,6 +1221,81 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     
+    calculateHeadPoseFromLandmarks(landmarks) {
+      try {
+        // 顔の主要な特徴点を使用して向きを計算
+        const noseTip = landmarks[1]; // 鼻先
+        const faceCenter = landmarks[9]; // 顔の中心
+        const leftEyeCorner = landmarks[33]; // 左目尻
+        const rightEyeCorner = landmarks[263]; // 右目尻
+        const chinCenter = landmarks[18]; // 顎の中心
+        const foreheadCenter = landmarks[10]; // 額の中心
+        
+        if (!noseTip || !faceCenter || !leftEyeCorner || !rightEyeCorner || !chinCenter || !foreheadCenter) {
+          return;
+        }
+        
+        // 顔の基準サイズを計算
+        const faceWidth = Math.abs(leftEyeCorner.x - rightEyeCorner.x);
+        const faceHeight = Math.abs(foreheadCenter.y - chinCenter.y);
+        
+        // 水平方向の向き（左右の回転）
+        // 鼻先と顔の中心の水平方向のずれで判定
+        const horizontalOffset = (noseTip.x - faceCenter.x) / (faceWidth * 0.5);
+        
+        // 垂直方向の向き（上下の傾き）
+        // 鼻先と顔の中心の垂直方向のずれで判定
+        const verticalOffset = (noseTip.y - faceCenter.y) / (faceHeight * 0.5);
+        
+        // カメラ映像が左右反転されているため、X座標も反転
+        this.headPoseX = Math.max(-50, Math.min(50, -horizontalOffset * 50));
+        this.headPoseY = Math.max(-50, Math.min(50, verticalOffset * 50));
+        
+        // 顔の向きの変化量を計算
+        this.calculateHeadPoseMovementDelta();
+        
+      } catch (error) {
+        console.error('顔の向き計算エラー:', error);
+        this.headPoseX = 0;
+        this.headPoseY = 0;
+      }
+    }
+    
+    calculateHeadPoseMovementDelta() {
+      const currentTime = Date.now();
+      const currentHeadPose = { x: this.headPoseX, y: this.headPoseY };
+      
+      // 前回の記録からの時間差（秒）
+      const deltaTime = (currentTime - this.previousHeadPose.timestamp) / 1000;
+      
+      if (deltaTime > 0 && deltaTime < 1.0) { // 1秒以内の変化のみ有効
+        // 速度計算（角度/秒）
+        let velocityX = (currentHeadPose.x - this.previousHeadPose.x) / deltaTime;
+        let velocityY = (currentHeadPose.y - this.previousHeadPose.y) / deltaTime;
+        
+        // 速度値の異常チェック（急激な変化を制限）
+        const maxVelocity = 100; // 最大速度制限
+        velocityX = Math.max(-maxVelocity, Math.min(maxVelocity, velocityX));
+        velocityY = Math.max(-maxVelocity, Math.min(maxVelocity, velocityY));
+        
+        // 速度にスムージングを適用
+        const velocitySmoothing = 0.4; // スムージング係数
+        this.headPoseVelocity.x = this.headPoseVelocity.x * (1 - velocitySmoothing) + velocityX * velocitySmoothing;
+        this.headPoseVelocity.y = this.headPoseVelocity.y * (1 - velocitySmoothing) + velocityY * velocitySmoothing;
+      } else {
+        // 時間差が大きい場合は速度をリセット
+        this.headPoseVelocity.x = 0;
+        this.headPoseVelocity.y = 0;
+      }
+      
+      // 前回の位置を更新
+      this.previousHeadPose = { 
+        x: currentHeadPose.x, 
+        y: currentHeadPose.y, 
+        timestamp: currentTime 
+      };
+    }
+    
     removeNoiseFromGazeData() {
       if (this.gazeRawHistory.length < 3) {
         return this.gazeRawHistory;
@@ -1272,37 +1358,10 @@ document.addEventListener('DOMContentLoaded', function() {
         this.gazeVelocity.x = this.gazeVelocity.x * (1 - velocitySmoothing) + velocityX * velocitySmoothing;
         this.gazeVelocity.y = this.gazeVelocity.y * (1 - velocitySmoothing) + velocityY * velocitySmoothing;
         
-        // 加速度計算
-        const prevVelocityTime = (currentTime - this.previousVelocity.timestamp) / 1000;
-        
-        if (prevVelocityTime > 0 && prevVelocityTime < 1.0) {
-          // 加速度計算（ピクセル/秒²）
-          let accelX = (this.gazeVelocity.x - this.previousVelocity.x) / prevVelocityTime;
-          let accelY = (this.gazeVelocity.y - this.previousVelocity.y) / prevVelocityTime;
-          
-          // 加速度値の異常チェック
-          const maxAcceleration = 500; // 最大加速度制限
-          accelX = Math.max(-maxAcceleration, Math.min(maxAcceleration, accelX));
-          accelY = Math.max(-maxAcceleration, Math.min(maxAcceleration, accelY));
-          
-          // 加速度にもスムージングを適用
-          const accelSmoothing = 0.4;
-          this.gazeAcceleration.x = this.gazeAcceleration.x * (1 - accelSmoothing) + accelX * accelSmoothing;
-          this.gazeAcceleration.y = this.gazeAcceleration.y * (1 - accelSmoothing) + accelY * accelSmoothing;
-        }
-        
-        // 前回の速度を更新
-        this.previousVelocity = { 
-          x: this.gazeVelocity.x, 
-          y: this.gazeVelocity.y, 
-          timestamp: currentTime 
-        };
-        
         // 動き履歴を更新（最新5フレーム分）
         this.eyeMovementHistory.push({
           position: { ...currentGaze },
           velocity: { x: velocityX, y: velocityY },
-          acceleration: { ...this.gazeAcceleration },
           timestamp: currentTime
         });
         
@@ -1314,8 +1373,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // 時間差が大きい場合は速度をリセット
         this.gazeVelocity.x = 0;
         this.gazeVelocity.y = 0;
-        this.gazeAcceleration.x = 0;
-        this.gazeAcceleration.y = 0;
       }
       
       // 前回の位置を更新
@@ -1551,7 +1608,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     drawMovementVectors(ctx, centerX, centerY) {
-      // 速度ベクトルの描画（青色）
+      // 視線速度ベクトルの描画（青色）
       const velocityMagnitude = Math.sqrt(this.gazeVelocity.x * this.gazeVelocity.x + this.gazeVelocity.y * this.gazeVelocity.y);
       
       if (velocityMagnitude > 1) { // 閾値以上の速度のみ表示
@@ -1598,50 +1655,101 @@ document.addEventListener('DOMContentLoaded', function() {
         ctx.setLineDash([]); // 破線を解除
       }
       
-      // 加速度ベクトルの描画（オレンジ色）
-      const accelMagnitude = Math.sqrt(this.gazeAcceleration.x * this.gazeAcceleration.x + this.gazeAcceleration.y * this.gazeAcceleration.y);
+      // 顔の向きベクトルの描画（オレンジ色）
+      const headPoseMagnitude = Math.sqrt(this.headPoseX * this.headPoseX + this.headPoseY * this.headPoseY);
       
-      if (accelMagnitude > 5) { // 閾値以上の加速度のみ表示
-        const accelScale = 0.5; // 加速度ベクトルの表示スケール
-        const accelLength = Math.min(accelMagnitude * accelScale, 40);
+      if (headPoseMagnitude > 2) { // 閾値以上の顔の向きのみ表示
+        const headPoseScale = 1.5; // 顔の向きベクトルの表示スケール
+        const headPoseLength = Math.min(headPoseMagnitude * headPoseScale, 50);
         
-        // 正規化された加速度ベクトル
-        const normalizedAccelX = this.gazeAcceleration.x / accelMagnitude;
-        const normalizedAccelY = this.gazeAcceleration.y / accelMagnitude;
+        // 正規化された顔の向きベクトル
+        const normalizedHeadPoseX = this.headPoseX / headPoseMagnitude;
+        const normalizedHeadPoseY = this.headPoseY / headPoseMagnitude;
         
-        // 加速度ベクトルの終点（少しオフセットして表示）
-        const offsetX = 20;
-        const offsetY = 20;
-        const accelStartX = centerX + offsetX;
-        const accelStartY = centerY + offsetY;
-        const accelEndX = accelStartX + normalizedAccelX * accelLength;
-        const accelEndY = accelStartY + normalizedAccelY * accelLength;
+        // 顔の向きベクトルの終点（少しオフセットして表示）
+        const offsetX = 25;
+        const offsetY = 25;
+        const headPoseStartX = centerX + offsetX;
+        const headPoseStartY = centerY + offsetY;
+        const headPoseEndX = headPoseStartX + normalizedHeadPoseX * headPoseLength;
+        const headPoseEndY = headPoseStartY + normalizedHeadPoseY * headPoseLength;
         
-        // 加速度ベクトルを描画（オレンジ色）
+        // 顔の向きベクトルを描画（オレンジ色）
         ctx.strokeStyle = '#ff6600';
         ctx.lineWidth = 2;
-        ctx.setLineDash([3, 2]); // 細かい破線
+        ctx.setLineDash([4, 3]); // 点線
         ctx.beginPath();
-        ctx.moveTo(accelStartX, accelStartY);
-        ctx.lineTo(accelEndX, accelEndY);
+        ctx.moveTo(headPoseStartX, headPoseStartY);
+        ctx.lineTo(headPoseEndX, headPoseEndY);
         ctx.stroke();
         
-        // 加速度ベクトルの矢印
-        if (accelLength > 10) {
+        // 顔の向きベクトルの矢印
+        if (headPoseLength > 10) {
           const arrowHeadLength = 8;
           const arrowHeadAngle = Math.PI / 4;
-          const accelAngle = Math.atan2(normalizedAccelY, normalizedAccelX);
+          const headPoseAngle = Math.atan2(normalizedHeadPoseY, normalizedHeadPoseX);
           
           ctx.beginPath();
-          ctx.moveTo(accelEndX, accelEndY);
+          ctx.moveTo(headPoseEndX, headPoseEndY);
           ctx.lineTo(
-            accelEndX - arrowHeadLength * Math.cos(accelAngle - arrowHeadAngle),
-            accelEndY - arrowHeadLength * Math.sin(accelAngle - arrowHeadAngle)
+            headPoseEndX - arrowHeadLength * Math.cos(headPoseAngle - arrowHeadAngle),
+            headPoseEndY - arrowHeadLength * Math.sin(headPoseAngle - arrowHeadAngle)
           );
-          ctx.moveTo(accelEndX, accelEndY);
+          ctx.moveTo(headPoseEndX, headPoseEndY);
           ctx.lineTo(
-            accelEndX - arrowHeadLength * Math.cos(accelAngle + arrowHeadAngle),
-            accelEndY - arrowHeadLength * Math.sin(accelAngle + arrowHeadAngle)
+            headPoseEndX - arrowHeadLength * Math.cos(headPoseAngle + arrowHeadAngle),
+            headPoseEndY - arrowHeadLength * Math.sin(headPoseAngle + arrowHeadAngle)
+          );
+          ctx.stroke();
+        }
+        
+        ctx.setLineDash([]); // 破線を解除
+      }
+      
+      // 顔の向き速度ベクトルの描画（紫色）
+      const headPoseVelocityMagnitude = Math.sqrt(this.headPoseVelocity.x * this.headPoseVelocity.x + this.headPoseVelocity.y * this.headPoseVelocity.y);
+      
+      if (headPoseVelocityMagnitude > 1) { // 閾値以上の顔の向き速度のみ表示
+        const headPoseVelScale = 3; // 顔の向き速度ベクトルの表示スケール
+        const headPoseVelLength = Math.min(headPoseVelocityMagnitude * headPoseVelScale, 45);
+        
+        // 正規化された顔の向き速度ベクトル
+        const normalizedHeadPoseVelX = this.headPoseVelocity.x / headPoseVelocityMagnitude;
+        const normalizedHeadPoseVelY = this.headPoseVelocity.y / headPoseVelocityMagnitude;
+        
+        // 顔の向き速度ベクトルの終点（さらにオフセット）
+        const velOffsetX = -25;
+        const velOffsetY = 25;
+        const headPoseVelStartX = centerX + velOffsetX;
+        const headPoseVelStartY = centerY + velOffsetY;
+        const headPoseVelEndX = headPoseVelStartX + normalizedHeadPoseVelX * headPoseVelLength;
+        const headPoseVelEndY = headPoseVelStartY + normalizedHeadPoseVelY * headPoseVelLength;
+        
+        // 顔の向き速度ベクトルを描画（紫色）
+        ctx.strokeStyle = '#9966ff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([2, 4]); // 短い破線
+        ctx.beginPath();
+        ctx.moveTo(headPoseVelStartX, headPoseVelStartY);
+        ctx.lineTo(headPoseVelEndX, headPoseVelEndY);
+        ctx.stroke();
+        
+        // 顔の向き速度ベクトルの矢印
+        if (headPoseVelLength > 10) {
+          const arrowHeadLength = 7;
+          const arrowHeadAngle = Math.PI / 5;
+          const headPoseVelAngle = Math.atan2(normalizedHeadPoseVelY, normalizedHeadPoseVelX);
+          
+          ctx.beginPath();
+          ctx.moveTo(headPoseVelEndX, headPoseVelEndY);
+          ctx.lineTo(
+            headPoseVelEndX - arrowHeadLength * Math.cos(headPoseVelAngle - arrowHeadAngle),
+            headPoseVelEndY - arrowHeadLength * Math.sin(headPoseVelAngle - arrowHeadAngle)
+          );
+          ctx.moveTo(headPoseVelEndX, headPoseVelEndY);
+          ctx.lineTo(
+            headPoseVelEndX - arrowHeadLength * Math.cos(headPoseVelAngle + arrowHeadAngle),
+            headPoseVelEndY - arrowHeadLength * Math.sin(headPoseVelAngle + arrowHeadAngle)
           );
           ctx.stroke();
         }
@@ -1659,25 +1767,25 @@ document.addEventListener('DOMContentLoaded', function() {
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 1;
       
-      const velocityText = `速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s`;
-      const accelText = `加速度: (${this.gazeAcceleration.x.toFixed(1)}, ${this.gazeAcceleration.y.toFixed(1)}) px/s²`;
-      const velocityMagText = `|速度|=${velocityMagnitude.toFixed(1)}`;
-      const accelMagText = `|加速度|=${accelMagnitude.toFixed(1)}`;
+      const gazeVelocityText = `視線速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s`;
+      const gazeVelocityMagText = `|視線速度|=${velocityMagnitude.toFixed(1)}`;
+      const headPoseText = `顔向き: (${this.headPoseX.toFixed(1)}, ${this.headPoseY.toFixed(1)})`;
+      const headPoseVelocityText = `顔向き速度: (${this.headPoseVelocity.x.toFixed(1)}, ${this.headPoseVelocity.y.toFixed(1)}) deg/s`;
       
-      // 右側に変化量情報を表示
-      ctx.strokeText(velocityText, 10, 60);
-      ctx.fillText(velocityText, 10, 60);
-      ctx.strokeText(velocityMagText, 10, 75);
-      ctx.fillText(velocityMagText, 10, 75);
-      ctx.strokeText(accelText, 10, 90);
-      ctx.fillText(accelText, 10, 90);
-      ctx.strokeText(accelMagText, 10, 105);
-      ctx.fillText(accelMagText, 10, 105);
+      // 右側に情報を表示
+      ctx.strokeText(gazeVelocityText, 10, 60);
+      ctx.fillText(gazeVelocityText, 10, 60);
+      ctx.strokeText(gazeVelocityMagText, 10, 75);
+      ctx.fillText(gazeVelocityMagText, 10, 75);
+      ctx.strokeText(headPoseText, 10, 90);
+      ctx.fillText(headPoseText, 10, 90);
+      ctx.strokeText(headPoseVelocityText, 10, 105);
+      ctx.fillText(headPoseVelocityText, 10, 105);
       
       // 凡例を表示
-      ctx.font = '9px Arial';
-      ctx.strokeText('━ 視線方向(緑) ┅ 速度(青) ┄ 加速度(橙)', 10, 220);
-      ctx.fillText('━ 視線方向(緑) ┅ 速度(青) ┄ 加速度(橙)', 10, 220);
+      ctx.font = '8px Arial';
+      ctx.strokeText('━ 視線方向(緑) ┅ 視線速度(青) ┄ 顔向き(橙) ┈ 顔向き速度(紫)', 10, 220);
+      ctx.fillText('━ 視線方向(緑) ┅ 視線速度(青) ┄ 顔向き(橙) ┈ 顔向き速度(紫)', 10, 220);
       
       ctx.restore();
     }
@@ -2021,16 +2129,21 @@ document.addEventListener('DOMContentLoaded', function() {
           details += `ノイズ除去率: ${this.gazeRawHistory.length > 0 ? ((this.gazeRawHistory.length - filteredCount) / this.gazeRawHistory.length * 100).toFixed(1) : 0}%\n\n`;
           
           // 変化量情報を追加
-          details += `【動きの変化量】\n`;
-          details += `速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s\n`;
-          details += `速度大きさ: ${Math.sqrt(this.gazeVelocity.x * this.gazeVelocity.x + this.gazeVelocity.y * this.gazeVelocity.y).toFixed(1)} px/s\n`;
-          details += `加速度: (${this.gazeAcceleration.x.toFixed(1)}, ${this.gazeAcceleration.y.toFixed(1)}) px/s²\n`;
-          details += `加速度大きさ: ${Math.sqrt(this.gazeAcceleration.x * this.gazeAcceleration.x + this.gazeAcceleration.y * this.gazeAcceleration.y).toFixed(1)} px/s²\n`;
-          details += `動き履歴: ${this.eyeMovementHistory.length}/5フレーム`;
+          details += `【視線の動き】\n`;
+          details += `視線速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s\n`;
+          details += `視線速度大きさ: ${Math.sqrt(this.gazeVelocity.x * this.gazeVelocity.x + this.gazeVelocity.y * this.gazeVelocity.y).toFixed(1)} px/s\n`;
+          details += `動き履歴: ${this.eyeMovementHistory.length}/5フレーム\n\n`;
+          
+          // 顔の向き情報を追加
+          details += `【顔の向き】\n`;
+          details += `顔向き: (${this.headPoseX.toFixed(1)}, ${this.headPoseY.toFixed(1)})\n`;
+          details += `顔向き速度: (${this.headPoseVelocity.x.toFixed(1)}, ${this.headPoseVelocity.y.toFixed(1)}) deg/s\n`;
+          details += `顔向き大きさ: ${Math.sqrt(this.headPoseX * this.headPoseX + this.headPoseY * this.headPoseY).toFixed(1)}`;
         } else {
           details = '眼球データ取得失敗 - フォールバックモード\n';
           details += `スムージング後: (${this.gazeSmoothed.x.toFixed(1)}, ${this.gazeSmoothed.y.toFixed(1)})\n`;
-          details += `変化量: 速度(${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) 加速度(${this.gazeAcceleration.x.toFixed(1)}, ${this.gazeAcceleration.y.toFixed(1)})`;
+          details += `視線速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s\n`;
+          details += `顔向き: (${this.headPoseX.toFixed(1)}, ${this.headPoseY.toFixed(1)})`;
         }
         
         this.debugElements.eyeballDetails.textContent = details;
