@@ -99,6 +99,116 @@
         </div>
       </div>
 
+      <!-- 学習セッション統計 -->
+      <div class="row mb-4">
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title">総学習セッション</h5>
+              <h2 class="text-primary"><%= @total_sessions %></h2>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title">完了セッション</h5>
+              <h2 class="text-success"><%= @completed_sessions %></h2>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title">平均学習時間</h5>
+              <h2 class="text-info">
+                <% if @average_session_duration && @average_session_duration > 0 %>
+                  <%= (@average_session_duration / 60).round(1) %>分
+                <% else %>
+                  -
+                <% end %>
+              </h2>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title">平均最終スコア</h5>
+              <h2 class="text-warning">
+                <% if @average_final_score %>
+                  <%= @average_final_score.round(1) %>点
+                <% else %>
+                  -
+                <% end %>
+              </h2>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 学習セッション一覧 -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h3>学習セッション履歴</h3>
+        </div>
+        <div class="card-body">
+          <% if @learning_sessions.any? %>
+            <div class="table-responsive">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>受講者</th>
+                    <th>開始時刻</th>
+                    <th>終了時刻</th>
+                    <th>学習時間</th>
+                    <th>最終スコア</th>
+                    <th>イベント数</th>
+                    <th>詳細</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% @learning_sessions.each do |session| %>
+                    <tr>
+                      <td>
+                        <%= session.user.name %>
+                        <br><small class="text-muted"><%= session.user.email %></small>
+                      </td>
+                      <td><%= session.session_start_time.strftime("%Y/%m/%d %H:%M") %></td>
+                      <td>
+                        <% if session.session_end_time %>
+                          <%= session.session_end_time.strftime("%Y/%m/%d %H:%M") %>
+                        <% else %>
+                          <span class="text-warning">進行中</span>
+                        <% end %>
+                      </td>
+                      <td><%= session.format_duration %></td>
+                      <td>
+                        <% if session.final_score %>
+                          <span class="badge <%= session.final_score >= 70 ? 'bg-success' : session.final_score >= 50 ? 'bg-warning' : 'bg-danger' %>">
+                            <%= session.final_score.round(1) %>点
+                          </span>
+                        <% else %>
+                          -
+                        <% end %>
+                      </td>
+                      <td><%= session.total_events || session.timestamp_events.count %></td>
+                      <td>
+                        <button class="btn btn-sm btn-primary" onclick="showSessionDetail(<%= session.id %>)">
+                          タイムライン表示
+                        </button>
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% else %>
+            <p class="text-muted">まだ学習セッションがありません。</p>
+          <% end %>
+        </div>
+      </div>
+
       <!-- 詳細な回答履歴 -->
       <div class="card">
         <div class="card-header">
@@ -159,3 +269,236 @@
     </div>
   </div>
 </div>
+
+<!-- セッション詳細モーダル -->
+<div class="modal fade" id="sessionDetailModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">学習セッション詳細</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <!-- グラフエリア -->
+        <div id="chartContainer">
+          <canvas id="timelineChart" width="800" height="400"></canvas>
+        </div>
+        
+        <!-- タイムスタンプログ -->
+        <div class="mt-4">
+          <h6>タイムスタンプログ</h6>
+          <div id="timestampLog" style="max-height: 300px; overflow-y: auto;">
+            <!-- JavaScriptで動的に生成 -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  .timestamp-entry {
+    padding: 8px;
+    margin-bottom: 4px;
+    border-left: 3px solid #007bff;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+  }
+  
+  .timestamp-entry.score-event {
+    border-left-color: #28a745;
+  }
+  
+  .timestamp-entry.video-event {
+    border-left-color: #ffc107;
+  }
+  
+  .timestamp-entry.interaction-event {
+    border-left-color: #17a2b8;
+  }
+  
+  .timestamp-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  
+  .timestamp-description {
+    font-size: 0.9em;
+    color: #6c757d;
+  }
+</style>
+
+<script>
+let currentChart = null;
+
+function showSessionDetail(sessionId) {
+  // モーダルを表示
+  const modal = new bootstrap.Modal(document.getElementById('sessionDetailModal'));
+  modal.show();
+  
+  // セッションデータを取得
+  fetch(`<%= video_management_session_detail_path(video_id: @video, session_id: 'SESSION_ID') %>`.replace('SESSION_ID', sessionId), {
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest'
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    renderChart(data);
+    renderTimestampLog(data);
+  })
+  .catch(error => {
+    console.error('セッションデータ取得エラー:', error);
+  });
+}
+
+function renderChart(data) {
+  const ctx = document.getElementById('timelineChart').getContext('2d');
+  
+  // 既存のチャートを削除
+  if (currentChart) {
+    currentChart.destroy();
+  }
+  
+  currentChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: '集中度スコア',
+          data: data.timeline,
+          borderColor: '#007bff',
+          backgroundColor: 'rgba(0, 123, 255, 0.1)',
+          tension: 0.4,
+          parsing: {
+            xAxisKey: 'x',
+            yAxisKey: 'y'
+          }
+        },
+        {
+          label: 'スコア変化イベント',
+          data: data.score_changes,
+          borderColor: '#28a745',
+          backgroundColor: '#28a745',
+          pointRadius: 6,
+          showLine: false,
+          parsing: {
+            xAxisKey: 'time',
+            yAxisKey: 'score'
+          }
+        },
+        {
+          label: '動画操作',
+          data: data.video_operations,
+          borderColor: '#ffc107',
+          backgroundColor: '#ffc107',
+          pointRadius: 8,
+          pointStyle: 'triangle',
+          showLine: false,
+          parsing: {
+            xAxisKey: 'time',
+            yAxisKey: function(ctx) {
+              // 動画操作は固定の高さで表示
+              return 50;
+            }
+          }
+        },
+        {
+          label: 'ユーザー操作',
+          data: data.interactions,
+          borderColor: '#17a2b8',
+          backgroundColor: '#17a2b8',
+          pointRadius: 5,
+          pointStyle: 'circle',
+          showLine: false,
+          parsing: {
+            xAxisKey: 'time',
+            yAxisKey: function(ctx) {
+              // ユーザー操作は固定の高さで表示
+              return 30;
+            }
+          }
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: {
+          type: 'linear',
+          title: {
+            display: true,
+            text: '経過時間 (秒)'
+          }
+        },
+        y: {
+          title: {
+            display: true,
+            text: '集中度スコア'
+          },
+          min: 0,
+          max: 100
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const point = context.parsed;
+              const rawData = context.raw;
+              
+              if (context.datasetIndex === 0) {
+                return `スコア: ${point.y.toFixed(1)}点 (${formatTime(point.x)})`;
+              } else if (context.datasetIndex === 1) {
+                return `${rawData.reason} (${rawData.change > 0 ? '+' : ''}${rawData.change.toFixed(1)}点)`;
+              } else if (context.datasetIndex === 2) {
+                return `${rawData.description} (動画時刻: ${formatTime(rawData.video_time)})`;
+              } else {
+                return rawData.description;
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderTimestampLog(data) {
+  const logContainer = document.getElementById('timestampLog');
+  
+  // 全イベントを時系列順に結合
+  const allEvents = [
+    ...data.timeline.map(e => ({...e, category: 'timeline'})),
+    ...data.score_changes.map(e => ({...e, category: 'score'})),
+    ...data.video_operations.map(e => ({...e, category: 'video'})),
+    ...data.interactions.map(e => ({...e, category: 'interaction'}))
+  ].sort((a, b) => (a.time || a.x) - (b.time || b.x));
+  
+  logContainer.innerHTML = allEvents.map(event => {
+    const time = event.time || event.x;
+    const category = event.category;
+    
+    return `
+      <div class="timestamp-entry ${category}-event">
+        <div class="timestamp-header">
+          <span>${formatTime(time)}</span>
+          <span class="badge bg-secondary">${category}</span>
+        </div>
+        <div class="timestamp-description">
+          ${event.description || event.reason || event.operation || event.type}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function formatTime(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+</script>

@@ -227,6 +227,7 @@
             <span>学習行動タイムスタンプ</span>
             <div class="timestamp-controls">
               <button class="btn btn-sm btn-success" id="export-timestamp">エクスポート</button>
+              <button class="btn btn-sm btn-primary" id="save-to-server">サーバー保存</button>
               <button class="btn btn-sm btn-info" id="clear-timestamp">クリア</button>
             </div>
           </div>
@@ -1120,7 +1121,7 @@ document.addEventListener('DOMContentLoaded', function() {
         responseDelayThreshold: 30,     // 回答遅延と判定する時間（秒）
         quickResponseThreshold: 5,      // 素早い回答と判定する時間（秒）
         questionConfirmWindow: 3,       // 問題確認判定の時間窓（秒）
-        frontFacingInterval: 1000,      // 正面注視加点の間隔（ミリ秒）
+        frontFacingInterval: 3000,      // 正面注視加点の間隔（ミリ秒）
         
         // その他設定
         gazeVelocityThreshold: 10,      // 問題確認と判定する視線速度（px/s）
@@ -1129,6 +1130,12 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // 正面注視の最後の加点時刻
       this.lastFrontFacingBonus = 0;
+      
+      // バッチ保存用の管理変数
+      this.lastSaveTime = Date.now();
+      this.lastSaveEventCount = 0;
+      this.pendingEvents = 0;
+      this.saveInProgress = false;
       
       // タイムスタンプ記録システム
       this.timestampLog = [];
@@ -1170,28 +1177,42 @@ document.addEventListener('DOMContentLoaded', function() {
       this.initializeVideoTracking();
       this.startTracking();
       
+      // 未保存データのチェックと復旧
+      this.checkPendingSessionData();
+      
+      // 初期化完了後に少し待ってからテスト用タイムスタンプを追加
+      setTimeout(() => {
+        this.addTimestamp('test_init', 'システム初期化完了');
+        console.log('タイムスタンプシステムのテスト初期化完了');
+        
+        // 初期化後さらに少し待ってからテスト保存
+        setTimeout(() => {
+          console.log('初期化後のテスト保存を実行します');
+          this.saveSessionToServer();
+        }, 3000);
+      }, 1000);
+      
       // グローバル関数としてタブ切り替えを登録
       window.showDebugTab = this.showDebugTab.bind(this);
+      
+      // デバッグ用のグローバル関数
+      window.debugSaveSession = () => {
+        console.log('手動セッション保存を実行します...');
+        console.log('現在のtimestampLog:', this.timestampLog);
+        console.log('セッション開始時刻:', new Date(this.sessionStartTime));
+        console.log('ユーザー認証状態:', <%= user_signed_in? ? 'true' : 'false' %>);
+        console.log('現在のユーザーID:', <%= current_user&.id || 'null' %>);
+        this.saveSessionToServer();
+      };
       
       // グローバルアクセス用にインスタンスを登録
       window.concentrationTracker = this;
       
-      // ページ離脱時のセッション終了記録
-      window.addEventListener('beforeunload', () => {
-        this.addTimestamp('session_end', '学習セッション終了');
-        
-        // セッションデータをlocalStorageに保存（オプション）
-        try {
-          localStorage.setItem('lastTimestampLog', JSON.stringify({
-            sessionStartTime: this.sessionStartTime,
-            sessionEndTime: Date.now(),
-            timestampLog: this.timestampLog,
-            finalScore: this.score
-          }));
-        } catch (e) {
-          console.warn('セッションデータの保存に失敗:', e);
-        }
-      });
+      // ページ離脱時のセッション終了記録（複数のイベントで確実に保存）
+      this.setupExitHandlers();
+      
+      // 効率的なバッチ保存（条件ベース）
+      this.setupBatchSaving();
     }
     
     async initializeCamera() {
@@ -2449,6 +2470,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     showDebugTab(tabName) {
+      console.log('showDebugTab called with:', tabName);
+      
       // すべてのタブを非表示
       document.querySelectorAll('.debug-tab-content').forEach(tab => {
         tab.style.display = 'none';
@@ -2463,10 +2486,21 @@ document.addEventListener('DOMContentLoaded', function() {
       const targetTab = document.getElementById(`debug-tab-${tabName}`);
       if (targetTab) {
         targetTab.style.display = 'block';
+        console.log(`Showing tab: debug-tab-${tabName}`);
+      } else {
+        console.log(`Tab not found: debug-tab-${tabName}`);
       }
       
       // 対応するボタンをactiveに
-      event.target.classList.add('active');
+      if (event && event.target) {
+        event.target.classList.add('active');
+      }
+      
+      // タイムスタンプタブが選択された場合は強制的に更新
+      if (tabName === 'timestamp') {
+        console.log('Timestamp tab selected, forcing update');
+        this.updateTimestampDisplay();
+      }
     }
     
     updateGauge() {
@@ -2718,6 +2752,13 @@ document.addEventListener('DOMContentLoaded', function() {
       
       this.timestampLog.push(timestampEntry);
       
+      // デバッグログを追加
+      console.log(`[タイムスタンプ追加] ${eventType}: ${description}`, {
+        totalEvents: this.timestampLog.length,
+        sessionElapsed: sessionElapsed.toFixed(1) + 's',
+        entry: timestampEntry
+      });
+      
       // ログを最新1000件まで保持
       if (this.timestampLog.length > 1000) {
         this.timestampLog = this.timestampLog.slice(-1000);
@@ -2737,7 +2778,32 @@ document.addEventListener('DOMContentLoaded', function() {
     
     updateTimestampDisplay() {
       const timestampElement = document.getElementById('timestamp-log');
-      if (!timestampElement || this.timestampLog.length === 0) return;
+      
+      // デバッグ情報を追加
+      console.log('updateTimestampDisplay called:', {
+        timestampElement: !!timestampElement,
+        timestampLogLength: this.timestampLog.length,
+        recentEvents: this.timestampLog.slice(-3)
+      });
+      
+      if (!timestampElement) {
+        console.warn('timestamp-log element not found');
+        return;
+      }
+      
+      if (this.timestampLog.length === 0) {
+        timestampElement.innerHTML = `
+          <div class="timestamp-entry">
+            <div class="timestamp-header">
+              <span class="timestamp-time">タイムスタンプデータなし</span>
+            </div>
+            <div class="timestamp-body">
+              <div class="timestamp-description">まだイベントが記録されていません。動画を操作するとタイムスタンプが記録されます。</div>
+            </div>
+          </div>
+        `;
+        return;
+      }
       
       // 最新10件を表示
       const recentLogs = this.timestampLog.slice(-10).reverse();
@@ -2773,16 +2839,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     exportTimestampLog() {
-      const data = {
-        sessionInfo: {
-          startTime: this.sessionStartTime,
-          endTime: Date.now(),
-          totalDuration: (Date.now() - this.sessionStartTime) / 1000,
-          videoId: window.location.pathname.split('/').pop()
-        },
-        timestampLog: this.timestampLog,
-        finalScore: this.score
-      };
+      const data = this.prepareSessionData();
       
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -2793,6 +2850,120 @@ document.addEventListener('DOMContentLoaded', function() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    }
+    
+    prepareSessionData() {
+      // 正しい動画IDの取得
+      const pathParts = window.location.pathname.split('/');
+      const videoId = pathParts[pathParts.length - 2]; // '/videos/{id}/player' から {id} を取得
+      
+      return {
+        sessionInfo: {
+          startTime: this.sessionStartTime,
+          endTime: Date.now(),
+          totalDuration: (Date.now() - this.sessionStartTime) / 1000,
+          videoId: videoId
+        },
+        timestampLog: this.timestampLog,
+        finalScore: this.score
+      };
+    }
+    
+    saveSessionToServer(useBeacon = false) {
+      if (this.saveInProgress) {
+        console.log('保存処理が既に実行中のためスキップ');
+        return;
+      }
+      
+      console.log('=== セッション保存開始 ===');
+      console.log('useBeacon:', useBeacon);
+      console.log('timestampLog length:', this.timestampLog.length);
+      
+      this.saveInProgress = true;
+      const data = this.prepareSessionData();
+      console.log('準備されたセッションデータ:', data);
+      
+      // 正しい動画IDの取得（URLパスから）
+      const pathParts = window.location.pathname.split('/');
+      const videoId = pathParts[pathParts.length - 2]; // '/videos/{id}/player' から {id} を取得
+      console.log('URL pathname:', window.location.pathname);
+      console.log('pathParts:', pathParts);
+      console.log('videoId:', videoId);
+      
+      const payload = JSON.stringify({ session_data: JSON.stringify(data) });
+      console.log('送信ペイロード長:', payload.length);
+      
+      if (useBeacon && navigator.sendBeacon) {
+        // sendBeaconを使用（ページ離脱時により確実）
+        const formData = new FormData();
+        formData.append('session_data', JSON.stringify(data));
+        
+        // CSRF token の追加
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+        formData.append('authenticity_token', csrfToken);
+        
+        const beaconUrl = `/videos/${videoId}/management/save_session`;
+        console.log('sendBeacon URL:', beaconUrl);
+        const success = navigator.sendBeacon(beaconUrl, formData);
+        if (success) {
+          console.log('sendBeaconでセッションデータを送信しました');
+        } else {
+          console.warn('sendBeaconでの送信に失敗、fetchを試行');
+          this.saveSessionToServer(false); // fallback
+        }
+        return;
+      }
+      
+      // 通常のfetch使用
+      console.log(`送信先URL: /videos/${videoId}/management/save_session`);
+      console.log('送信するデータ:', data);
+      
+      fetch(`/videos/${videoId}/management/save_session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: payload
+      })
+      .then(response => response.json())
+      .then(result => {
+        if (result.success) {
+          console.log(`セッションデータを保存しました (${this.timestampLog.length - this.lastSaveEventCount}件):`, result.session_id);
+          // 保存成功時の管理変数更新
+          this.lastSaveTime = Date.now();
+          this.lastSaveEventCount = this.timestampLog.length;
+          localStorage.removeItem('pendingSessionData');
+        } else {
+          console.error('セッションデータ保存エラー:', result.error);
+        }
+      })
+      .catch(error => {
+        console.error('セッションデータ送信エラー:', error);
+        this.saveToLocalStorageBackup(data);
+      })
+      .finally(() => {
+        this.saveInProgress = false;
+      });
+    }
+    
+    saveToLocalStorageBackup(data) {
+      try {
+        // 正しい動画IDの取得
+        const pathParts = window.location.pathname.split('/');
+        const videoId = pathParts[pathParts.length - 2];
+        
+        const backupData = {
+          ...data,
+          videoId: videoId,
+          saved: false,
+          backupTime: Date.now()
+        };
+        localStorage.setItem('pendingSessionData', JSON.stringify(backupData));
+        console.log('セッションデータをlocalStorageにバックアップしました');
+      } catch (e) {
+        console.error('localStorageバックアップ失敗:', e);
+      }
     }
     
     initializeVideoTracking() {
@@ -2869,6 +3040,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
       }
       
+      // サーバー保存ボタン
+      const saveBtn = document.getElementById('save-to-server');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+          this.saveSessionToServer();
+          alert('セッションデータをサーバーに保存しました');
+        });
+      }
+      
       // クリアボタン
       const clearBtn = document.getElementById('clear-timestamp');
       if (clearBtn) {
@@ -2903,6 +3083,226 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (eventCountEl) {
         eventCountEl.textContent = this.timestampLog.length;
+      }
+    }
+    
+    setupBatchSaving() {
+      // 条件ベースの賢い保存システム
+      setInterval(() => {
+        this.checkAndSave();
+      }, 15000); // 15秒間隔でチェック
+      
+      // 重要イベント時の即座保存
+      this.setupCriticalEventSaving();
+    }
+    
+    checkAndSave() {
+      if (this.saveInProgress) return;
+      
+      const currentTime = Date.now();
+      const timeSinceLastSave = (currentTime - this.lastSaveTime) / 1000;
+      const newEvents = this.timestampLog.length - this.lastSaveEventCount;
+      
+      console.log(`=== 保存条件チェック ===`);
+      console.log(`新しいイベント数: ${newEvents}`);
+      console.log(`最後の保存からの経過時間: ${timeSinceLastSave}秒`);
+      console.log(`総イベント数: ${this.timestampLog.length}`);
+      
+      // 保存条件（いずれかを満たす）- デバッグ用に条件を緩和
+      const shouldSave = 
+        newEvents >= 3 ||                     // 新しいイベントが3個以上（緩和）
+        timeSinceLastSave >= 60 ||            // 1分経過（緩和）
+        (newEvents >= 1 && timeSinceLastSave >= 30) ||  // 30秒経過 + 1イベント以上（緩和）
+        this.hasHighPriorityEvents();         // 重要イベントがある
+      
+      console.log(`保存すべきか: ${shouldSave}`);
+      
+      if (shouldSave && newEvents > 0) {
+        console.log('条件を満たしたため保存を実行します');
+        this.saveSessionToServer();
+      } else {
+        console.log('保存条件を満たしていません');
+      }
+    }
+    
+    hasHighPriorityEvents() {
+      // 最後の保存以降に重要なイベントがあるかチェック
+      const recentEvents = this.timestampLog.slice(this.lastSaveEventCount);
+      return recentEvents.some(event => 
+        event.eventType.includes('question') ||
+        event.eventType.includes('answer') ||
+        event.eventType.includes('video_end') ||
+        (event.eventType.includes('score_change') && Math.abs(event.additionalData?.scoreChange || 0) >= 5)
+      );
+    }
+    
+    setupCriticalEventSaving() {
+      // 重要イベント時は即座に保存をスケジュール
+      const originalAddTimestamp = this.addTimestamp.bind(this);
+      this.addTimestamp = (eventType, description, additionalData = {}) => {
+        // 元の処理を実行
+        originalAddTimestamp(eventType, description, additionalData);
+        
+        // 重要イベントの場合は優先保存をスケジュール
+        if (this.isCriticalEvent(eventType, additionalData)) {
+          clearTimeout(this.criticalSaveTimeout);
+          this.criticalSaveTimeout = setTimeout(() => {
+            if (!this.saveInProgress) {
+              this.saveSessionToServer();
+            }
+          }, 2000); // 2秒後に保存
+        }
+      };
+    }
+    
+    isCriticalEvent(eventType, additionalData) {
+      return (
+        eventType.includes('session_end') ||
+        eventType.includes('video_end') ||
+        eventType.includes('question') ||
+        eventType.includes('answer') ||
+        (eventType.includes('score_change') && Math.abs(additionalData?.scoreChange || 0) >= 10)
+      );
+    }
+    
+    setupExitHandlers() {
+      let isExiting = false;
+      
+      const saveOnExit = () => {
+        if (isExiting) return; // 重複実行を防ぐ
+        isExiting = true;
+        
+        this.addTimestamp('session_end', '学習セッション終了');
+        
+        // sendBeaconでの確実な保存を試行
+        this.saveSessionToServer(true);
+        
+        // フォールバックとして同期保存も実行
+        this.saveSessionToServerSync();
+        
+        // localStorageにもバックアップ保存
+        try {
+          // 正しい動画IDの取得
+          const pathParts = window.location.pathname.split('/');
+          const videoId = pathParts[pathParts.length - 2];
+          
+          const backupData = {
+            sessionStartTime: this.sessionStartTime,
+            sessionEndTime: Date.now(),
+            timestampLog: this.timestampLog,
+            finalScore: this.score,
+            videoId: videoId,
+            saved: false // サーバー保存成功フラグ
+          };
+          localStorage.setItem('pendingSessionData', JSON.stringify(backupData));
+          localStorage.setItem('lastTimestampLog', JSON.stringify(backupData));
+        } catch (e) {
+          console.warn('localStorageへの保存に失敗:', e);
+        }
+      };
+      
+      // 複数のイベントで離脱を検知
+      window.addEventListener('beforeunload', saveOnExit);
+      window.addEventListener('unload', saveOnExit);
+      window.addEventListener('pagehide', saveOnExit);
+      
+      // ブラウザタブの非表示化を検知
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          this.saveSessionToServer(); // 非同期保存
+        }
+      });
+      
+      // ブラウザフォーカス喪失を検知
+      window.addEventListener('blur', () => {
+        this.saveSessionToServer(); // 非同期保存
+      });
+      
+      // 定期的な「生存確認」保存
+      setInterval(() => {
+        this.saveSessionToServer();
+      }, 30000); // 30秒間隔
+    }
+    
+    saveSessionToServerSync() {
+      // 同期的なXHR要求（ページ離脱時用）
+      try {
+        const data = this.prepareSessionData();
+        // 正しい動画IDの取得
+        const pathParts = window.location.pathname.split('/');
+        const videoId = pathParts[pathParts.length - 2];
+        
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/videos/${videoId}/management/save_session`, false); // 同期
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-CSRF-Token', document.querySelector('meta[name="csrf-token"]').content);
+        
+        xhr.send(JSON.stringify({ session_data: JSON.stringify(data) }));
+        
+        if (xhr.status === 200) {
+          console.log('セッションデータを同期保存しました');
+          // 保存成功をlocalStorageに記録
+          const pendingData = localStorage.getItem('pendingSessionData');
+          if (pendingData) {
+            const parsed = JSON.parse(pendingData);
+            parsed.saved = true;
+            localStorage.setItem('pendingSessionData', JSON.stringify(parsed));
+          }
+        }
+      } catch (error) {
+        console.error('同期保存エラー:', error);
+      }
+    }
+    
+    // ページ読み込み時に未保存データをチェック
+    checkPendingSessionData() {
+      try {
+        const pendingData = localStorage.getItem('pendingSessionData');
+        if (pendingData) {
+          const data = JSON.parse(pendingData);
+          if (!data.saved && data.timestampLog && data.timestampLog.length > 0) {
+            // 未保存のセッションデータがある場合、サーバーに送信
+            console.log('未保存のセッションデータを発見、サーバーに送信中...');
+            
+            // 正しい動画IDの取得
+            const pathParts = window.location.pathname.split('/');
+            const currentVideoId = pathParts[pathParts.length - 2];
+            if (data.videoId === currentVideoId) {
+              fetch(`/videos/${currentVideoId}/management/save_session`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ session_data: JSON.stringify({
+                  sessionInfo: {
+                    startTime: data.sessionStartTime,
+                    endTime: data.sessionEndTime,
+                    totalDuration: (data.sessionEndTime - data.sessionStartTime) / 1000,
+                    videoId: data.videoId
+                  },
+                  timestampLog: data.timestampLog,
+                  finalScore: data.finalScore
+                })})
+              })
+              .then(response => response.json())
+              .then(result => {
+                if (result.success) {
+                  console.log('未保存データの復旧に成功:', result.session_id);
+                  localStorage.removeItem('pendingSessionData');
+                }
+              })
+              .catch(error => {
+                console.error('未保存データの復旧に失敗:', error);
+              });
+            }
+          } else {
+            // 既に保存済みの場合は削除
+            localStorage.removeItem('pendingSessionData');
+          }
+        }
+      } catch (e) {
+        console.warn('未保存データのチェックでエラー:', e);
       }
     }
     

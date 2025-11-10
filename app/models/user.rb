@@ -12,6 +12,7 @@ class User < ApplicationRecord
   has_many :accessible_videos, through: :video_accesses, source: :video
   has_many :user_responses, dependent: :destroy
   has_many :notes, dependent: :destroy
+  has_many :learning_sessions, dependent: :destroy
 
   # Validations
   validates :name, presence: true, length: { minimum: 1 }

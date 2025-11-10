@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_07_16_024307) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_10_083816) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.string "name", null: false
     t.string "record_type", null: false
@@ -37,6 +37,20 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_16_024307) do
     t.bigint "blob_id", null: false
     t.string "variation_digest", null: false
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+  end
+
+  create_table "learning_sessions", force: :cascade do |t|
+    t.integer "user_id", null: false
+    t.integer "video_id", null: false
+    t.datetime "session_start_time"
+    t.datetime "session_end_time"
+    t.float "final_score"
+    t.integer "total_events"
+    t.text "session_data"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_learning_sessions_on_user_id"
+    t.index ["video_id"], name: "index_learning_sessions_on_video_id"
   end
 
   create_table "notes", force: :cascade do |t|
@@ -67,6 +81,22 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_16_024307) do
     t.datetime "updated_at", null: false
     t.boolean "show_answer"
     t.index ["video_id"], name: "index_questions_on_video_id"
+  end
+
+  create_table "timestamp_events", force: :cascade do |t|
+    t.integer "learning_session_id", null: false
+    t.datetime "timestamp"
+    t.float "session_elapsed"
+    t.float "video_time"
+    t.string "event_type"
+    t.text "description"
+    t.float "concentration_score"
+    t.string "video_state"
+    t.float "playback_rate"
+    t.text "additional_data"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["learning_session_id"], name: "index_timestamp_events_on_learning_session_id"
   end
 
   create_table "user_responses", force: :cascade do |t|
@@ -126,9 +156,12 @@ ActiveRecord::Schema[8.0].define(version: 2025_07_16_024307) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "learning_sessions", "users"
+  add_foreign_key "learning_sessions", "videos"
   add_foreign_key "notes", "videos"
   add_foreign_key "options", "questions"
   add_foreign_key "questions", "videos"
+  add_foreign_key "timestamp_events", "learning_sessions"
   add_foreign_key "user_responses", "questions"
   add_foreign_key "user_responses", "users"
   add_foreign_key "video_accesses", "users"
