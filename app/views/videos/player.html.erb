@@ -14,6 +14,7 @@
         <div class="debug-tabs">
           <button class="debug-tab-btn active" onclick="showDebugTab('info')">基本情報</button>
           <button class="debug-tab-btn" onclick="showDebugTab('factors')">スコア要因</button>
+          <button class="debug-tab-btn" onclick="showDebugTab('settings')">スコア設定</button>
         </div>
         
         <!-- 基本情報タブ -->
@@ -95,6 +96,126 @@
                 <div class="factor-header">メモ入力 (+3点/回)</div>
                 <div class="factor-detail">新しいメモを入力するたびに加点されます</div>
               </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- スコア設定タブ -->
+        <div id="debug-tab-settings" class="debug-tab-content" style="display: none;">
+          <div class="settings-header">スコア調整設定</div>
+          <div class="settings-content">
+            
+            <!-- 減点設定 -->
+            <div class="settings-category">
+              <h7 class="settings-category-title">減点設定</h7>
+              
+              <div class="setting-item">
+                <label for="face-not-detected-penalty">顔未検出時の減点:</label>
+                <input type="number" id="face-not-detected-penalty" value="2" min="0" max="10" step="0.1">
+                <span class="setting-unit">点</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="movement-stop-penalty">目線停止時の減点:</label>
+                <input type="number" id="movement-stop-penalty" value="1" min="0" max="5" step="0.1">
+                <span class="setting-unit">点/秒</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="response-delay-penalty">回答遅延時の減点:</label>
+                <input type="number" id="response-delay-penalty" value="1" min="0" max="5" step="0.1">
+                <span class="setting-unit">点/秒</span>
+              </div>
+            </div>
+            
+            <!-- 加点設定 -->
+            <div class="settings-category">
+              <h7 class="settings-category-title">加点設定</h7>
+              
+              <div class="setting-item">
+                <label for="center-gaze-bonus">中央注視時の加点:</label>
+                <input type="number" id="center-gaze-bonus" value="0.5" min="0" max="5" step="0.1">
+                <span class="setting-unit">点</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="question-confirm-bonus">問題確認時の加点:</label>
+                <input type="number" id="question-confirm-bonus" value="5" min="0" max="20" step="0.5">
+                <span class="setting-unit">点</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="quick-response-bonus">素早い回答時の加点:</label>
+                <input type="number" id="quick-response-bonus" value="3" min="0" max="10" step="0.5">
+                <span class="setting-unit">点</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="note-input-bonus">メモ入力時の加点:</label>
+                <input type="number" id="note-input-bonus" value="3" min="0" max="10" step="0.5">
+                <span class="setting-unit">点</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="front-facing-bonus">正面注視時の加点:</label>
+                <input type="number" id="front-facing-bonus" value="1" min="0" max="5" step="0.1">
+                <span class="setting-unit">点</span>
+              </div>
+            </div>
+            
+            <!-- 時間設定 -->
+            <div class="settings-category">
+              <h7 class="settings-category-title">時間間隔設定</h7>
+              
+              <div class="setting-item">
+                <label for="movement-stop-threshold">目線停止判定時間:</label>
+                <input type="number" id="movement-stop-threshold" value="10" min="1" max="60" step="1">
+                <span class="setting-unit">秒</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="response-delay-threshold">回答遅延判定時間:</label>
+                <input type="number" id="response-delay-threshold" value="30" min="5" max="120" step="1">
+                <span class="setting-unit">秒</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="quick-response-threshold">素早い回答判定時間:</label>
+                <input type="number" id="quick-response-threshold" value="5" min="1" max="30" step="0.5">
+                <span class="setting-unit">秒</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="front-facing-interval">正面注視加点間隔:</label>
+                <input type="number" id="front-facing-interval" value="1000" min="100" max="10000" step="100">
+                <span class="setting-unit">ミリ秒</span>
+              </div>
+            </div>
+            
+            <!-- その他設定 -->
+            <div class="settings-category">
+              <h7 class="settings-category-title">その他設定</h7>
+              
+              <div class="setting-item">
+                <label for="center-gaze-threshold">中央注視判定範囲:</label>
+                <input type="number" id="center-gaze-threshold" value="15" min="5" max="50" step="1">
+                <span class="setting-unit">ピクセル</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="gaze-velocity-threshold">問題確認判定速度:</label>
+                <input type="number" id="gaze-velocity-threshold" value="10" min="1" max="50" step="1">
+                <span class="setting-unit">px/s</span>
+              </div>
+            </div>
+            
+            <!-- 設定操作ボタン -->
+            <div class="settings-actions">
+              <button class="btn btn-primary btn-sm" id="apply-settings">設定を適用</button>
+              <button class="btn btn-secondary btn-sm" id="reset-settings">デフォルトに戻す</button>
+              <button class="btn btn-info btn-sm" id="export-settings">設定をエクスポート</button>
+              <button class="btn btn-success btn-sm" id="import-settings">設定をインポート</button>
+              <input type="file" id="import-file" accept=".json" style="display: none;">
             </div>
           </div>
         </div>
@@ -425,6 +546,85 @@
     padding-top: 10px;
   }
   
+  /* 設定タブのスタイル */
+  .settings-content {
+    max-height: 400px;
+    overflow-y: auto;
+    font-size: 12px;
+  }
+  
+  .settings-category {
+    margin-bottom: 15px;
+    padding: 8px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+  
+  .settings-category-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #4fc3f7;
+    margin-bottom: 8px;
+    display: block;
+    border-bottom: 1px solid #444;
+    padding-bottom: 3px;
+  }
+  
+  .setting-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding: 4px 0;
+  }
+  
+  .setting-item label {
+    flex: 1;
+    font-size: 11px;
+    color: #ddd;
+    margin-bottom: 0;
+  }
+  
+  .setting-item input {
+    width: 60px;
+    padding: 2px 4px;
+    font-size: 11px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #fff;
+    margin: 0 5px;
+  }
+  
+  .setting-unit {
+    font-size: 10px;
+    color: #aaa;
+    min-width: 40px;
+    text-align: left;
+  }
+  
+  .settings-actions {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid #555;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  
+  .settings-actions .btn {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+  
+  .settings-header {
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #4fc3f7;
+    border-bottom: 1px solid #555;
+    padding-bottom: 4px;
+  }
+
   .camera-preview video,
   .camera-preview canvas {
     border: 1px solid #555;
@@ -753,6 +953,35 @@ document.addEventListener('DOMContentLoaded', function() {
       this.questionConfirmed = false; // 問題確認済みフラグを追加
       this.gazeOverlayInterval = null; // 視線オーバーレイ更新インターバル
       
+      // スコア調整設定
+      this.scoreSettings = {
+        // 減点系
+        faceNotDetectedPenalty: 2,      // 顔未検出時の減点
+        movementStopPenalty: 1,         // 目線停止時の減点（秒あたり）
+        responseDelayPenalty: 1,        // 回答遅延時の減点（秒あたり）
+        
+        // 加点系
+        centerGazeBonus: 0.5,           // 中央注視時の加点
+        questionConfirmBonus: 5,        // 問題確認時の加点
+        quickResponseBonus: 3,          // 素早い回答時の加点
+        noteInputBonus: 3,              // メモ入力時の加点
+        frontFacingBonus: 1,            // 正面注視時の加点
+        
+        // 時間間隔設定
+        movementStopThreshold: 10,      // 目線停止と判定する時間（秒）
+        responseDelayThreshold: 30,     // 回答遅延と判定する時間（秒）
+        quickResponseThreshold: 5,      // 素早い回答と判定する時間（秒）
+        questionConfirmWindow: 3,       // 問題確認判定の時間窓（秒）
+        frontFacingInterval: 1000,      // 正面注視加点の間隔（ミリ秒）
+        
+        // その他設定
+        gazeVelocityThreshold: 10,      // 問題確認と判定する視線速度（px/s）
+        centerGazeThreshold: 15         // 中央注視と判定する範囲（ピクセル）
+      };
+      
+      // 正面注視の最後の加点時刻
+      this.lastFrontFacingBonus = 0;
+      
       // 眼球動きの変化量追跡
       this.previousGaze = { x: 0, y: 0, timestamp: Date.now() };
       this.gazeVelocity = { x: 0, y: 0 }; // ピクセル/秒
@@ -941,6 +1170,9 @@ document.addEventListener('DOMContentLoaded', function() {
       // ログ機能の初期化
       this.logElement = document.getElementById('concentration-log');
       this.logs = [];
+      
+      // 設定パネルの初期化
+      this.initializeSettingsPanel();
     }
     
     onFaceMeshResults(results) {
@@ -1809,7 +2041,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // 顔が検出されない場合は減点
       if (!this.faceDetected) {
-        const penalty = 2;
+        const penalty = this.scoreSettings.faceNotDetectedPenalty;
         newScore -= penalty;
         reasons.push({ 
           text: '顔未検出', 
@@ -1819,22 +2051,26 @@ document.addEventListener('DOMContentLoaded', function() {
           detail: 'カメラに顔が映っていません'
         });
       } else {
-        // 正面向きの評価（加点は一時停止）
-        // if (this.frontFacingRatio > 80) {
-        //   const bonus = 1;
-        //   newScore += bonus;
-        //   reasons.push({ 
-        //     text: '正面注視', 
-        //     change: bonus, 
-        //     type: 'positive',
-        //     category: '姿勢',
-        //     detail: `正面を向いています (正面率:${this.frontFacingRatio.toFixed(1)}%)`
-        //   });
-        // }
+        // 正面向きの評価（間隔制御付き加点）
+        const currentTime = Date.now();
+        if (this.frontFacingRatio > 80 && 
+            (currentTime - this.lastFrontFacingBonus) >= this.scoreSettings.frontFacingInterval) {
+          const bonus = this.scoreSettings.frontFacingBonus;
+          newScore += bonus;
+          this.lastFrontFacingBonus = currentTime;
+          reasons.push({ 
+            text: '正面注視', 
+            change: bonus, 
+            type: 'positive',
+            category: '姿勢',
+            detail: `正面を向いています (正面率:${this.frontFacingRatio.toFixed(1)}%)`
+          });
+        }
         
         // 目線方向による評価（目線をそらすだけでは減点しない）
-        if (Math.abs(this.gazeX) < 15 && Math.abs(this.gazeY) < 15) {
-          const bonus = 0.5;
+        if (Math.abs(this.gazeX) < this.scoreSettings.centerGazeThreshold && 
+            Math.abs(this.gazeY) < this.scoreSettings.centerGazeThreshold) {
+          const bonus = this.scoreSettings.centerGazeBonus;
           newScore += bonus;
           reasons.push({ 
             text: '集中注視', 
@@ -1849,10 +2085,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // 問題表示後の目線の動き（右向きの視線速度を評価）
         if (this.questionDisplayTime && !this.responseStartTime && !this.questionConfirmed) {
           const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
-          if (timeFromQuestion < 3) { // 問題表示から3秒以内
-            // 右向きの視線速度をチェック（10px/s以上の右向き速度）
-            if (this.gazeVelocity.x > 10) {
-              const gazeBonus = 5;
+          if (timeFromQuestion < this.scoreSettings.questionConfirmWindow) {
+            // 右向きの視線速度をチェック
+            if (this.gazeVelocity.x > this.scoreSettings.gazeVelocityThreshold) {
+              const gazeBonus = this.scoreSettings.questionConfirmBonus;
               newScore += gazeBonus;
               this.questionConfirmed = true; // フラグを立てて一度だけ実行
               reasons.push({ 
@@ -1868,8 +2104,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 一定時間動きがない場合は減点
         const timeSinceMovement = (Date.now() - this.lastMovementTime) / 1000;
-        if (timeSinceMovement > 10) {
-          const penalty = Math.min(20, timeSinceMovement - 10);
+        if (timeSinceMovement > this.scoreSettings.movementStopThreshold) {
+          const penalty = Math.min(20, (timeSinceMovement - this.scoreSettings.movementStopThreshold) * this.scoreSettings.movementStopPenalty);
           newScore -= penalty;
           reasons.push({ 
             text: `目線停止`, 
@@ -1883,8 +2119,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // 出題から回答までの時間が長い場合は減点
         if (this.questionDisplayTime && this.responseStartTime && !this.responseProcessed) {
           const responseTime = (this.responseStartTime - this.questionDisplayTime) / 1000;
-          if (responseTime > 30) {
-            const penalty = Math.min(15, responseTime - 30);
+          if (responseTime > this.scoreSettings.responseDelayThreshold) {
+            const penalty = Math.min(15, (responseTime - this.scoreSettings.responseDelayThreshold) * this.scoreSettings.responseDelayPenalty);
             newScore -= penalty;
             reasons.push({ 
               text: `回答遅延`, 
@@ -1893,8 +2129,8 @@ document.addEventListener('DOMContentLoaded', function() {
               category: '反応',
               detail: `問題表示から回答まで${responseTime.toFixed(1)}秒かかりました`
             });
-          } else if (responseTime < 5) {
-            const bonus = 3;
+          } else if (responseTime < this.scoreSettings.quickResponseThreshold) {
+            const bonus = this.scoreSettings.quickResponseBonus;
             newScore += bonus;
             reasons.push({ 
               text: `素早い回答`, 
@@ -1913,7 +2149,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // メモ入力があった場合は加点（前回チェック時からの増分のみ）
       if (this.noteInputs > this.lastNoteCount) {
         const newNotes = this.noteInputs - this.lastNoteCount;
-        const noteBonus = newNotes * 3;
+        const noteBonus = newNotes * this.scoreSettings.noteInputBonus;
         newScore += noteBonus;
         reasons.push({ 
           text: `メモ入力`, 
@@ -2251,6 +2487,194 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       this.updateLogDisplay();
+    }
+    
+    // スコア設定関連のメソッド
+    initializeSettingsPanel() {
+      // 設定値をUIに反映
+      this.loadSettingsToUI();
+      
+      // イベントリスナーを設定
+      document.getElementById('apply-settings')?.addEventListener('click', () => {
+        this.applySettingsFromUI();
+      });
+      
+      document.getElementById('reset-settings')?.addEventListener('click', () => {
+        this.resetSettingsToDefault();
+      });
+      
+      document.getElementById('export-settings')?.addEventListener('click', () => {
+        this.exportSettings();
+      });
+      
+      document.getElementById('import-settings')?.addEventListener('click', () => {
+        document.getElementById('import-file').click();
+      });
+      
+      document.getElementById('import-file')?.addEventListener('change', (event) => {
+        this.importSettings(event.target.files[0]);
+      });
+    }
+    
+    loadSettingsToUI() {
+      const settings = this.scoreSettings;
+      
+      // 各設定項目をUIに反映
+      Object.keys(settings).forEach(key => {
+        const element = document.getElementById(key.replace(/([A-Z])/g, '-$1').toLowerCase());
+        if (element) {
+          element.value = settings[key];
+        }
+      });
+    }
+    
+    applySettingsFromUI() {
+      try {
+        // UIから設定値を取得して適用
+        const newSettings = {};
+        
+        Object.keys(this.scoreSettings).forEach(key => {
+          const elementId = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+          const element = document.getElementById(elementId);
+          if (element) {
+            const value = parseFloat(element.value);
+            if (!isNaN(value)) {
+              newSettings[key] = value;
+            }
+          }
+        });
+        
+        // 設定を更新
+        Object.assign(this.scoreSettings, newSettings);
+        
+        // 成功メッセージを表示
+        this.showSettingsMessage('設定を適用しました', 'success');
+        
+        console.log('スコア設定が更新されました:', this.scoreSettings);
+        
+      } catch (error) {
+        console.error('設定の適用中にエラーが発生しました:', error);
+        this.showSettingsMessage('設定の適用中にエラーが発生しました', 'error');
+      }
+    }
+    
+    resetSettingsToDefault() {
+      // デフォルト設定
+      const defaultSettings = {
+        faceNotDetectedPenalty: 2,
+        movementStopPenalty: 1,
+        responseDelayPenalty: 1,
+        centerGazeBonus: 0.5,
+        questionConfirmBonus: 5,
+        quickResponseBonus: 3,
+        noteInputBonus: 3,
+        frontFacingBonus: 1,
+        movementStopThreshold: 10,
+        responseDelayThreshold: 30,
+        quickResponseThreshold: 5,
+        questionConfirmWindow: 3,
+        frontFacingInterval: 1000,
+        gazeVelocityThreshold: 10,
+        centerGazeThreshold: 15
+      };
+      
+      // 設定をデフォルトに戻す
+      this.scoreSettings = { ...defaultSettings };
+      
+      // UIにも反映
+      this.loadSettingsToUI();
+      
+      this.showSettingsMessage('設定をデフォルトに戻しました', 'info');
+    }
+    
+    exportSettings() {
+      try {
+        const settingsJson = JSON.stringify(this.scoreSettings, null, 2);
+        const blob = new Blob([settingsJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'concentration_settings.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        this.showSettingsMessage('設定をエクスポートしました', 'success');
+        
+      } catch (error) {
+        console.error('設定のエクスポート中にエラーが発生しました:', error);
+        this.showSettingsMessage('エクスポート中にエラーが発生しました', 'error');
+      }
+    }
+    
+    importSettings(file) {
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const importedSettings = JSON.parse(e.target.result);
+          
+          // 設定を検証
+          const validKeys = Object.keys(this.scoreSettings);
+          const filteredSettings = {};
+          
+          Object.keys(importedSettings).forEach(key => {
+            if (validKeys.includes(key) && typeof importedSettings[key] === 'number') {
+              filteredSettings[key] = importedSettings[key];
+            }
+          });
+          
+          // 設定を適用
+          Object.assign(this.scoreSettings, filteredSettings);
+          
+          // UIに反映
+          this.loadSettingsToUI();
+          
+          this.showSettingsMessage('設定をインポートしました', 'success');
+          
+        } catch (error) {
+          console.error('設定のインポート中にエラーが発生しました:', error);
+          this.showSettingsMessage('インポート中にエラーが発生しました', 'error');
+        }
+      };
+      
+      reader.readAsText(file);
+    }
+    
+    showSettingsMessage(message, type) {
+      // 簡易的なメッセージ表示
+      const existingMessage = document.querySelector('.settings-message');
+      if (existingMessage) {
+        existingMessage.remove();
+      }
+      
+      const messageEl = document.createElement('div');
+      messageEl.className = `settings-message settings-message-${type}`;
+      messageEl.textContent = message;
+      messageEl.style.cssText = `
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        z-index: 1000;
+        ${type === 'success' ? 'background: #28a745; color: white;' : ''}
+        ${type === 'error' ? 'background: #dc3545; color: white;' : ''}
+        ${type === 'info' ? 'background: #17a2b8; color: white;' : ''}
+      `;
+      
+      document.body.appendChild(messageEl);
+      
+      // 3秒後に自動で削除
+      setTimeout(() => {
+        if (messageEl.parentNode) {
+          messageEl.parentNode.removeChild(messageEl);
+        }
+      }, 3000);
     }
   }
   
