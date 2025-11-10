@@ -15,6 +15,7 @@
           <button class="debug-tab-btn active" onclick="showDebugTab('info')">基本情報</button>
           <button class="debug-tab-btn" onclick="showDebugTab('factors')">スコア要因</button>
           <button class="debug-tab-btn" onclick="showDebugTab('settings')">スコア設定</button>
+          <button class="debug-tab-btn" onclick="showDebugTab('timestamp')">タイムスタンプ</button>
         </div>
         
         <!-- 基本情報タブ -->
@@ -216,6 +217,40 @@
               <button class="btn btn-info btn-sm" id="export-settings">設定をエクスポート</button>
               <button class="btn btn-success btn-sm" id="import-settings">設定をインポート</button>
               <input type="file" id="import-file" accept=".json" style="display: none;">
+            </div>
+          </div>
+        </div>
+        
+        <!-- タイムスタンプタブ -->
+        <div id="debug-tab-timestamp" class="debug-tab-content" style="display: none;">
+          <div class="timestamp-header">
+            <span>学習行動タイムスタンプ</span>
+            <div class="timestamp-controls">
+              <button class="btn btn-sm btn-success" id="export-timestamp">エクスポート</button>
+              <button class="btn btn-sm btn-info" id="clear-timestamp">クリア</button>
+            </div>
+          </div>
+          
+          <div class="timestamp-stats">
+            <div class="stat-item">
+              <span class="stat-label">セッション時間:</span>
+              <span id="session-duration">0:00</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">動画時刻:</span>
+              <span id="current-video-time">0:00</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">イベント数:</span>
+              <span id="event-count">0</span>
+            </div>
+          </div>
+          
+          <div class="timestamp-log" id="timestamp-log">
+            <div class="timestamp-entry">
+              <div class="timestamp-header">
+                <span class="timestamp-time">セッション開始待機中...</span>
+              </div>
             </div>
           </div>
         </div>
@@ -625,6 +660,119 @@
     padding-bottom: 4px;
   }
 
+  /* タイムスタンプタブのスタイル */
+  .timestamp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #4fc3f7;
+    border-bottom: 1px solid #555;
+    padding-bottom: 4px;
+  }
+  
+  .timestamp-controls {
+    display: flex;
+    gap: 5px;
+  }
+  
+  .timestamp-controls .btn {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+  
+  .timestamp-stats {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 10px;
+    padding: 8px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+  
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 11px;
+  }
+  
+  .stat-label {
+    color: #aaa;
+    margin-bottom: 2px;
+  }
+  
+  .timestamp-log {
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 11px;
+  }
+  
+  .timestamp-entry {
+    margin-bottom: 8px;
+    padding: 6px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    border-left: 3px solid #007bff;
+  }
+  
+  .timestamp-entry.score-event {
+    border-left-color: #28a745;
+  }
+  
+  .timestamp-entry.video-event {
+    border-left-color: #ffc107;
+  }
+  
+  .timestamp-entry.interaction-event {
+    border-left-color: #17a2b8;
+  }
+  
+  .timestamp-entry .timestamp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .timestamp-time {
+    font-size: 10px;
+    color: #ccc;
+  }
+  
+  .timestamp-type {
+    font-size: 10px;
+    padding: 2px 6px;
+    background-color: rgba(0, 123, 255, 0.3);
+    border-radius: 3px;
+    color: #fff;
+  }
+  
+  .concentration-score {
+    font-size: 10px;
+    font-weight: bold;
+    color: #4fc3f7;
+  }
+  
+  .timestamp-body {
+    font-size: 10px;
+  }
+  
+  .timestamp-description {
+    color: #ddd;
+    margin-bottom: 3px;
+  }
+  
+  .timestamp-times {
+    display: flex;
+    gap: 10px;
+    color: #aaa;
+    font-size: 9px;
+  }
+
   .camera-preview video,
   .camera-preview canvas {
     border: 1px solid #555;
@@ -982,6 +1130,14 @@ document.addEventListener('DOMContentLoaded', function() {
       // 正面注視の最後の加点時刻
       this.lastFrontFacingBonus = 0;
       
+      // タイムスタンプ記録システム
+      this.timestampLog = [];
+      this.sessionStartTime = Date.now();
+      this.videoElement = null;
+      this.lastVideoTime = 0;
+      this.videoState = 'stopped'; // stopped, playing, paused
+      this.lastPlaybackRate = 1.0;
+      
       // 眼球動きの変化量追跡
       this.previousGaze = { x: 0, y: 0, timestamp: Date.now() };
       this.gazeVelocity = { x: 0, y: 0 }; // ピクセル/秒
@@ -1011,6 +1167,7 @@ document.addEventListener('DOMContentLoaded', function() {
       this.initializeCamera();
       this.initializeGauge();
       this.initializeDebugPanel();
+      this.initializeVideoTracking();
       this.startTracking();
       
       // グローバル関数としてタブ切り替えを登録
@@ -1018,6 +1175,23 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // グローバルアクセス用にインスタンスを登録
       window.concentrationTracker = this;
+      
+      // ページ離脱時のセッション終了記録
+      window.addEventListener('beforeunload', () => {
+        this.addTimestamp('session_end', '学習セッション終了');
+        
+        // セッションデータをlocalStorageに保存（オプション）
+        try {
+          localStorage.setItem('lastTimestampLog', JSON.stringify({
+            sessionStartTime: this.sessionStartTime,
+            sessionEndTime: Date.now(),
+            timestampLog: this.timestampLog,
+            finalScore: this.score
+          }));
+        } catch (e) {
+          console.warn('セッションデータの保存に失敗:', e);
+        }
+      });
     }
     
     async initializeCamera() {
@@ -1173,6 +1347,9 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // 設定パネルの初期化
       this.initializeSettingsPanel();
+      
+      // タイムスタンプパネルの初期化
+      this.initializeTimestampPanel();
     }
     
     onFaceMeshResults(results) {
@@ -2167,6 +2344,20 @@ document.addEventListener('DOMContentLoaded', function() {
       // ログに記録（スコアが変化した場合、または理由がある場合）
       if (Math.abs(this.score - oldScore) > 0.1 || reasons.length > 0) {
         this.addLog(reasons, oldScore, this.score);
+        
+        // タイムスタンプ記録（スコアが変化した場合のみ）
+        if (Math.abs(this.score - oldScore) > 0.1) {
+          const change = this.score - oldScore;
+          const changeStr = change > 0 ? `+${change.toFixed(1)}` : change.toFixed(1);
+          const reasonTexts = reasons.map(r => r.text).join(', ');
+          
+          this.addTimestamp('score_change', `集中度変化: ${changeStr}点 (${reasonTexts})`, {
+            scoreChange: change,
+            previousScore: oldScore,
+            newScore: this.score,
+            reasons: reasons
+          });
+        }
       }
     }
     
@@ -2403,6 +2594,11 @@ document.addEventListener('DOMContentLoaded', function() {
       this.responseProcessed = false; // 新しい問題でフラグをリセット
       this.questionConfirmed = false; // 問題確認フラグもリセット
       
+      // タイムスタンプ記録
+      this.addTimestamp('question_display', '問題表示', {
+        questionDisplayed: true
+      });
+      
       // 問題表示をログに記録
       const timestamp = new Date().toLocaleTimeString();
       this.logs.unshift({
@@ -2431,20 +2627,27 @@ document.addEventListener('DOMContentLoaded', function() {
     onResponseStarted() {
       this.responseStartTime = Date.now();
       
+      // タイムスタンプ記録
+      const responseTime = this.questionDisplayTime ? 
+        (this.responseStartTime - this.questionDisplayTime) / 1000 : 0;
+      this.addTimestamp('answer_start', '回答開始', {
+        responseTime: responseTime
+      });
+      
       // 回答開始をログに記録
       const timestamp = new Date().toLocaleTimeString();
-      const responseTime = this.questionDisplayTime ? 
+      const responseTimeStr = this.questionDisplayTime ? 
         ((Date.now() - this.questionDisplayTime) / 1000).toFixed(1) : '不明';
       
       this.logs.unshift({
-        text: `[${timestamp}] 回答開始 (${responseTime}s後)`,
-        detail: `問題表示から${responseTime}秒後に回答を開始しました。`,
+        text: `[${timestamp}] 回答開始 (${responseTimeStr}s後)`,
+        detail: `問題表示から${responseTimeStr}秒後に回答を開始しました。`,
         reasons: [{
           text: '回答開始',
           change: 0,
           type: 'neutral',
           category: 'イベント',
-          detail: `問題表示から${responseTime}秒後に回答を開始しました。`
+          detail: `問題表示から${responseTimeStr}秒後に回答を開始しました。`
         }],
         type: 'neutral',
         timestamp: Date.now(),
@@ -2461,6 +2664,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     onNoteInput() {
       this.noteInputs++;
+      
+      // タイムスタンプ記録
+      this.addTimestamp('interaction_note', `メモ入力（${this.noteInputs}回目）`, {
+        noteCount: this.noteInputs
+      });
       
       // メモ入力を即座にログに記録
       const timestamp = new Date().toLocaleTimeString();
@@ -2489,7 +2697,375 @@ document.addEventListener('DOMContentLoaded', function() {
       this.updateLogDisplay();
     }
     
+    // タイムスタンプ記録システム
+    addTimestamp(eventType, description, additionalData = {}) {
+      const currentTime = Date.now();
+      const sessionElapsed = (currentTime - this.sessionStartTime) / 1000; // 秒
+      const videoTime = this.videoElement ? this.videoElement.currentTime : 0;
+      
+      const timestampEntry = {
+        id: this.timestampLog.length + 1,
+        timestamp: currentTime,
+        sessionElapsed: sessionElapsed,
+        videoTime: videoTime,
+        eventType: eventType,
+        description: description,
+        concentrationScore: this.score,
+        videoState: this.videoState,
+        playbackRate: this.videoElement ? this.videoElement.playbackRate : 1.0,
+        ...additionalData
+      };
+      
+      this.timestampLog.push(timestampEntry);
+      
+      // ログを最新1000件まで保持
+      if (this.timestampLog.length > 1000) {
+        this.timestampLog = this.timestampLog.slice(-1000);
+      }
+      
+      // リアルタイム表示を更新
+      this.updateTimestampDisplay();
+      
+      console.log(`[タイムスタンプ] ${eventType}: ${description}`, timestampEntry);
+    }
+    
+    formatTime(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${minutes}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    updateTimestampDisplay() {
+      const timestampElement = document.getElementById('timestamp-log');
+      if (!timestampElement || this.timestampLog.length === 0) return;
+      
+      // 最新10件を表示
+      const recentLogs = this.timestampLog.slice(-10).reverse();
+      
+      timestampElement.innerHTML = recentLogs.map(entry => {
+        const timeStr = new Date(entry.timestamp).toLocaleTimeString();
+        const sessionStr = this.formatTime(entry.sessionElapsed);
+        const videoStr = this.formatTime(entry.videoTime);
+        
+        let className = 'timestamp-entry';
+        if (entry.eventType.includes('score')) className += ' score-event';
+        else if (entry.eventType.includes('video')) className += ' video-event';
+        else if (entry.eventType.includes('interaction')) className += ' interaction-event';
+        
+        return `
+          <div class="${className}">
+            <div class="timestamp-header">
+              <span class="timestamp-time">${timeStr}</span>
+              <span class="timestamp-type">${entry.eventType}</span>
+              <span class="concentration-score">スコア: ${entry.concentrationScore.toFixed(0)}</span>
+            </div>
+            <div class="timestamp-body">
+              <div class="timestamp-description">${entry.description}</div>
+              <div class="timestamp-times">
+                <span>経過: ${sessionStr}</span>
+                <span>動画: ${videoStr}</span>
+                ${entry.playbackRate !== 1.0 ? `<span>速度: ${entry.playbackRate}x</span>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    exportTimestampLog() {
+      const data = {
+        sessionInfo: {
+          startTime: this.sessionStartTime,
+          endTime: Date.now(),
+          totalDuration: (Date.now() - this.sessionStartTime) / 1000,
+          videoId: window.location.pathname.split('/').pop()
+        },
+        timestampLog: this.timestampLog,
+        finalScore: this.score
+      };
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `learning-session-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    
+    initializeVideoTracking() {
+      this.videoElement = document.getElementById('video-player');
+      if (!this.videoElement) return;
+      
+      // 動画イベントリスナーを設定
+      this.videoElement.addEventListener('play', () => {
+        this.videoState = 'playing';
+        this.addTimestamp('video_play', '動画再生開始', {
+          previousState: 'paused'
+        });
+      });
+      
+      this.videoElement.addEventListener('pause', () => {
+        this.videoState = 'paused';
+        this.addTimestamp('video_pause', '動画一時停止', {
+          previousState: 'playing'
+        });
+      });
+      
+      this.videoElement.addEventListener('seeked', () => {
+        const currentTime = this.videoElement.currentTime;
+        const timeDiff = Math.abs(currentTime - this.lastVideoTime);
+        
+        if (timeDiff > 2) { // 2秒以上のスキップ
+          const direction = currentTime > this.lastVideoTime ? '前進' : '後退';
+          this.addTimestamp('video_skip', `動画スキップ（${direction}）`, {
+            from: this.lastVideoTime,
+            to: currentTime,
+            skipAmount: timeDiff,
+            direction: direction
+          });
+        }
+        
+        this.lastVideoTime = currentTime;
+      });
+      
+      this.videoElement.addEventListener('ratechange', () => {
+        const newRate = this.videoElement.playbackRate;
+        this.addTimestamp('video_speed_change', `再生速度変更`, {
+          from: this.lastPlaybackRate,
+          to: newRate,
+          speedChange: newRate / this.lastPlaybackRate
+        });
+        this.lastPlaybackRate = newRate;
+      });
+      
+      this.videoElement.addEventListener('ended', () => {
+        this.videoState = 'stopped';
+        this.addTimestamp('video_end', '動画視聴完了', {
+          totalWatchTime: this.videoElement.duration,
+          completionRate: 1.0
+        });
+      });
+      
+      // 定期的な動画時刻更新
+      setInterval(() => {
+        if (this.videoElement && this.videoState === 'playing') {
+          this.lastVideoTime = this.videoElement.currentTime;
+        }
+      }, 1000);
+      
+      // セッション開始を記録
+      this.addTimestamp('session_start', '学習セッション開始');
+    }
+    
+    initializeTimestampPanel() {
+      // エクスポートボタン
+      const exportBtn = document.getElementById('export-timestamp');
+      if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+          this.exportTimestampLog();
+        });
+      }
+      
+      // クリアボタン
+      const clearBtn = document.getElementById('clear-timestamp');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          if (confirm('タイムスタンプログをクリアしますか？')) {
+            this.timestampLog = [];
+            this.updateTimestampDisplay();
+            this.updateTimestampStats();
+          }
+        });
+      }
+      
+      // 統計の定期更新
+      setInterval(() => {
+        this.updateTimestampStats();
+      }, 1000);
+    }
+    
+    updateTimestampStats() {
+      const sessionDurationEl = document.getElementById('session-duration');
+      const videoTimeEl = document.getElementById('current-video-time');
+      const eventCountEl = document.getElementById('event-count');
+      
+      if (sessionDurationEl) {
+        const sessionElapsed = (Date.now() - this.sessionStartTime) / 1000;
+        sessionDurationEl.textContent = this.formatTime(sessionElapsed);
+      }
+      
+      if (videoTimeEl && this.videoElement) {
+        videoTimeEl.textContent = this.formatTime(this.videoElement.currentTime || 0);
+      }
+      
+      if (eventCountEl) {
+        eventCountEl.textContent = this.timestampLog.length;
+      }
+    }
+    
     // スコア設定関連のメソッド
+    initializeSettingsPanel() {
+      // 設定値を入力フィールドに反映
+      this.updateSettingsUI();
+      
+      // 設定適用ボタン
+      const applyBtn = document.getElementById('apply-settings');
+      if (applyBtn) {
+        applyBtn.addEventListener('click', () => {
+          this.applySettings();
+        });
+      }
+      
+      // デフォルト復元ボタン
+      const resetBtn = document.getElementById('reset-settings');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          if (confirm('設定をデフォルト値に戻しますか？')) {
+            this.resetToDefaultSettings();
+          }
+        });
+      }
+      
+      // エクスポートボタン
+      const exportBtn = document.getElementById('export-settings');
+      if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+          this.exportSettings();
+        });
+      }
+      
+      // インポートボタン
+      const importBtn = document.getElementById('import-settings');
+      const importFile = document.getElementById('import-file');
+      if (importBtn && importFile) {
+        importBtn.addEventListener('click', () => {
+          importFile.click();
+        });
+        
+        importFile.addEventListener('change', (e) => {
+          if (e.target.files.length > 0) {
+            this.importSettings(e.target.files[0]);
+          }
+        });
+      }
+    }
+    
+    updateSettingsUI() {
+      // 各設定値を入力フィールドに反映
+      const settings = this.scoreSettings;
+      
+      Object.keys(settings).forEach(key => {
+        const kebabKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+        const element = document.getElementById(kebabKey);
+        if (element) {
+          element.value = settings[key];
+        }
+      });
+    }
+    
+    applySettings() {
+      // 入力フィールドから設定値を読み取って適用
+      const elements = {
+        'face-not-detected-penalty': 'faceNotDetectedPenalty',
+        'movement-stop-penalty': 'movementStopPenalty',
+        'response-delay-penalty': 'responseDelayPenalty',
+        'center-gaze-bonus': 'centerGazeBonus',
+        'question-confirm-bonus': 'questionConfirmBonus',
+        'quick-response-bonus': 'quickResponseBonus',
+        'note-input-bonus': 'noteInputBonus',
+        'front-facing-bonus': 'frontFacingBonus',
+        'movement-stop-threshold': 'movementStopThreshold',
+        'response-delay-threshold': 'responseDelayThreshold',
+        'quick-response-threshold': 'quickResponseThreshold',
+        'front-facing-interval': 'frontFacingInterval',
+        'center-gaze-threshold': 'centerGazeThreshold',
+        'gaze-velocity-threshold': 'gazeVelocityThreshold'
+      };
+      
+      Object.keys(elements).forEach(elementId => {
+        const element = document.getElementById(elementId);
+        const settingKey = elements[elementId];
+        
+        if (element && settingKey in this.scoreSettings) {
+          const value = parseFloat(element.value);
+          if (!isNaN(value)) {
+            this.scoreSettings[settingKey] = value;
+          }
+        }
+      });
+      
+      // タイムスタンプ記録
+      this.addTimestamp('settings_apply', '設定変更適用');
+      
+      alert('設定が適用されました');
+    }
+    
+    resetToDefaultSettings() {
+      // デフォルト値に戻す
+      this.scoreSettings = {
+        faceNotDetectedPenalty: 2,
+        movementStopPenalty: 1,
+        responseDelayPenalty: 1,
+        centerGazeBonus: 0.5,
+        questionConfirmBonus: 5,
+        quickResponseBonus: 3,
+        noteInputBonus: 3,
+        frontFacingBonus: 1,
+        movementStopThreshold: 10,
+        responseDelayThreshold: 30,
+        quickResponseThreshold: 5,
+        questionConfirmWindow: 3,
+        frontFacingInterval: 1000,
+        gazeVelocityThreshold: 10,
+        centerGazeThreshold: 15
+      };
+      
+      this.updateSettingsUI();
+      this.addTimestamp('settings_reset', '設定をデフォルトに復元');
+      alert('設定をデフォルト値に戻しました');
+    }
+    
+    exportSettings() {
+      const data = {
+        timestamp: new Date().toISOString(),
+        settings: this.scoreSettings
+      };
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `concentration-settings-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      this.addTimestamp('settings_export', '設定をエクスポート');
+    }
+    
+    importSettings(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (data.settings && typeof data.settings === 'object') {
+            this.scoreSettings = { ...this.scoreSettings, ...data.settings };
+            this.updateSettingsUI();
+            this.addTimestamp('settings_import', '設定をインポート');
+            alert('設定をインポートしました');
+          } else {
+            alert('無効な設定ファイルです');
+          }
+        } catch (error) {
+          alert('設定ファイルの読み込みに失敗しました: ' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    }
     initializeSettingsPanel() {
       // 設定値をUIに反映
       this.loadSettingsToUI();
@@ -3077,6 +3653,16 @@ document.addEventListener('DOMContentLoaded', function() {
     function submitAnswer(userAnswer, optionId) {
       // 回答時間を計算（ミリ秒）
       const responseTime = questionStartTime ? Date.now() - questionStartTime : 0;
+      
+      // タイムスタンプ記録
+      if (window.concentrationTracker) {
+        window.concentrationTracker.addTimestamp('answer_submit', '回答送信', {
+          userAnswer: userAnswer,
+          optionId: optionId,
+          responseTimeMs: responseTime,
+          responseTimeS: responseTime / 1000
+        });
+      }
       
       const formData = new FormData();
       
