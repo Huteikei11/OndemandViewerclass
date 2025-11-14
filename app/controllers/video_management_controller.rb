@@ -58,6 +58,40 @@ class VideoManagementController < ApplicationController
     render json: @chart_data if request.xhr?
   end
 
+  def timeline
+    # 分析画面と同じ基本データを取得
+    @questions = @video.questions.includes(:user_responses, :options).order(:time_position)
+    @user_responses = @video.user_responses.includes(:user, :question).order(:created_at)
+    @learning_sessions = @video.learning_sessions.includes(:user, :timestamp_events).order(:session_start_time)
+
+    # タイムライン表示用のデータを準備
+    @sessions_with_events = @learning_sessions.includes(:timestamp_events, :user)
+                                              .where.not(session_start_time: nil)
+                                              .order(:session_start_time)
+
+    # 全セッションの統合タイムライン
+    @timeline_events = []
+
+    @sessions_with_events.each do |session|
+      session.timestamp_events.order(:timestamp).each do |event|
+        @timeline_events << {
+          session: session,
+          event: event,
+          user: session.user,
+          formatted_time: event.timestamp.strftime("%Y/%m/%d %H:%M:%S"),
+          session_elapsed: event.session_elapsed,
+          video_time: event.video_time
+        }
+      end
+    end
+
+    # 時系列順にソート
+    @timeline_events.sort_by! { |item| item[:event].timestamp }
+
+    # ページング処理（最新100件）
+    @timeline_events = @timeline_events.last(100) if @timeline_events.length > 100
+  end
+
   def save_session_data
     begin
       Rails.logger.info "セッション保存開始 - ユーザー: #{current_user&.id || '未認証'}, 動画: #{@video.id}"
