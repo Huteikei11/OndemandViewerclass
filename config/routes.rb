@@ -31,7 +31,10 @@ Rails.application.routes.draw do
 
     # Video management routes (nested under videos)
     get "management/analytics", to: "video_management#analytics", as: "management_analytics"
+    get "management/timeline", to: "video_management#timeline", as: "management_timeline"
     get "management/add_manager", to: "video_management#add_manager", as: "management_add_manager"
     post "management/add_manager", to: "video_management#add_manager"
+    get "management/session/:session_id", to: "video_management#session_detail", as: "management_session_detail"
+    post "management/save_session", to: "video_management#save_session_data", as: "management_save_session"
   end
 end

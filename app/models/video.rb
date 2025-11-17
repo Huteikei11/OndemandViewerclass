@@ -8,6 +8,7 @@ class Video < ApplicationRecord
   has_many :video_accesses, dependent: :destroy
   has_many :authorized_users, through: :video_accesses, source: :user
   has_many :user_responses, through: :questions
+  has_many :learning_sessions, dependent: :destroy
 
   has_one_attached :video_file
   has_one_attached :pdf_file

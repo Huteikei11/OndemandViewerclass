@@ -14,6 +14,8 @@
         <div class="debug-tabs">
           <button class="debug-tab-btn active" onclick="showDebugTab('info')">基本情報</button>
           <button class="debug-tab-btn" onclick="showDebugTab('factors')">スコア要因</button>
+          <button class="debug-tab-btn" onclick="showDebugTab('settings')">スコア設定</button>
+          <button class="debug-tab-btn" onclick="showDebugTab('timestamp')">タイムスタンプ</button>
         </div>
         
         <!-- 基本情報タブ -->
@@ -69,7 +71,7 @@
               </div>
               <div class="factor-item positive">
                 <div class="factor-header">問題確認 (+5点)</div>
-                <div class="factor-detail">問題表示後に右側（問題エリア）を注視した場合に加点されます</div>
+                <div class="factor-detail">問題表示後3秒以内に右向きの視線速度が10px/s以上になった場合に加点されます</div>
               </div>
               <div class="factor-item negative">
                 <div class="factor-header">目線停止 (-20点まで)</div>
@@ -94,6 +96,167 @@
               <div class="factor-item positive">
                 <div class="factor-header">メモ入力 (+3点/回)</div>
                 <div class="factor-detail">新しいメモを入力するたびに加点されます</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- スコア設定タブ -->
+        <div id="debug-tab-settings" class="debug-tab-content" style="display: none;">
+          <div class="settings-header">スコア調整設定</div>
+          <div class="settings-content">
+            
+            <!-- 減点設定 -->
+            <div class="settings-category">
+              <h7 class="settings-category-title">減点設定</h7>
+              
+              <div class="setting-item">
+                <label for="face-not-detected-penalty">顔未検出時の減点:</label>
+                <input type="number" id="face-not-detected-penalty" value="2" min="0" max="10" step="0.1">
+                <span class="setting-unit">点</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="movement-stop-penalty">目線停止時の減点:</label>
+                <input type="number" id="movement-stop-penalty" value="1" min="0" max="5" step="0.1">
+                <span class="setting-unit">点/秒</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="response-delay-penalty">回答遅延時の減点:</label>
+                <input type="number" id="response-delay-penalty" value="1" min="0" max="5" step="0.1">
+                <span class="setting-unit">点/秒</span>
+              </div>
+            </div>
+            
+            <!-- 加点設定 -->
+            <div class="settings-category">
+              <h7 class="settings-category-title">加点設定</h7>
+              
+              <div class="setting-item">
+                <label for="center-gaze-bonus">中央注視時の加点:</label>
+                <input type="number" id="center-gaze-bonus" value="0.5" min="0" max="5" step="0.1">
+                <span class="setting-unit">点</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="question-confirm-bonus">問題確認時の加点:</label>
+                <input type="number" id="question-confirm-bonus" value="5" min="0" max="20" step="0.5">
+                <span class="setting-unit">点</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="quick-response-bonus">素早い回答時の加点:</label>
+                <input type="number" id="quick-response-bonus" value="3" min="0" max="10" step="0.5">
+                <span class="setting-unit">点</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="note-input-bonus">メモ入力時の加点:</label>
+                <input type="number" id="note-input-bonus" value="3" min="0" max="10" step="0.5">
+                <span class="setting-unit">点</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="front-facing-bonus">正面注視時の加点:</label>
+                <input type="number" id="front-facing-bonus" value="1" min="0" max="5" step="0.1">
+                <span class="setting-unit">点</span>
+              </div>
+            </div>
+            
+            <!-- 時間設定 -->
+            <div class="settings-category">
+              <h7 class="settings-category-title">時間間隔設定</h7>
+              
+              <div class="setting-item">
+                <label for="movement-stop-threshold">目線停止判定時間:</label>
+                <input type="number" id="movement-stop-threshold" value="10" min="1" max="60" step="1">
+                <span class="setting-unit">秒</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="response-delay-threshold">回答遅延判定時間:</label>
+                <input type="number" id="response-delay-threshold" value="30" min="5" max="120" step="1">
+                <span class="setting-unit">秒</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="quick-response-threshold">素早い回答判定時間:</label>
+                <input type="number" id="quick-response-threshold" value="5" min="1" max="30" step="0.5">
+                <span class="setting-unit">秒</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="front-facing-interval">正面注視加点間隔:</label>
+                <input type="number" id="front-facing-interval" value="5000" min="100" max="10000" step="100">
+                <span class="setting-unit">ミリ秒</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="center-gaze-interval">集中注視加点間隔:</label>
+                <input type="number" id="center-gaze-interval" value="3000" min="100" max="10000" step="100">
+                <span class="setting-unit">ミリ秒</span>
+              </div>
+            </div>
+            
+            <!-- その他設定 -->
+            <div class="settings-category">
+              <h7 class="settings-category-title">その他設定</h7>
+              
+              <div class="setting-item">
+                <label for="center-gaze-threshold">中央注視判定範囲:</label>
+                <input type="number" id="center-gaze-threshold" value="15" min="5" max="50" step="1">
+                <span class="setting-unit">ピクセル</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="gaze-velocity-threshold">問題確認判定速度:</label>
+                <input type="number" id="gaze-velocity-threshold" value="10" min="1" max="50" step="1">
+                <span class="setting-unit">px/s</span>
+              </div>
+            </div>
+            
+            <!-- 設定操作ボタン -->
+            <div class="settings-actions">
+              <button class="btn btn-primary btn-sm" id="apply-settings">設定を適用</button>
+              <button class="btn btn-secondary btn-sm" id="reset-settings">デフォルトに戻す</button>
+              <button class="btn btn-info btn-sm" id="export-settings">設定をエクスポート</button>
+              <button class="btn btn-success btn-sm" id="import-settings">設定をインポート</button>
+              <input type="file" id="import-file" accept=".json" style="display: none;">
+            </div>
+          </div>
+        </div>
+        
+        <!-- タイムスタンプタブ -->
+        <div id="debug-tab-timestamp" class="debug-tab-content" style="display: none;">
+          <div class="timestamp-header">
+            <span>学習行動タイムスタンプ</span>
+            <div class="timestamp-controls">
+              <button class="btn btn-sm btn-success" id="export-timestamp">エクスポート</button>
+              <button class="btn btn-sm btn-primary" id="save-to-server">サーバー保存</button>
+              <button class="btn btn-sm btn-info" id="clear-timestamp">クリア</button>
+            </div>
+          </div>
+          
+          <div class="timestamp-stats">
+            <div class="stat-item">
+              <span class="stat-label">セッション時間:</span>
+              <span id="session-duration">0:00</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">動画時刻:</span>
+              <span id="current-video-time">0:00</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">イベント数:</span>
+              <span id="event-count">0</span>
+            </div>
+          </div>
+          
+          <div class="timestamp-log" id="timestamp-log">
+            <div class="timestamp-entry">
+              <div class="timestamp-header">
+                <span class="timestamp-time">セッション開始待機中...</span>
               </div>
             </div>
           </div>
@@ -425,11 +588,204 @@
     padding-top: 10px;
   }
   
+  /* 設定タブのスタイル */
+  .settings-content {
+    max-height: 400px;
+    overflow-y: auto;
+    font-size: 12px;
+  }
+  
+  .settings-category {
+    margin-bottom: 15px;
+    padding: 8px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+  
+  .settings-category-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #4fc3f7;
+    margin-bottom: 8px;
+    display: block;
+    border-bottom: 1px solid #444;
+    padding-bottom: 3px;
+  }
+  
+  .setting-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding: 4px 0;
+  }
+  
+  .setting-item label {
+    flex: 1;
+    font-size: 11px;
+    color: #ddd;
+    margin-bottom: 0;
+  }
+  
+  .setting-item input {
+    width: 60px;
+    padding: 2px 4px;
+    font-size: 11px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #fff;
+    margin: 0 5px;
+  }
+  
+  .setting-unit {
+    font-size: 10px;
+    color: #aaa;
+    min-width: 40px;
+    text-align: left;
+  }
+  
+  .settings-actions {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid #555;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  
+  .settings-actions .btn {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+  
+  .settings-header {
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #4fc3f7;
+    border-bottom: 1px solid #555;
+    padding-bottom: 4px;
+  }
+
+  /* タイムスタンプタブのスタイル */
+  .timestamp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #4fc3f7;
+    border-bottom: 1px solid #555;
+    padding-bottom: 4px;
+  }
+  
+  .timestamp-controls {
+    display: flex;
+    gap: 5px;
+  }
+  
+  .timestamp-controls .btn {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+  
+  .timestamp-stats {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 10px;
+    padding: 8px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+  
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 11px;
+  }
+  
+  .stat-label {
+    color: #aaa;
+    margin-bottom: 2px;
+  }
+  
+  .timestamp-log {
+    max-height: 300px;
+    overflow-y: auto;
+    font-size: 11px;
+  }
+  
+  .timestamp-entry {
+    margin-bottom: 8px;
+    padding: 6px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    border-left: 3px solid #007bff;
+  }
+  
+  .timestamp-entry.score-event {
+    border-left-color: #28a745;
+  }
+  
+  .timestamp-entry.video-event {
+    border-left-color: #ffc107;
+  }
+  
+  .timestamp-entry.interaction-event {
+    border-left-color: #17a2b8;
+  }
+  
+  .timestamp-entry .timestamp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .timestamp-time {
+    font-size: 10px;
+    color: #ccc;
+  }
+  
+  .timestamp-type {
+    font-size: 10px;
+    padding: 2px 6px;
+    background-color: rgba(0, 123, 255, 0.3);
+    border-radius: 3px;
+    color: #fff;
+  }
+  
+  .concentration-score {
+    font-size: 10px;
+    font-weight: bold;
+    color: #4fc3f7;
+  }
+  
+  .timestamp-body {
+    font-size: 10px;
+  }
+  
+  .timestamp-description {
+    color: #ddd;
+    margin-bottom: 3px;
+  }
+  
+  .timestamp-times {
+    display: flex;
+    gap: 10px;
+    color: #aaa;
+    font-size: 9px;
+  }
+
   .camera-preview video,
   .camera-preview canvas {
     border: 1px solid #555;
     border-radius: 4px;
     margin-bottom: 5px;
+    transform: scaleX(-1); /* 左右反転 */
   }
   
   .concentration-log {
@@ -749,7 +1105,76 @@ document.addEventListener('DOMContentLoaded', function() {
       this.responseStartTime = null;
       this.questionDisplayTime = null;
       this.responseProcessed = false; // 反応時間処理済みフラグを追加
+      this.questionConfirmed = false; // 問題確認済みフラグを追加
       this.gazeOverlayInterval = null; // 視線オーバーレイ更新インターバル
+      
+      // スコア調整設定
+      this.scoreSettings = {
+        // 減点系
+        faceNotDetectedPenalty: 2,      // 顔未検出時の減点
+        movementStopPenalty: 1,         // 目線停止時の減点（秒あたり）
+        responseDelayPenalty: 1,        // 回答遅延時の減点（秒あたり）
+        
+        // 加点系
+        centerGazeBonus: 0,           // 中央注視時の加点
+        // 集中注視: 学習者が画面の中央（動画やコンテンツがある場所）に視線を向けている状態
+        questionConfirmBonus: 5,        // 問題確認時の加点
+        quickResponseBonus: 3,          // 素早い回答時の加点
+        noteInputBonus: 3,              // メモ入力時の加点
+        frontFacingBonus: 1,            // 正面注視時の加点　
+        // 正面注視: 学習者が画面から離れたり、横を向いたりせず、正面を向いて学習している状態
+        
+        // 時間間隔設定
+        movementStopThreshold: 10,      // 目線停止と判定する時間（秒）
+        responseDelayThreshold: 30,     // 回答遅延と判定する時間（秒）
+        quickResponseThreshold: 5,      // 素早い回答と判定する時間（秒）
+        questionConfirmWindow: 3,       // 問題確認判定の時間窓（秒）
+        frontFacingInterval: 5000,      // 正面注視加点の間隔（ミリ秒）
+        centerGazeInterval: 5000,       // 集中注視加点の間隔（ミリ秒）
+        
+        // その他設定
+        gazeVelocityThreshold: 10,      // 問題確認と判定する視線速度（px/s）
+        centerGazeThreshold: 15         // 中央注視と判定する範囲（ピクセル）
+      };
+      
+      // 正面注視の最後の加点時刻
+      this.lastFrontFacingBonus = 0;
+      // 集中注視の最後の加点時刻
+      this.lastCenterGazeBonus = 0;
+      
+      // バッチ保存用の管理変数
+      this.lastSaveTime = Date.now();
+      this.lastSaveEventCount = 0;
+      this.pendingEvents = 0;
+      this.saveInProgress = false;
+      
+      // タイムスタンプ記録システム
+      this.timestampLog = [];
+      this.sessionStartTime = Date.now();
+      this.videoElement = null;
+      this.lastVideoTime = 0;
+      this.videoState = 'stopped'; // stopped, playing, paused
+      this.lastPlaybackRate = 1.0;
+      
+      // 眼球動きの変化量追跡
+      this.previousGaze = { x: 0, y: 0, timestamp: Date.now() };
+      this.gazeVelocity = { x: 0, y: 0 }; // ピクセル/秒
+      this.gazeAcceleration = { x: 0, y: 0 }; // ピクセル/秒²
+      this.previousVelocity = { x: 0, y: 0, timestamp: Date.now() };
+      this.eyeMovementHistory = []; // 最近の動きの履歴（5フレーム分）
+      
+      // 視線データのスムージング用
+      this.gazeRawHistory = []; // 生の視線データ履歴（10フレーム分）
+      this.gazeSmoothed = { x: 0, y: 0 }; // スムージング後の視線データ
+      this.smoothingWindowSize = 8; // 移動平均のウィンドウサイズ
+      this.noiseThreshold = 3; // ノイズ除去の閾値（ピクセル）
+      this.lastValidGaze = { x: 0, y: 0, timestamp: Date.now() }; // 最後の有効な視線データ
+      
+      // 顔の向きの追跡
+      this.headPoseX = 0; // 顔の水平方向の向き（-50 to 50）
+      this.headPoseY = 0; // 顔の垂直方向の向き（-50 to 50）
+      this.previousHeadPose = { x: 0, y: 0, timestamp: Date.now() };
+      this.headPoseVelocity = { x: 0, y: 0 }; // 顔の向きの変化速度
       
       // MediaPipe関連の初期化
       this.faceMesh = null;
@@ -760,13 +1185,45 @@ document.addEventListener('DOMContentLoaded', function() {
       this.initializeCamera();
       this.initializeGauge();
       this.initializeDebugPanel();
+      this.initializeVideoTracking();
       this.startTracking();
+      
+      // 未保存データのチェックと復旧
+      this.checkPendingSessionData();
+      
+      // 初期化完了後に少し待ってからテスト用タイムスタンプを追加
+      setTimeout(() => {
+        this.addTimestamp('test_init', 'システム初期化完了');
+        console.log('タイムスタンプシステムのテスト初期化完了');
+        
+        // 初期化後さらに少し待ってからテスト保存
+        setTimeout(() => {
+          console.log('初期化後のテスト保存を実行します');
+          this.saveSessionToServer();
+        }, 3000);
+      }, 1000);
       
       // グローバル関数としてタブ切り替えを登録
       window.showDebugTab = this.showDebugTab.bind(this);
       
+      // デバッグ用のグローバル関数
+      window.debugSaveSession = () => {
+        console.log('手動セッション保存を実行します...');
+        console.log('現在のtimestampLog:', this.timestampLog);
+        console.log('セッション開始時刻:', new Date(this.sessionStartTime));
+        console.log('ユーザー認証状態:', <%= user_signed_in? ? 'true' : 'false' %>);
+        console.log('現在のユーザーID:', <%= current_user&.id || 'null' %>);
+        this.saveSessionToServer();
+      };
+      
       // グローバルアクセス用にインスタンスを登録
       window.concentrationTracker = this;
+      
+      // ページ離脱時のセッション終了記録（複数のイベントで確実に保存）
+      this.setupExitHandlers();
+      
+      // 効率的なバッチ保存（条件ベース）
+      this.setupBatchSaving();
     }
     
     async initializeCamera() {
@@ -919,6 +1376,12 @@ document.addEventListener('DOMContentLoaded', function() {
       // ログ機能の初期化
       this.logElement = document.getElementById('concentration-log');
       this.logs = [];
+      
+      // 設定パネルの初期化
+      this.initializeSettingsPanel();
+      
+      // タイムスタンプパネルの初期化
+      this.initializeTimestampPanel();
     }
     
     onFaceMeshResults(results) {
@@ -959,9 +1422,10 @@ document.addEventListener('DOMContentLoaded', function() {
           const avgPupilY = (leftEyeData.pupilRatio.y + rightEyeData.pupilRatio.y) / 2;
           
           // 眼球の動きを視線方向に変換（-1 to 1の範囲）
-          // 左右の動き: 負の値が左、正の値が右
-          const normalizedGazeX = (avgPupilX - 0.5) * 2;
-          // 上下の動き: 負の値が上、正の値が下
+          // カメラ映像が左右反転されているため、X座標も反転
+          // 左右の動き: 負の値が右、正の値が左（反転）
+          const normalizedGazeX = -((avgPupilX - 0.5) * 2);
+          // 上下の動き: 負の値が上、正の値が下（変更なし）
           const normalizedGazeY = (avgPupilY - 0.5) * 2;
           
           // スケールして最終的な値に変換（-50 to 50の範囲）
@@ -985,11 +1449,25 @@ document.addEventListener('DOMContentLoaded', function() {
           this.lastMovementTime = Date.now();
         }
         
+        // 視線データのスムージング処理
+        this.applySmoothingToGaze();
+        
+        // 眼球動きの変化量を計算（スムージング後のデータを使用）
+        this.calculateGazeMovementDelta();
+        
+        // 顔の向きを計算
+        this.calculateHeadPoseFromLandmarks(landmarks);
+        
       } catch (error) {
         console.error('視線計算エラー:', error);
         // エラー時はデフォルト値
         this.gazeX = 0;
         this.gazeY = 0;
+        // 変化量もリセット
+        this.gazeVelocity = { x: 0, y: 0 };
+        this.headPoseX = 0;
+        this.headPoseY = 0;
+        this.headPoseVelocity = { x: 0, y: 0 };
       }
     }
     
@@ -1109,7 +1587,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const faceWidth = Math.abs(leftEye.x - rightEye.x);
         const faceHeight = Math.abs(landmarks[10].y - landmarks[152].y);
         
-        const normalizedGazeX = (eyeCenter.x - faceCenter.x) / (faceWidth * 0.5);
+        // カメラ映像が左右反転されているため、X座標も反転
+        const normalizedGazeX = -((eyeCenter.x - faceCenter.x) / (faceWidth * 0.5));
         const normalizedGazeY = (eyeCenter.y - faceCenter.y) / (faceHeight * 0.5);
         
         this.gazeX = Math.max(-50, Math.min(50, normalizedGazeX * 50));
@@ -1133,6 +1612,215 @@ document.addEventListener('DOMContentLoaded', function() {
       return {
         x: sumX / eyeIndices.length,
         y: sumY / eyeIndices.length
+      };
+    }
+    
+    applySmoothingToGaze() {
+      const currentTime = Date.now();
+      
+      // 生の視線データを履歴に追加
+      this.gazeRawHistory.push({
+        x: this.gazeX,
+        y: this.gazeY,
+        timestamp: currentTime
+      });
+      
+      // 履歴のサイズを制限
+      if (this.gazeRawHistory.length > this.smoothingWindowSize) {
+        this.gazeRawHistory.shift();
+      }
+      
+      // ノイズ除去: 極端な値を検出して除去
+      const filteredHistory = this.removeNoiseFromGazeData();
+      
+      if (filteredHistory.length >= 3) {
+        // 移動平均を計算
+        const smoothedX = filteredHistory.reduce((sum, data) => sum + data.x, 0) / filteredHistory.length;
+        const smoothedY = filteredHistory.reduce((sum, data) => sum + data.y, 0) / filteredHistory.length;
+        
+        // 重み付き平均（新しいデータにより大きな重みを付ける）
+        const weights = filteredHistory.map((_, index) => Math.pow(1.2, index)); // 新しいデータほど重い
+        const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+        
+        const weightedX = filteredHistory.reduce((sum, data, index) => sum + data.x * weights[index], 0) / totalWeight;
+        const weightedY = filteredHistory.reduce((sum, data, index) => sum + data.y * weights[index], 0) / totalWeight;
+        
+        // スムージング結果を保存
+        this.gazeSmoothed.x = weightedX;
+        this.gazeSmoothed.y = weightedY;
+        
+        // スムージング後のデータで元の値を更新
+        this.gazeX = weightedX;
+        this.gazeY = weightedY;
+        
+        // 有効なデータとして記録
+        this.lastValidGaze = { x: weightedX, y: weightedY, timestamp: currentTime };
+      } else if (this.lastValidGaze.timestamp > 0 && (currentTime - this.lastValidGaze.timestamp) < 500) {
+        // データが不足している場合は前回の有効なデータを使用（0.5秒以内）
+        this.gazeX = this.lastValidGaze.x;
+        this.gazeY = this.lastValidGaze.y;
+      }
+    }
+    
+    calculateHeadPoseFromLandmarks(landmarks) {
+      try {
+        // 顔の主要な特徴点を使用して向きを計算
+        const noseTip = landmarks[1]; // 鼻先
+        const faceCenter = landmarks[9]; // 顔の中心
+        const leftEyeCorner = landmarks[33]; // 左目尻
+        const rightEyeCorner = landmarks[263]; // 右目尻
+        const chinCenter = landmarks[18]; // 顎の中心
+        const foreheadCenter = landmarks[10]; // 額の中心
+        
+        if (!noseTip || !faceCenter || !leftEyeCorner || !rightEyeCorner || !chinCenter || !foreheadCenter) {
+          return;
+        }
+        
+        // 顔の基準サイズを計算
+        const faceWidth = Math.abs(leftEyeCorner.x - rightEyeCorner.x);
+        const faceHeight = Math.abs(foreheadCenter.y - chinCenter.y);
+        
+        // 水平方向の向き（左右の回転）
+        // 鼻先と顔の中心の水平方向のずれで判定
+        const horizontalOffset = (noseTip.x - faceCenter.x) / (faceWidth * 0.5);
+        
+        // 垂直方向の向き（上下の傾き）
+        // 鼻先と顔の中心の垂直方向のずれで判定
+        const verticalOffset = (noseTip.y - faceCenter.y) / (faceHeight * 0.5);
+        
+        // カメラ映像が左右反転されているため、X座標も反転
+        this.headPoseX = Math.max(-50, Math.min(50, -horizontalOffset * 50));
+        this.headPoseY = Math.max(-50, Math.min(50, verticalOffset * 50));
+        
+        // 顔の向きの変化量を計算
+        this.calculateHeadPoseMovementDelta();
+        
+      } catch (error) {
+        console.error('顔の向き計算エラー:', error);
+        this.headPoseX = 0;
+        this.headPoseY = 0;
+      }
+    }
+    
+    calculateHeadPoseMovementDelta() {
+      const currentTime = Date.now();
+      const currentHeadPose = { x: this.headPoseX, y: this.headPoseY };
+      
+      // 前回の記録からの時間差（秒）
+      const deltaTime = (currentTime - this.previousHeadPose.timestamp) / 1000;
+      
+      if (deltaTime > 0 && deltaTime < 1.0) { // 1秒以内の変化のみ有効
+        // 速度計算（角度/秒）
+        let velocityX = (currentHeadPose.x - this.previousHeadPose.x) / deltaTime;
+        let velocityY = (currentHeadPose.y - this.previousHeadPose.y) / deltaTime;
+        
+        // 速度値の異常チェック（急激な変化を制限）
+        const maxVelocity = 100; // 最大速度制限
+        velocityX = Math.max(-maxVelocity, Math.min(maxVelocity, velocityX));
+        velocityY = Math.max(-maxVelocity, Math.min(maxVelocity, velocityY));
+        
+        // 速度にスムージングを適用
+        const velocitySmoothing = 0.4; // スムージング係数
+        this.headPoseVelocity.x = this.headPoseVelocity.x * (1 - velocitySmoothing) + velocityX * velocitySmoothing;
+        this.headPoseVelocity.y = this.headPoseVelocity.y * (1 - velocitySmoothing) + velocityY * velocitySmoothing;
+      } else {
+        // 時間差が大きい場合は速度をリセット
+        this.headPoseVelocity.x = 0;
+        this.headPoseVelocity.y = 0;
+      }
+      
+      // 前回の位置を更新
+      this.previousHeadPose = { 
+        x: currentHeadPose.x, 
+        y: currentHeadPose.y, 
+        timestamp: currentTime 
+      };
+    }
+    
+    removeNoiseFromGazeData() {
+      if (this.gazeRawHistory.length < 3) {
+        return this.gazeRawHistory;
+      }
+      
+      const filtered = [];
+      
+      for (let i = 0; i < this.gazeRawHistory.length; i++) {
+        const current = this.gazeRawHistory[i];
+        let isNoise = false;
+        
+        // 前後のデータと比較してノイズを検出
+        if (i > 0 && i < this.gazeRawHistory.length - 1) {
+          const prev = this.gazeRawHistory[i - 1];
+          const next = this.gazeRawHistory[i + 1];
+          
+          // 前後のデータとの差が閾値を超える場合はノイズと判定
+          const diffPrev = Math.sqrt(Math.pow(current.x - prev.x, 2) + Math.pow(current.y - prev.y, 2));
+          const diffNext = Math.sqrt(Math.pow(current.x - next.x, 2) + Math.pow(current.y - next.y, 2));
+          const diffPrevNext = Math.sqrt(Math.pow(prev.x - next.x, 2) + Math.pow(prev.y - next.y, 2));
+          
+          // 現在の値が前後から大きく離れている場合はノイズ
+          if (diffPrev > this.noiseThreshold && diffNext > this.noiseThreshold && diffPrevNext < this.noiseThreshold) {
+            isNoise = true;
+          }
+        }
+        
+        // 極端に大きな値もノイズとして除去
+        if (Math.abs(current.x) > 100 || Math.abs(current.y) > 100) {
+          isNoise = true;
+        }
+        
+        if (!isNoise) {
+          filtered.push(current);
+        }
+      }
+      
+      return filtered.length > 0 ? filtered : this.gazeRawHistory;
+    }
+    
+    calculateGazeMovementDelta() {
+      const currentTime = Date.now();
+      const currentGaze = { x: this.gazeX, y: this.gazeY }; // すでにスムージング済み
+      
+      // 前回の記録からの時間差（秒）
+      const deltaTime = (currentTime - this.previousGaze.timestamp) / 1000;
+      
+      if (deltaTime > 0 && deltaTime < 1.0) { // 1秒以内の変化のみ有効
+        // 速度計算（ピクセル/秒）
+        let velocityX = (currentGaze.x - this.previousGaze.x) / deltaTime;
+        let velocityY = (currentGaze.y - this.previousGaze.y) / deltaTime;
+        
+        // 速度値の異常チェック（急激な変化を制限）
+        const maxVelocity = 200; // 最大速度制限（ピクセル/秒）
+        velocityX = Math.max(-maxVelocity, Math.min(maxVelocity, velocityX));
+        velocityY = Math.max(-maxVelocity, Math.min(maxVelocity, velocityY));
+        
+        // 速度にもスムージングを適用（前回の速度との平均）
+        const velocitySmoothing = 0.3; // スムージング係数
+        this.gazeVelocity.x = this.gazeVelocity.x * (1 - velocitySmoothing) + velocityX * velocitySmoothing;
+        this.gazeVelocity.y = this.gazeVelocity.y * (1 - velocitySmoothing) + velocityY * velocitySmoothing;
+        
+        // 動き履歴を更新（最新5フレーム分）
+        this.eyeMovementHistory.push({
+          position: { ...currentGaze },
+          velocity: { x: velocityX, y: velocityY },
+          timestamp: currentTime
+        });
+        
+        // 履歴の長さを制限
+        if (this.eyeMovementHistory.length > 5) {
+          this.eyeMovementHistory.shift();
+        }
+      } else {
+        // 時間差が大きい場合は速度をリセット
+        this.gazeVelocity.x = 0;
+        this.gazeVelocity.y = 0;
+      }
+      
+      // 前回の位置を更新
+      this.previousGaze = { 
+        x: currentGaze.x, 
+        y: currentGaze.y, 
+        timestamp: currentTime 
       };
     }
     
@@ -1222,6 +1910,11 @@ document.addEventListener('DOMContentLoaded', function() {
       const ctx = overlayCanvas.getContext('2d');
       ctx.clearRect(0, 0, 320, 240);
       
+      // キャンバスを左右反転（ビデオに合わせる）
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.translate(-320, 0);
+      
       if (this.faceDetected) {
         // カメラ映像の中心を基準点とする
         const centerX = 160; // 320/2
@@ -1280,13 +1973,17 @@ document.addEventListener('DOMContentLoaded', function() {
           ctx.arc(centerX, centerY, 4, 0, 2 * Math.PI);
           ctx.fill();
           
-          // ベクトル情報をテキストで表示
+          // ベクトル情報をテキストで表示（テキストは反転させない）
+          ctx.save();
+          ctx.scale(-1, 1);
+          ctx.translate(-320, 0);
+          
           ctx.fillStyle = '#ffffff';
           ctx.font = '12px Arial';
           ctx.strokeStyle = '#000000';
           ctx.lineWidth = 2;
           
-          const vectorText = `V(${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)})`;
+          const vectorText = `視線V(${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)})`;
           const magnitudeText = `|V|=${magnitude.toFixed(1)}`;
           
           // テキストに縁取りを付けて見やすくする
@@ -1294,6 +1991,8 @@ document.addEventListener('DOMContentLoaded', function() {
           ctx.fillText(vectorText, 10, 20);
           ctx.strokeText(magnitudeText, 10, 40);
           ctx.fillText(magnitudeText, 10, 40);
+          
+          ctx.restore();
         } else {
           // 中心点のみ表示（視線が正面の場合）
           ctx.fillStyle = '#00ff00';
@@ -1301,14 +2000,24 @@ document.addEventListener('DOMContentLoaded', function() {
           ctx.arc(centerX, centerY, 6, 0, 2 * Math.PI);
           ctx.fill();
           
-          // 正面視線のテキスト
+          // 正面視線のテキスト（テキストは反転させない）
+          ctx.save();
+          ctx.scale(-1, 1);
+          ctx.translate(-320, 0);
+          
           ctx.fillStyle = '#ffffff';
           ctx.font = '12px Arial';
           ctx.strokeStyle = '#000000';
           ctx.lineWidth = 2;
           ctx.strokeText('正面視線', 10, 20);
           ctx.fillText('正面視線', 10, 20);
+          
+          ctx.restore();
         }
+        
+        // 眼球動きの変化量ベクトルを描画
+        this.drawMovementVectors(ctx, centerX, centerY);
+        
       } else {
         // 顔未検出時の表示
         ctx.strokeStyle = '#ff0000';
@@ -1324,10 +2033,202 @@ document.addEventListener('DOMContentLoaded', function() {
         ctx.lineTo(140, 140);
         ctx.stroke();
         
-        // テキスト表示
+        // テキスト表示（テキストは反転させない）
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.translate(-320, 0);
+        
         ctx.strokeText('顔未検出', 130, 160);
         ctx.fillText('顔未検出', 130, 160);
+        
+        ctx.restore();
       }
+      
+      // キャンバス変換を復元
+      ctx.restore();
+    }
+    
+    drawMovementVectors(ctx, centerX, centerY) {
+      // 視線速度ベクトルの描画（青色）
+      const velocityMagnitude = Math.sqrt(this.gazeVelocity.x * this.gazeVelocity.x + this.gazeVelocity.y * this.gazeVelocity.y);
+      
+      if (velocityMagnitude > 1) { // 閾値以上の速度のみ表示
+        const velocityScale = 2; // 速度ベクトルの表示スケール
+        const velocityLength = Math.min(velocityMagnitude * velocityScale, 60);
+        
+        // 正規化された速度ベクトル
+        const normalizedVelX = this.gazeVelocity.x / velocityMagnitude;
+        const normalizedVelY = this.gazeVelocity.y / velocityMagnitude;
+        
+        // 速度ベクトルの終点
+        const velEndX = centerX + normalizedVelX * velocityLength;
+        const velEndY = centerY + normalizedVelY * velocityLength;
+        
+        // 速度ベクトルを描画（青色）
+        ctx.strokeStyle = '#0099ff';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([5, 3]); // 破線で表示
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(velEndX, velEndY);
+        ctx.stroke();
+        
+        // 速度ベクトルの矢印
+        if (velocityLength > 15) {
+          const arrowHeadLength = 10;
+          const arrowHeadAngle = Math.PI / 5;
+          const velAngle = Math.atan2(normalizedVelY, normalizedVelX);
+          
+          ctx.beginPath();
+          ctx.moveTo(velEndX, velEndY);
+          ctx.lineTo(
+            velEndX - arrowHeadLength * Math.cos(velAngle - arrowHeadAngle),
+            velEndY - arrowHeadLength * Math.sin(velAngle - arrowHeadAngle)
+          );
+          ctx.moveTo(velEndX, velEndY);
+          ctx.lineTo(
+            velEndX - arrowHeadLength * Math.cos(velAngle + arrowHeadAngle),
+            velEndY - arrowHeadLength * Math.sin(velAngle + arrowHeadAngle)
+          );
+          ctx.stroke();
+        }
+        
+        ctx.setLineDash([]); // 破線を解除
+      }
+      
+      // 顔の向きベクトルの描画（オレンジ色）
+      const headPoseMagnitude = Math.sqrt(this.headPoseX * this.headPoseX + this.headPoseY * this.headPoseY);
+      
+      if (headPoseMagnitude > 2) { // 閾値以上の顔の向きのみ表示
+        const headPoseScale = 1.5; // 顔の向きベクトルの表示スケール
+        const headPoseLength = Math.min(headPoseMagnitude * headPoseScale, 50);
+        
+        // 正規化された顔の向きベクトル
+        const normalizedHeadPoseX = this.headPoseX / headPoseMagnitude;
+        const normalizedHeadPoseY = this.headPoseY / headPoseMagnitude;
+        
+        // 顔の向きベクトルの終点（少しオフセットして表示）
+        const offsetX = 25;
+        const offsetY = 25;
+        const headPoseStartX = centerX + offsetX;
+        const headPoseStartY = centerY + offsetY;
+        const headPoseEndX = headPoseStartX + normalizedHeadPoseX * headPoseLength;
+        const headPoseEndY = headPoseStartY + normalizedHeadPoseY * headPoseLength;
+        
+        // 顔の向きベクトルを描画（オレンジ色）
+        ctx.strokeStyle = '#ff6600';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]); // 点線
+        ctx.beginPath();
+        ctx.moveTo(headPoseStartX, headPoseStartY);
+        ctx.lineTo(headPoseEndX, headPoseEndY);
+        ctx.stroke();
+        
+        // 顔の向きベクトルの矢印
+        if (headPoseLength > 10) {
+          const arrowHeadLength = 8;
+          const arrowHeadAngle = Math.PI / 4;
+          const headPoseAngle = Math.atan2(normalizedHeadPoseY, normalizedHeadPoseX);
+          
+          ctx.beginPath();
+          ctx.moveTo(headPoseEndX, headPoseEndY);
+          ctx.lineTo(
+            headPoseEndX - arrowHeadLength * Math.cos(headPoseAngle - arrowHeadAngle),
+            headPoseEndY - arrowHeadLength * Math.sin(headPoseAngle - arrowHeadAngle)
+          );
+          ctx.moveTo(headPoseEndX, headPoseEndY);
+          ctx.lineTo(
+            headPoseEndX - arrowHeadLength * Math.cos(headPoseAngle + arrowHeadAngle),
+            headPoseEndY - arrowHeadLength * Math.sin(headPoseAngle + arrowHeadAngle)
+          );
+          ctx.stroke();
+        }
+        
+        ctx.setLineDash([]); // 破線を解除
+      }
+      
+      // 顔の向き速度ベクトルの描画（紫色）
+      const headPoseVelocityMagnitude = Math.sqrt(this.headPoseVelocity.x * this.headPoseVelocity.x + this.headPoseVelocity.y * this.headPoseVelocity.y);
+      
+      if (headPoseVelocityMagnitude > 1) { // 閾値以上の顔の向き速度のみ表示
+        const headPoseVelScale = 3; // 顔の向き速度ベクトルの表示スケール
+        const headPoseVelLength = Math.min(headPoseVelocityMagnitude * headPoseVelScale, 45);
+        
+        // 正規化された顔の向き速度ベクトル
+        const normalizedHeadPoseVelX = this.headPoseVelocity.x / headPoseVelocityMagnitude;
+        const normalizedHeadPoseVelY = this.headPoseVelocity.y / headPoseVelocityMagnitude;
+        
+        // 顔の向き速度ベクトルの終点（さらにオフセット）
+        const velOffsetX = -25;
+        const velOffsetY = 25;
+        const headPoseVelStartX = centerX + velOffsetX;
+        const headPoseVelStartY = centerY + velOffsetY;
+        const headPoseVelEndX = headPoseVelStartX + normalizedHeadPoseVelX * headPoseVelLength;
+        const headPoseVelEndY = headPoseVelStartY + normalizedHeadPoseVelY * headPoseVelLength;
+        
+        // 顔の向き速度ベクトルを描画（紫色）
+        ctx.strokeStyle = '#9966ff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([2, 4]); // 短い破線
+        ctx.beginPath();
+        ctx.moveTo(headPoseVelStartX, headPoseVelStartY);
+        ctx.lineTo(headPoseVelEndX, headPoseVelEndY);
+        ctx.stroke();
+        
+        // 顔の向き速度ベクトルの矢印
+        if (headPoseVelLength > 10) {
+          const arrowHeadLength = 7;
+          const arrowHeadAngle = Math.PI / 5;
+          const headPoseVelAngle = Math.atan2(normalizedHeadPoseVelY, normalizedHeadPoseVelX);
+          
+          ctx.beginPath();
+          ctx.moveTo(headPoseVelEndX, headPoseVelEndY);
+          ctx.lineTo(
+            headPoseVelEndX - arrowHeadLength * Math.cos(headPoseVelAngle - arrowHeadAngle),
+            headPoseVelEndY - arrowHeadLength * Math.sin(headPoseVelAngle - arrowHeadAngle)
+          );
+          ctx.moveTo(headPoseVelEndX, headPoseVelEndY);
+          ctx.lineTo(
+            headPoseVelEndX - arrowHeadLength * Math.cos(headPoseVelAngle + arrowHeadAngle),
+            headPoseVelEndY - arrowHeadLength * Math.sin(headPoseVelAngle + arrowHeadAngle)
+          );
+          ctx.stroke();
+        }
+        
+        ctx.setLineDash([]); // 破線を解除
+      }
+      
+      // 変化量の数値情報を表示（テキストは反転させない）
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.translate(-320, 0);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Arial';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1;
+      
+      const gazeVelocityText = `視線速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s`;
+      const gazeVelocityMagText = `|視線速度|=${velocityMagnitude.toFixed(1)}`;
+      const headPoseText = `顔向き: (${this.headPoseX.toFixed(1)}, ${this.headPoseY.toFixed(1)})`;
+      const headPoseVelocityText = `顔向き速度: (${this.headPoseVelocity.x.toFixed(1)}, ${this.headPoseVelocity.y.toFixed(1)}) deg/s`;
+      
+      // 右側に情報を表示
+      ctx.strokeText(gazeVelocityText, 10, 60);
+      ctx.fillText(gazeVelocityText, 10, 60);
+      ctx.strokeText(gazeVelocityMagText, 10, 75);
+      ctx.fillText(gazeVelocityMagText, 10, 75);
+      ctx.strokeText(headPoseText, 10, 90);
+      ctx.fillText(headPoseText, 10, 90);
+      ctx.strokeText(headPoseVelocityText, 10, 105);
+      ctx.fillText(headPoseVelocityText, 10, 105);
+      
+      // 凡例を表示
+      ctx.font = '8px Arial';
+      ctx.strokeText('━ 視線方向(緑) ┅ 視線速度(青) ┄ 顔向き(橙) ┈ 顔向き速度(紫)', 10, 220);
+      ctx.fillText('━ 視線方向(緑) ┅ 視線速度(青) ┄ 顔向き(橙) ┈ 顔向き速度(紫)', 10, 220);
+      
+      ctx.restore();
     }
     
     detectFace(imageData) {
@@ -1349,7 +2250,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // 顔が検出されない場合は減点
       if (!this.faceDetected) {
-        const penalty = 2;
+        const penalty = this.scoreSettings.faceNotDetectedPenalty;
         newScore -= penalty;
         reasons.push({ 
           text: '顔未検出', 
@@ -1359,23 +2260,29 @@ document.addEventListener('DOMContentLoaded', function() {
           detail: 'カメラに顔が映っていません'
         });
       } else {
-        // 正面向きの評価（加点は一時停止）
-        // if (this.frontFacingRatio > 80) {
-        //   const bonus = 1;
-        //   newScore += bonus;
-        //   reasons.push({ 
-        //     text: '正面注視', 
-        //     change: bonus, 
-        //     type: 'positive',
-        //     category: '姿勢',
-        //     detail: `正面を向いています (正面率:${this.frontFacingRatio.toFixed(1)}%)`
-        //   });
-        // }
-        
-        // 目線方向による評価（目線をそらすだけでは減点しない）
-        if (Math.abs(this.gazeX) < 15 && Math.abs(this.gazeY) < 15) {
-          const bonus = 0.5;
+        // 正面向きの評価（間隔制御付き加点）
+        const currentTime = Date.now();
+        if (this.frontFacingRatio > 80 && 
+            (currentTime - this.lastFrontFacingBonus) >= this.scoreSettings.frontFacingInterval) {
+          const bonus = this.scoreSettings.frontFacingBonus;
           newScore += bonus;
+          this.lastFrontFacingBonus = currentTime;
+          reasons.push({ 
+            text: '正面注視', 
+            change: bonus, 
+            type: 'positive',
+            category: '姿勢',
+            detail: `正面を向いています (正面率:${this.frontFacingRatio.toFixed(1)}%)`
+          });
+        }
+        
+        // 目線方向による評価（間隔制御付き加点）
+        if (Math.abs(this.gazeX) < this.scoreSettings.centerGazeThreshold && 
+            Math.abs(this.gazeY) < this.scoreSettings.centerGazeThreshold &&
+            (currentTime - this.lastCenterGazeBonus) >= this.scoreSettings.centerGazeInterval) {
+          const bonus = this.scoreSettings.centerGazeBonus;
+          newScore += bonus;
+          this.lastCenterGazeBonus = currentTime;
           reasons.push({ 
             text: '集中注視', 
             change: bonus, 
@@ -1386,19 +2293,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         // 目線をそらすこと自体は減点対象から除外
         
-        // 問題表示後の目線の動き（右側への注視を評価）
-        if (this.questionDisplayTime && !this.responseStartTime) {
+        // 問題表示後の目線の動き（右向きの視線速度を評価）
+        if (this.questionDisplayTime && !this.responseStartTime && !this.questionConfirmed) {
           const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
-          if (timeFromQuestion < 10) { // 問題表示から10秒以内
-            if (this.gazeX > 15) { // 右側を見ている
-              const gazeBonus = 5;
+          if (timeFromQuestion < this.scoreSettings.questionConfirmWindow) {
+            // 右向きの視線速度をチェック
+            if (this.gazeVelocity.x > this.scoreSettings.gazeVelocityThreshold) {
+              const gazeBonus = this.scoreSettings.questionConfirmBonus;
               newScore += gazeBonus;
+              this.questionConfirmed = true; // フラグを立てて一度だけ実行
               reasons.push({ 
                 text: '問題確認', 
                 change: gazeBonus, 
                 type: 'positive',
                 category: '目線',
-                detail: '問題表示後に右側（問題エリア）を注視しています'
+                detail: `問題表示後${timeFromQuestion.toFixed(1)}秒で右向き速度${this.gazeVelocity.x.toFixed(1)}px/sを検出しました`
               });
             }
           }
@@ -1406,8 +2315,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 一定時間動きがない場合は減点
         const timeSinceMovement = (Date.now() - this.lastMovementTime) / 1000;
-        if (timeSinceMovement > 10) {
-          const penalty = Math.min(20, timeSinceMovement - 10);
+        if (timeSinceMovement > this.scoreSettings.movementStopThreshold) {
+          const penalty = Math.min(20, (timeSinceMovement - this.scoreSettings.movementStopThreshold) * this.scoreSettings.movementStopPenalty);
           newScore -= penalty;
           reasons.push({ 
             text: `目線停止`, 
@@ -1421,8 +2330,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // 出題から回答までの時間が長い場合は減点
         if (this.questionDisplayTime && this.responseStartTime && !this.responseProcessed) {
           const responseTime = (this.responseStartTime - this.questionDisplayTime) / 1000;
-          if (responseTime > 30) {
-            const penalty = Math.min(15, responseTime - 30);
+          if (responseTime > this.scoreSettings.responseDelayThreshold) {
+            const penalty = Math.min(15, (responseTime - this.scoreSettings.responseDelayThreshold) * this.scoreSettings.responseDelayPenalty);
             newScore -= penalty;
             reasons.push({ 
               text: `回答遅延`, 
@@ -1431,8 +2340,8 @@ document.addEventListener('DOMContentLoaded', function() {
               category: '反応',
               detail: `問題表示から回答まで${responseTime.toFixed(1)}秒かかりました`
             });
-          } else if (responseTime < 5) {
-            const bonus = 3;
+          } else if (responseTime < this.scoreSettings.quickResponseThreshold) {
+            const bonus = this.scoreSettings.quickResponseBonus;
             newScore += bonus;
             reasons.push({ 
               text: `素早い回答`, 
@@ -1451,7 +2360,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // メモ入力があった場合は加点（前回チェック時からの増分のみ）
       if (this.noteInputs > this.lastNoteCount) {
         const newNotes = this.noteInputs - this.lastNoteCount;
-        const noteBonus = newNotes * 3;
+        const noteBonus = newNotes * this.scoreSettings.noteInputBonus;
         newScore += noteBonus;
         reasons.push({ 
           text: `メモ入力`, 
@@ -1469,6 +2378,20 @@ document.addEventListener('DOMContentLoaded', function() {
       // ログに記録（スコアが変化した場合、または理由がある場合）
       if (Math.abs(this.score - oldScore) > 0.1 || reasons.length > 0) {
         this.addLog(reasons, oldScore, this.score);
+        
+        // タイムスタンプ記録（スコアが変化した場合のみ）
+        if (Math.abs(this.score - oldScore) > 0.1) {
+          const change = this.score - oldScore;
+          const changeStr = change > 0 ? `+${change.toFixed(1)}` : change.toFixed(1);
+          const reasonTexts = reasons.map(r => r.text).join(', ');
+          
+          this.addTimestamp('score_change', `集中度変化: ${changeStr}点 (${reasonTexts})`, {
+            scoreChange: change,
+            previousScore: oldScore,
+            newScore: this.score,
+            reasons: reasons
+          });
+        }
       }
     }
     
@@ -1560,6 +2483,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     showDebugTab(tabName) {
+      console.log('showDebugTab called with:', tabName);
+      
       // すべてのタブを非表示
       document.querySelectorAll('.debug-tab-content').forEach(tab => {
         tab.style.display = 'none';
@@ -1574,10 +2499,21 @@ document.addEventListener('DOMContentLoaded', function() {
       const targetTab = document.getElementById(`debug-tab-${tabName}`);
       if (targetTab) {
         targetTab.style.display = 'block';
+        console.log(`Showing tab: debug-tab-${tabName}`);
+      } else {
+        console.log(`Tab not found: debug-tab-${tabName}`);
       }
       
       // 対応するボタンをactiveに
-      event.target.classList.add('active');
+      if (event && event.target) {
+        event.target.classList.add('active');
+      }
+      
+      // タイムスタンプタブが選択された場合は強制的に更新
+      if (tabName === 'timestamp') {
+        console.log('Timestamp tab selected, forcing update');
+        this.updateTimestampDisplay();
+      }
     }
     
     updateGauge() {
@@ -1656,9 +2592,32 @@ document.addEventListener('DOMContentLoaded', function() {
           details += `右目瞳孔: (${(data.right.pupilRatio.x * 100).toFixed(1)}%, ${(data.right.pupilRatio.y * 100).toFixed(1)}%)\n`;
           details += `平均瞳孔: (${(data.avgPupilRatio.x * 100).toFixed(1)}%, ${(data.avgPupilRatio.y * 100).toFixed(1)}%)\n`;
           details += `生視線値: (${data.rawGaze.x.toFixed(3)}, ${data.rawGaze.y.toFixed(3)})\n`;
-          details += `信頼度: L=${(data.left.confidence * 100).toFixed(0)}% R=${(data.right.confidence * 100).toFixed(0)}%`;
+          details += `信頼度: L=${(data.left.confidence * 100).toFixed(0)}% R=${(data.right.confidence * 100).toFixed(0)}%\n\n`;
+          
+          // スムージング情報を追加
+          details += `【スムージング処理】\n`;
+          details += `スムージング後: (${this.gazeSmoothed.x.toFixed(1)}, ${this.gazeSmoothed.y.toFixed(1)})\n`;
+          details += `生データ履歴: ${this.gazeRawHistory.length}/${this.smoothingWindowSize}フレーム\n`;
+          const filteredCount = this.removeNoiseFromGazeData().length;
+          details += `ノイズ除去後: ${filteredCount}フレーム\n`;
+          details += `ノイズ除去率: ${this.gazeRawHistory.length > 0 ? ((this.gazeRawHistory.length - filteredCount) / this.gazeRawHistory.length * 100).toFixed(1) : 0}%\n\n`;
+          
+          // 変化量情報を追加
+          details += `【視線の動き】\n`;
+          details += `視線速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s\n`;
+          details += `視線速度大きさ: ${Math.sqrt(this.gazeVelocity.x * this.gazeVelocity.x + this.gazeVelocity.y * this.gazeVelocity.y).toFixed(1)} px/s\n`;
+          details += `動き履歴: ${this.eyeMovementHistory.length}/5フレーム\n\n`;
+          
+          // 顔の向き情報を追加
+          details += `【顔の向き】\n`;
+          details += `顔向き: (${this.headPoseX.toFixed(1)}, ${this.headPoseY.toFixed(1)})\n`;
+          details += `顔向き速度: (${this.headPoseVelocity.x.toFixed(1)}, ${this.headPoseVelocity.y.toFixed(1)}) deg/s\n`;
+          details += `顔向き大きさ: ${Math.sqrt(this.headPoseX * this.headPoseX + this.headPoseY * this.headPoseY).toFixed(1)}`;
         } else {
-          details = '眼球データ取得失敗 - フォールバックモード';
+          details = '眼球データ取得失敗 - フォールバックモード\n';
+          details += `スムージング後: (${this.gazeSmoothed.x.toFixed(1)}, ${this.gazeSmoothed.y.toFixed(1)})\n`;
+          details += `視線速度: (${this.gazeVelocity.x.toFixed(1)}, ${this.gazeVelocity.y.toFixed(1)}) px/s\n`;
+          details += `顔向き: (${this.headPoseX.toFixed(1)}, ${this.headPoseY.toFixed(1)})`;
         }
         
         this.debugElements.eyeballDetails.textContent = details;
@@ -1680,6 +2639,12 @@ document.addEventListener('DOMContentLoaded', function() {
       this.questionDisplayTime = Date.now();
       this.responseStartTime = null;
       this.responseProcessed = false; // 新しい問題でフラグをリセット
+      this.questionConfirmed = false; // 問題確認フラグもリセット
+      
+      // タイムスタンプ記録
+      this.addTimestamp('question_display', '問題表示', {
+        questionDisplayed: true
+      });
       
       // 問題表示をログに記録
       const timestamp = new Date().toLocaleTimeString();
@@ -1709,20 +2674,27 @@ document.addEventListener('DOMContentLoaded', function() {
     onResponseStarted() {
       this.responseStartTime = Date.now();
       
+      // タイムスタンプ記録
+      const responseTime = this.questionDisplayTime ? 
+        (this.responseStartTime - this.questionDisplayTime) / 1000 : 0;
+      this.addTimestamp('answer_start', '回答開始', {
+        responseTime: responseTime
+      });
+      
       // 回答開始をログに記録
       const timestamp = new Date().toLocaleTimeString();
-      const responseTime = this.questionDisplayTime ? 
+      const responseTimeStr = this.questionDisplayTime ? 
         ((Date.now() - this.questionDisplayTime) / 1000).toFixed(1) : '不明';
       
       this.logs.unshift({
-        text: `[${timestamp}] 回答開始 (${responseTime}s後)`,
-        detail: `問題表示から${responseTime}秒後に回答を開始しました。`,
+        text: `[${timestamp}] 回答開始 (${responseTimeStr}s後)`,
+        detail: `問題表示から${responseTimeStr}秒後に回答を開始しました。`,
         reasons: [{
           text: '回答開始',
           change: 0,
           type: 'neutral',
           category: 'イベント',
-          detail: `問題表示から${responseTime}秒後に回答を開始しました。`
+          detail: `問題表示から${responseTimeStr}秒後に回答を開始しました。`
         }],
         type: 'neutral',
         timestamp: Date.now(),
@@ -1739,6 +2711,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     onNoteInput() {
       this.noteInputs++;
+      
+      // タイムスタンプ記録
+      this.addTimestamp('interaction_note', `メモ入力（${this.noteInputs}回目）`, {
+        noteCount: this.noteInputs
+      });
       
       // メモ入力を即座にログに記録
       const timestamp = new Date().toLocaleTimeString();
@@ -1765,6 +2742,931 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       this.updateLogDisplay();
+    }
+    
+    // タイムスタンプ記録システム
+    addTimestamp(eventType, description, additionalData = {}) {
+      const currentTime = Date.now();
+      const sessionElapsed = (currentTime - this.sessionStartTime) / 1000; // 秒
+      const videoTime = this.videoElement ? this.videoElement.currentTime : 0;
+      
+      const timestampEntry = {
+        id: this.timestampLog.length + 1,
+        timestamp: currentTime,
+        sessionElapsed: sessionElapsed,
+        videoTime: videoTime,
+        eventType: eventType,
+        description: description,
+        concentrationScore: this.score,
+        videoState: this.videoState,
+        playbackRate: this.videoElement ? this.videoElement.playbackRate : 1.0,
+        ...additionalData
+      };
+      
+      this.timestampLog.push(timestampEntry);
+      
+      // デバッグログを追加
+      console.log(`[タイムスタンプ追加] ${eventType}: ${description}`, {
+        totalEvents: this.timestampLog.length,
+        sessionElapsed: sessionElapsed.toFixed(1) + 's',
+        entry: timestampEntry
+      });
+      
+      // ログを最新1000件まで保持
+      if (this.timestampLog.length > 1000) {
+        this.timestampLog = this.timestampLog.slice(-1000);
+      }
+      
+      // リアルタイム表示を更新
+      this.updateTimestampDisplay();
+      
+      console.log(`[タイムスタンプ] ${eventType}: ${description}`, timestampEntry);
+    }
+    
+    formatTime(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${minutes}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    updateTimestampDisplay() {
+      const timestampElement = document.getElementById('timestamp-log');
+      
+      // デバッグ情報を追加
+      console.log('updateTimestampDisplay called:', {
+        timestampElement: !!timestampElement,
+        timestampLogLength: this.timestampLog.length,
+        recentEvents: this.timestampLog.slice(-3)
+      });
+      
+      if (!timestampElement) {
+        console.warn('timestamp-log element not found');
+        return;
+      }
+      
+      if (this.timestampLog.length === 0) {
+        timestampElement.innerHTML = `
+          <div class="timestamp-entry">
+            <div class="timestamp-header">
+              <span class="timestamp-time">タイムスタンプデータなし</span>
+            </div>
+            <div class="timestamp-body">
+              <div class="timestamp-description">まだイベントが記録されていません。動画を操作するとタイムスタンプが記録されます。</div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+      
+      // 最新10件を表示
+      const recentLogs = this.timestampLog.slice(-10).reverse();
+      
+      timestampElement.innerHTML = recentLogs.map(entry => {
+        const timeStr = new Date(entry.timestamp).toLocaleTimeString();
+        const sessionStr = this.formatTime(entry.sessionElapsed);
+        const videoStr = this.formatTime(entry.videoTime);
+        
+        let className = 'timestamp-entry';
+        if (entry.eventType.includes('score')) className += ' score-event';
+        else if (entry.eventType.includes('video')) className += ' video-event';
+        else if (entry.eventType.includes('interaction')) className += ' interaction-event';
+        
+        return `
+          <div class="${className}">
+            <div class="timestamp-header">
+              <span class="timestamp-time">${timeStr}</span>
+              <span class="timestamp-type">${entry.eventType}</span>
+              <span class="concentration-score">スコア: ${entry.concentrationScore.toFixed(0)}</span>
+            </div>
+            <div class="timestamp-body">
+              <div class="timestamp-description">${entry.description}</div>
+              <div class="timestamp-times">
+                <span>経過: ${sessionStr}</span>
+                <span>動画: ${videoStr}</span>
+                ${entry.playbackRate !== 1.0 ? `<span>速度: ${entry.playbackRate}x</span>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    exportTimestampLog() {
+      const data = this.prepareSessionData();
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `learning-session-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    
+    prepareSessionData() {
+      // 正しい動画IDの取得
+      const pathParts = window.location.pathname.split('/');
+      const videoId = pathParts[pathParts.length - 2]; // '/videos/{id}/player' から {id} を取得
+      
+      return {
+        sessionInfo: {
+          startTime: this.sessionStartTime,
+          endTime: Date.now(),
+          totalDuration: (Date.now() - this.sessionStartTime) / 1000,
+          videoId: videoId
+        },
+        timestampLog: this.timestampLog,
+        finalScore: this.score
+      };
+    }
+    
+    saveSessionToServer(useBeacon = false) {
+      if (this.saveInProgress) {
+        console.log('保存処理が既に実行中のためスキップ');
+        return;
+      }
+      
+      console.log('=== セッション保存開始 ===');
+      console.log('useBeacon:', useBeacon);
+      console.log('timestampLog length:', this.timestampLog.length);
+      
+      this.saveInProgress = true;
+      const data = this.prepareSessionData();
+      console.log('準備されたセッションデータ:', data);
+      
+      // 正しい動画IDの取得（URLパスから）
+      const pathParts = window.location.pathname.split('/');
+      const videoId = pathParts[pathParts.length - 2]; // '/videos/{id}/player' から {id} を取得
+      console.log('URL pathname:', window.location.pathname);
+      console.log('pathParts:', pathParts);
+      console.log('videoId:', videoId);
+      
+      const payload = JSON.stringify({ session_data: JSON.stringify(data) });
+      console.log('送信ペイロード長:', payload.length);
+      
+      if (useBeacon && navigator.sendBeacon) {
+        // sendBeaconを使用（ページ離脱時により確実）
+        const formData = new FormData();
+        formData.append('session_data', JSON.stringify(data));
+        
+        // CSRF token の追加
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+        formData.append('authenticity_token', csrfToken);
+        
+        const beaconUrl = `/videos/${videoId}/management/save_session`;
+        console.log('sendBeacon URL:', beaconUrl);
+        const success = navigator.sendBeacon(beaconUrl, formData);
+        if (success) {
+          console.log('sendBeaconでセッションデータを送信しました');
+        } else {
+          console.warn('sendBeaconでの送信に失敗、fetchを試行');
+          this.saveSessionToServer(false); // fallback
+        }
+        return;
+      }
+      
+      // 通常のfetch使用
+      console.log(`送信先URL: /videos/${videoId}/management/save_session`);
+      console.log('送信するデータ:', data);
+      
+      fetch(`/videos/${videoId}/management/save_session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: payload
+      })
+      .then(response => response.json())
+      .then(result => {
+        if (result.success) {
+          console.log(`セッションデータを保存しました (${this.timestampLog.length - this.lastSaveEventCount}件):`, result.session_id);
+          // 保存成功時の管理変数更新
+          this.lastSaveTime = Date.now();
+          this.lastSaveEventCount = this.timestampLog.length;
+          localStorage.removeItem('pendingSessionData');
+        } else {
+          console.error('セッションデータ保存エラー:', result.error);
+        }
+      })
+      .catch(error => {
+        console.error('セッションデータ送信エラー:', error);
+        this.saveToLocalStorageBackup(data);
+      })
+      .finally(() => {
+        this.saveInProgress = false;
+      });
+    }
+    
+    saveToLocalStorageBackup(data) {
+      try {
+        // 正しい動画IDの取得
+        const pathParts = window.location.pathname.split('/');
+        const videoId = pathParts[pathParts.length - 2];
+        
+        const backupData = {
+          ...data,
+          videoId: videoId,
+          saved: false,
+          backupTime: Date.now()
+        };
+        localStorage.setItem('pendingSessionData', JSON.stringify(backupData));
+        console.log('セッションデータをlocalStorageにバックアップしました');
+      } catch (e) {
+        console.error('localStorageバックアップ失敗:', e);
+      }
+    }
+    
+    initializeVideoTracking() {
+      this.videoElement = document.getElementById('video-player');
+      if (!this.videoElement) return;
+      
+      // 動画イベントリスナーを設定
+      this.videoElement.addEventListener('play', () => {
+        this.videoState = 'playing';
+        this.addTimestamp('video_play', '動画再生開始', {
+          previousState: 'paused'
+        });
+      });
+      
+      this.videoElement.addEventListener('pause', () => {
+        this.videoState = 'paused';
+        this.addTimestamp('video_pause', '動画一時停止', {
+          previousState: 'playing'
+        });
+      });
+      
+      this.videoElement.addEventListener('seeked', () => {
+        const currentTime = this.videoElement.currentTime;
+        const timeDiff = Math.abs(currentTime - this.lastVideoTime);
+        
+        if (timeDiff > 2) { // 2秒以上のスキップ
+          const direction = currentTime > this.lastVideoTime ? '前進' : '後退';
+          this.addTimestamp('video_skip', `動画スキップ（${direction}）`, {
+            from: this.lastVideoTime,
+            to: currentTime,
+            skipAmount: timeDiff,
+            direction: direction
+          });
+        }
+        
+        this.lastVideoTime = currentTime;
+      });
+      
+      this.videoElement.addEventListener('ratechange', () => {
+        const newRate = this.videoElement.playbackRate;
+        this.addTimestamp('video_speed_change', `再生速度変更`, {
+          from: this.lastPlaybackRate,
+          to: newRate,
+          speedChange: newRate / this.lastPlaybackRate
+        });
+        this.lastPlaybackRate = newRate;
+      });
+      
+      this.videoElement.addEventListener('ended', () => {
+        this.videoState = 'stopped';
+        this.addTimestamp('video_end', '動画視聴完了', {
+          totalWatchTime: this.videoElement.duration,
+          completionRate: 1.0
+        });
+      });
+      
+      // 定期的な動画時刻更新
+      setInterval(() => {
+        if (this.videoElement && this.videoState === 'playing') {
+          this.lastVideoTime = this.videoElement.currentTime;
+        }
+      }, 1000);
+      
+      // セッション開始を記録
+      this.addTimestamp('session_start', '学習セッション開始');
+    }
+    
+    initializeTimestampPanel() {
+      // エクスポートボタン
+      const exportBtn = document.getElementById('export-timestamp');
+      if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+          this.exportTimestampLog();
+        });
+      }
+      
+      // サーバー保存ボタン
+      const saveBtn = document.getElementById('save-to-server');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+          this.saveSessionToServer();
+          alert('セッションデータをサーバーに保存しました');
+        });
+      }
+      
+      // クリアボタン
+      const clearBtn = document.getElementById('clear-timestamp');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          if (confirm('タイムスタンプログをクリアしますか？')) {
+            this.timestampLog = [];
+            this.updateTimestampDisplay();
+            this.updateTimestampStats();
+          }
+        });
+      }
+      
+      // 統計の定期更新
+      setInterval(() => {
+        this.updateTimestampStats();
+      }, 1000);
+    }
+    
+    updateTimestampStats() {
+      const sessionDurationEl = document.getElementById('session-duration');
+      const videoTimeEl = document.getElementById('current-video-time');
+      const eventCountEl = document.getElementById('event-count');
+      
+      if (sessionDurationEl) {
+        const sessionElapsed = (Date.now() - this.sessionStartTime) / 1000;
+        sessionDurationEl.textContent = this.formatTime(sessionElapsed);
+      }
+      
+      if (videoTimeEl && this.videoElement) {
+        videoTimeEl.textContent = this.formatTime(this.videoElement.currentTime || 0);
+      }
+      
+      if (eventCountEl) {
+        eventCountEl.textContent = this.timestampLog.length;
+      }
+    }
+    
+    setupBatchSaving() {
+      // 条件ベースの賢い保存システム
+      setInterval(() => {
+        this.checkAndSave();
+      }, 15000); // 15秒間隔でチェック
+      
+      // 重要イベント時の即座保存
+      this.setupCriticalEventSaving();
+    }
+    
+    checkAndSave() {
+      if (this.saveInProgress) return;
+      
+      const currentTime = Date.now();
+      const timeSinceLastSave = (currentTime - this.lastSaveTime) / 1000;
+      const newEvents = this.timestampLog.length - this.lastSaveEventCount;
+      
+      console.log(`=== 保存条件チェック ===`);
+      console.log(`新しいイベント数: ${newEvents}`);
+      console.log(`最後の保存からの経過時間: ${timeSinceLastSave}秒`);
+      console.log(`総イベント数: ${this.timestampLog.length}`);
+      
+      // 保存条件（いずれかを満たす）- デバッグ用に条件を緩和
+      const shouldSave = 
+        newEvents >= 3 ||                     // 新しいイベントが3個以上（緩和）
+        timeSinceLastSave >= 60 ||            // 1分経過（緩和）
+        (newEvents >= 1 && timeSinceLastSave >= 30) ||  // 30秒経過 + 1イベント以上（緩和）
+        this.hasHighPriorityEvents();         // 重要イベントがある
+      
+      console.log(`保存すべきか: ${shouldSave}`);
+      
+      if (shouldSave && newEvents > 0) {
+        console.log('条件を満たしたため保存を実行します');
+        this.saveSessionToServer();
+      } else {
+        console.log('保存条件を満たしていません');
+      }
+    }
+    
+    hasHighPriorityEvents() {
+      // 最後の保存以降に重要なイベントがあるかチェック
+      const recentEvents = this.timestampLog.slice(this.lastSaveEventCount);
+      return recentEvents.some(event => 
+        event.eventType.includes('question') ||
+        event.eventType.includes('answer') ||
+        event.eventType.includes('video_end') ||
+        (event.eventType.includes('score_change') && Math.abs(event.additionalData?.scoreChange || 0) >= 5)
+      );
+    }
+    
+    setupCriticalEventSaving() {
+      // 重要イベント時は即座に保存をスケジュール
+      const originalAddTimestamp = this.addTimestamp.bind(this);
+      this.addTimestamp = (eventType, description, additionalData = {}) => {
+        // 元の処理を実行
+        originalAddTimestamp(eventType, description, additionalData);
+        
+        // 重要イベントの場合は優先保存をスケジュール
+        if (this.isCriticalEvent(eventType, additionalData)) {
+          clearTimeout(this.criticalSaveTimeout);
+          this.criticalSaveTimeout = setTimeout(() => {
+            if (!this.saveInProgress) {
+              this.saveSessionToServer();
+            }
+          }, 2000); // 2秒後に保存
+        }
+      };
+    }
+    
+    isCriticalEvent(eventType, additionalData) {
+      return (
+        eventType.includes('session_end') ||
+        eventType.includes('video_end') ||
+        eventType.includes('question') ||
+        eventType.includes('answer') ||
+        (eventType.includes('score_change') && Math.abs(additionalData?.scoreChange || 0) >= 10)
+      );
+    }
+    
+    setupExitHandlers() {
+      let isExiting = false;
+      
+      const saveOnExit = () => {
+        if (isExiting) return; // 重複実行を防ぐ
+        isExiting = true;
+        
+        this.addTimestamp('session_end', '学習セッション終了');
+        
+        // sendBeaconでの確実な保存を試行
+        this.saveSessionToServer(true);
+        
+        // フォールバックとして同期保存も実行
+        this.saveSessionToServerSync();
+        
+        // localStorageにもバックアップ保存
+        try {
+          // 正しい動画IDの取得
+          const pathParts = window.location.pathname.split('/');
+          const videoId = pathParts[pathParts.length - 2];
+          
+          const backupData = {
+            sessionStartTime: this.sessionStartTime,
+            sessionEndTime: Date.now(),
+            timestampLog: this.timestampLog,
+            finalScore: this.score,
+            videoId: videoId,
+            saved: false // サーバー保存成功フラグ
+          };
+          localStorage.setItem('pendingSessionData', JSON.stringify(backupData));
+          localStorage.setItem('lastTimestampLog', JSON.stringify(backupData));
+        } catch (e) {
+          console.warn('localStorageへの保存に失敗:', e);
+        }
+      };
+      
+      // 複数のイベントで離脱を検知
+      window.addEventListener('beforeunload', saveOnExit);
+      window.addEventListener('unload', saveOnExit);
+      window.addEventListener('pagehide', saveOnExit);
+      
+      // ブラウザタブの非表示化を検知
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          this.saveSessionToServer(); // 非同期保存
+        }
+      });
+      
+      // ブラウザフォーカス喪失を検知
+      window.addEventListener('blur', () => {
+        this.saveSessionToServer(); // 非同期保存
+      });
+      
+      // 定期的な「生存確認」保存
+      setInterval(() => {
+        this.saveSessionToServer();
+      }, 30000); // 30秒間隔
+    }
+    
+    saveSessionToServerSync() {
+      // 同期的なXHR要求（ページ離脱時用）
+      try {
+        const data = this.prepareSessionData();
+        // 正しい動画IDの取得
+        const pathParts = window.location.pathname.split('/');
+        const videoId = pathParts[pathParts.length - 2];
+        
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/videos/${videoId}/management/save_session`, false); // 同期
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('X-CSRF-Token', document.querySelector('meta[name="csrf-token"]').content);
+        
+        xhr.send(JSON.stringify({ session_data: JSON.stringify(data) }));
+        
+        if (xhr.status === 200) {
+          console.log('セッションデータを同期保存しました');
+          // 保存成功をlocalStorageに記録
+          const pendingData = localStorage.getItem('pendingSessionData');
+          if (pendingData) {
+            const parsed = JSON.parse(pendingData);
+            parsed.saved = true;
+            localStorage.setItem('pendingSessionData', JSON.stringify(parsed));
+          }
+        }
+      } catch (error) {
+        console.error('同期保存エラー:', error);
+      }
+    }
+    
+    // ページ読み込み時に未保存データをチェック
+    checkPendingSessionData() {
+      try {
+        const pendingData = localStorage.getItem('pendingSessionData');
+        if (pendingData) {
+          const data = JSON.parse(pendingData);
+          if (!data.saved && data.timestampLog && data.timestampLog.length > 0) {
+            // 未保存のセッションデータがある場合、サーバーに送信
+            console.log('未保存のセッションデータを発見、サーバーに送信中...');
+            
+            // 正しい動画IDの取得
+            const pathParts = window.location.pathname.split('/');
+            const currentVideoId = pathParts[pathParts.length - 2];
+            if (data.videoId === currentVideoId) {
+              fetch(`/videos/${currentVideoId}/management/save_session`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ session_data: JSON.stringify({
+                  sessionInfo: {
+                    startTime: data.sessionStartTime,
+                    endTime: data.sessionEndTime,
+                    totalDuration: (data.sessionEndTime - data.sessionStartTime) / 1000,
+                    videoId: data.videoId
+                  },
+                  timestampLog: data.timestampLog,
+                  finalScore: data.finalScore
+                })})
+              })
+              .then(response => response.json())
+              .then(result => {
+                if (result.success) {
+                  console.log('未保存データの復旧に成功:', result.session_id);
+                  localStorage.removeItem('pendingSessionData');
+                }
+              })
+              .catch(error => {
+                console.error('未保存データの復旧に失敗:', error);
+              });
+            }
+          } else {
+            // 既に保存済みの場合は削除
+            localStorage.removeItem('pendingSessionData');
+          }
+        }
+      } catch (e) {
+        console.warn('未保存データのチェックでエラー:', e);
+      }
+    }
+    
+    // スコア設定関連のメソッド
+    initializeSettingsPanel() {
+      // 設定値を入力フィールドに反映
+      this.updateSettingsUI();
+      
+      // 設定適用ボタン
+      const applyBtn = document.getElementById('apply-settings');
+      if (applyBtn) {
+        applyBtn.addEventListener('click', () => {
+          this.applySettings();
+        });
+      }
+      
+      // デフォルト復元ボタン
+      const resetBtn = document.getElementById('reset-settings');
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          if (confirm('設定をデフォルト値に戻しますか？')) {
+            this.resetToDefaultSettings();
+          }
+        });
+      }
+      
+      // エクスポートボタン
+      const exportBtn = document.getElementById('export-settings');
+      if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+          this.exportSettings();
+        });
+      }
+      
+      // インポートボタン
+      const importBtn = document.getElementById('import-settings');
+      const importFile = document.getElementById('import-file');
+      if (importBtn && importFile) {
+        importBtn.addEventListener('click', () => {
+          importFile.click();
+        });
+        
+        importFile.addEventListener('change', (e) => {
+          if (e.target.files.length > 0) {
+            this.importSettings(e.target.files[0]);
+          }
+        });
+      }
+    }
+    
+    updateSettingsUI() {
+      // 各設定値を入力フィールドに反映
+      const settings = this.scoreSettings;
+      
+      Object.keys(settings).forEach(key => {
+        const kebabKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+        const element = document.getElementById(kebabKey);
+        if (element) {
+          element.value = settings[key];
+        }
+      });
+    }
+    
+    applySettings() {
+      // 入力フィールドから設定値を読み取って適用
+      const elements = {
+        'face-not-detected-penalty': 'faceNotDetectedPenalty',
+        'movement-stop-penalty': 'movementStopPenalty',
+        'response-delay-penalty': 'responseDelayPenalty',
+        'center-gaze-bonus': 'centerGazeBonus',
+        'question-confirm-bonus': 'questionConfirmBonus',
+        'quick-response-bonus': 'quickResponseBonus',
+        'note-input-bonus': 'noteInputBonus',
+        'front-facing-bonus': 'frontFacingBonus',
+        'movement-stop-threshold': 'movementStopThreshold',
+        'response-delay-threshold': 'responseDelayThreshold',
+        'quick-response-threshold': 'quickResponseThreshold',
+        'front-facing-interval': 'frontFacingInterval',
+        'center-gaze-interval': 'centerGazeInterval',
+        'center-gaze-threshold': 'centerGazeThreshold',
+        'gaze-velocity-threshold': 'gazeVelocityThreshold'
+      };
+      
+      Object.keys(elements).forEach(elementId => {
+        const element = document.getElementById(elementId);
+        const settingKey = elements[elementId];
+        
+        if (element && settingKey in this.scoreSettings) {
+          const value = parseFloat(element.value);
+          if (!isNaN(value)) {
+            this.scoreSettings[settingKey] = value;
+          }
+        }
+      });
+      
+      // タイムスタンプ記録
+      this.addTimestamp('settings_apply', '設定変更適用');
+      
+      alert('設定が適用されました');
+    }
+    
+    resetToDefaultSettings() {
+      // デフォルト値に戻す
+      this.scoreSettings = {
+        faceNotDetectedPenalty: 2,
+        movementStopPenalty: 1,
+        responseDelayPenalty: 1,
+        centerGazeBonus: 0.5,
+        questionConfirmBonus: 5,
+        quickResponseBonus: 3,
+        noteInputBonus: 3,
+        frontFacingBonus: 1,
+        movementStopThreshold: 10,
+        responseDelayThreshold: 30,
+        quickResponseThreshold: 5,
+        questionConfirmWindow: 3,
+        frontFacingInterval: 5000,
+        centerGazeInterval: 3000,
+        gazeVelocityThreshold: 10,
+        centerGazeThreshold: 15
+      };
+      
+      this.updateSettingsUI();
+      this.addTimestamp('settings_reset', '設定をデフォルトに復元');
+      alert('設定をデフォルト値に戻しました');
+    }
+    
+    exportSettings() {
+      const data = {
+        timestamp: new Date().toISOString(),
+        settings: this.scoreSettings
+      };
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `concentration-settings-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      this.addTimestamp('settings_export', '設定をエクスポート');
+    }
+    
+    importSettings(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (data.settings && typeof data.settings === 'object') {
+            this.scoreSettings = { ...this.scoreSettings, ...data.settings };
+            this.updateSettingsUI();
+            this.addTimestamp('settings_import', '設定をインポート');
+            alert('設定をインポートしました');
+          } else {
+            alert('無効な設定ファイルです');
+          }
+        } catch (error) {
+          alert('設定ファイルの読み込みに失敗しました: ' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+    initializeSettingsPanel() {
+      // 設定値をUIに反映
+      this.loadSettingsToUI();
+      
+      // イベントリスナーを設定
+      document.getElementById('apply-settings')?.addEventListener('click', () => {
+        this.applySettingsFromUI();
+      });
+      
+      document.getElementById('reset-settings')?.addEventListener('click', () => {
+        this.resetSettingsToDefault();
+      });
+      
+      document.getElementById('export-settings')?.addEventListener('click', () => {
+        this.exportSettings();
+      });
+      
+      document.getElementById('import-settings')?.addEventListener('click', () => {
+        document.getElementById('import-file').click();
+      });
+      
+      document.getElementById('import-file')?.addEventListener('change', (event) => {
+        this.importSettings(event.target.files[0]);
+      });
+    }
+    
+    loadSettingsToUI() {
+      const settings = this.scoreSettings;
+      
+      // 各設定項目をUIに反映
+      Object.keys(settings).forEach(key => {
+        const element = document.getElementById(key.replace(/([A-Z])/g, '-$1').toLowerCase());
+        if (element) {
+          element.value = settings[key];
+        }
+      });
+    }
+    
+    applySettingsFromUI() {
+      try {
+        // UIから設定値を取得して適用
+        const newSettings = {};
+        
+        Object.keys(this.scoreSettings).forEach(key => {
+          const elementId = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+          const element = document.getElementById(elementId);
+          if (element) {
+            const value = parseFloat(element.value);
+            if (!isNaN(value)) {
+              newSettings[key] = value;
+            }
+          }
+        });
+        
+        // 設定を更新
+        Object.assign(this.scoreSettings, newSettings);
+        
+        // 成功メッセージを表示
+        this.showSettingsMessage('設定を適用しました', 'success');
+        
+        console.log('スコア設定が更新されました:', this.scoreSettings);
+        
+      } catch (error) {
+        console.error('設定の適用中にエラーが発生しました:', error);
+        this.showSettingsMessage('設定の適用中にエラーが発生しました', 'error');
+      }
+    }
+    
+    resetSettingsToDefault() {
+      // デフォルト設定
+      const defaultSettings = {
+        faceNotDetectedPenalty: 2,
+        movementStopPenalty: 1,
+        responseDelayPenalty: 1,
+        centerGazeBonus: 0.5,
+        questionConfirmBonus: 5,
+        quickResponseBonus: 3,
+        noteInputBonus: 3,
+        frontFacingBonus: 1,
+        movementStopThreshold: 10,
+        responseDelayThreshold: 30,
+        quickResponseThreshold: 5,
+        questionConfirmWindow: 3,
+        frontFacingInterval: 5000,
+        centerGazeInterval: 3000,
+        gazeVelocityThreshold: 10,
+        centerGazeThreshold: 15
+      };
+      
+      // 設定をデフォルトに戻す
+      this.scoreSettings = { ...defaultSettings };
+      
+      // UIにも反映
+      this.loadSettingsToUI();
+      
+      this.showSettingsMessage('設定をデフォルトに戻しました', 'info');
+    }
+    
+    exportSettings() {
+      try {
+        const settingsJson = JSON.stringify(this.scoreSettings, null, 2);
+        const blob = new Blob([settingsJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'concentration_settings.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        this.showSettingsMessage('設定をエクスポートしました', 'success');
+        
+      } catch (error) {
+        console.error('設定のエクスポート中にエラーが発生しました:', error);
+        this.showSettingsMessage('エクスポート中にエラーが発生しました', 'error');
+      }
+    }
+    
+    importSettings(file) {
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const importedSettings = JSON.parse(e.target.result);
+          
+          // 設定を検証
+          const validKeys = Object.keys(this.scoreSettings);
+          const filteredSettings = {};
+          
+          Object.keys(importedSettings).forEach(key => {
+            if (validKeys.includes(key) && typeof importedSettings[key] === 'number') {
+              filteredSettings[key] = importedSettings[key];
+            }
+          });
+          
+          // 設定を適用
+          Object.assign(this.scoreSettings, filteredSettings);
+          
+          // UIに反映
+          this.loadSettingsToUI();
+          
+          this.showSettingsMessage('設定をインポートしました', 'success');
+          
+        } catch (error) {
+          console.error('設定のインポート中にエラーが発生しました:', error);
+          this.showSettingsMessage('インポート中にエラーが発生しました', 'error');
+        }
+      };
+      
+      reader.readAsText(file);
+    }
+    
+    showSettingsMessage(message, type) {
+      // 簡易的なメッセージ表示
+      const existingMessage = document.querySelector('.settings-message');
+      if (existingMessage) {
+        existingMessage.remove();
+      }
+      
+      const messageEl = document.createElement('div');
+      messageEl.className = `settings-message settings-message-${type}`;
+      messageEl.textContent = message;
+      messageEl.style.cssText = `
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        z-index: 1000;
+        ${type === 'success' ? 'background: #28a745; color: white;' : ''}
+        ${type === 'error' ? 'background: #dc3545; color: white;' : ''}
+        ${type === 'info' ? 'background: #17a2b8; color: white;' : ''}
+      `;
+      
+      document.body.appendChild(messageEl);
+      
+      // 3秒後に自動で削除
+      setTimeout(() => {
+        if (messageEl.parentNode) {
+          messageEl.parentNode.removeChild(messageEl);
+        }
+      }, 3000);
     }
   }
   
@@ -2167,6 +4069,16 @@ document.addEventListener('DOMContentLoaded', function() {
     function submitAnswer(userAnswer, optionId) {
       // 回答時間を計算（ミリ秒）
       const responseTime = questionStartTime ? Date.now() - questionStartTime : 0;
+      
+      // タイムスタンプ記録
+      if (window.concentrationTracker) {
+        window.concentrationTracker.addTimestamp('answer_submit', '回答送信', {
+          userAnswer: userAnswer,
+          optionId: optionId,
+          responseTimeMs: responseTime,
+          responseTimeS: responseTime / 1000
+        });
+      }
       
       const formData = new FormData();
       

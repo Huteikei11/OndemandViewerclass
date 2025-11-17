@@ -1,0 +1,19 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  user: one
+  video: one
+  session_start_time: 2025-11-10 17:37:05
+  session_end_time: 2025-11-10 17:37:05
+  final_score: 1.5
+  total_events: 1
+  session_data: MyText
+
+two:
+  user: two
+  video: two
+  session_start_time: 2025-11-10 17:37:05
+  session_end_time: 2025-11-10 17:37:05
+  final_score: 1.5
+  total_events: 1
+  session_data: MyText

@@ -1,0 +1,389 @@
+<div class="container">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><%= @video.title %> - 学習タイムライン</h1>
+        <div>
+          <%= link_to "分析画面", video_management_analytics_path(video_id: @video), class: "btn btn-outline-primary" %>
+          <%= link_to "動画編集", edit_video_path(@video), class: "btn btn-primary" %>
+          <%= link_to "戻る", root_path, class: "btn btn-secondary" %>
+        </div>
+      </div>
+
+      <!-- タイムライン統計 -->
+      <div class="row mb-4">
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title">総イベント数</h5>
+              <h2 class="text-primary"><%= @timeline_events.count %></h2>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title">アクティブセッション</h5>
+              <h2 class="text-info"><%= @sessions_with_events.count %></h2>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title">ユニークユーザー</h5>
+              <h2 class="text-success"><%= @sessions_with_events.joins(:user).distinct.count(:user_id) %></h2>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title">表示範囲</h5>
+              <h2 class="text-warning">最新100件</h2>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- フィルタリング -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="mb-0">フィルタ・検索</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-3">
+              <label for="event-type-filter" class="form-label">イベントタイプ</label>
+              <select id="event-type-filter" class="form-select">
+                <option value="">全て</option>
+                <option value="session">セッション</option>
+                <option value="video">動画操作</option>
+                <option value="question">問題関連</option>
+                <option value="score">スコア変更</option>
+                <option value="interaction">インタラクション</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label for="user-filter" class="form-label">ユーザー</label>
+              <select id="user-filter" class="form-select">
+                <option value="">全ユーザー</option>
+                <% @sessions_with_events.joins(:user).distinct.includes(:user).each do |session| %>
+                  <option value="<%= session.user.id %>">
+                    <%= session.user.email.split('@').first %>
+                  </option>
+                <% end %>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label for="search-text" class="form-label">テキスト検索</label>
+              <input type="text" id="search-text" class="form-control" placeholder="イベント説明を検索...">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+              <button id="clear-filters" class="btn btn-outline-secondary w-100">フィルタクリア</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- タイムライン表示 -->
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">学習活動タイムライン</h5>
+          <div class="btn-group" role="group">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="export-timeline">
+              CSVエクスポート
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="auto-refresh" data-enabled="false">
+              自動更新 OFF
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="timeline-container" class="timeline-container">
+            <% if @timeline_events.any? %>
+              <% @timeline_events.reverse.each_with_index do |item, index| %>
+                <div class="timeline-event" 
+                     data-event-type="<%= item[:event].event_type %>"
+                     data-user-id="<%= item[:user].id %>"
+                     data-description="<%= item[:event].description %>"
+                     data-timestamp="<%= item[:event].timestamp.to_i %>">
+                  
+                  <div class="timeline-marker <%= get_event_type_class(item[:event].event_type) %>">
+                    <i class="<%= get_event_icon(item[:event].event_type) %>"></i>
+                  </div>
+                  
+                  <div class="timeline-content">
+                    <div class="timeline-header">
+                      <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                          <h6 class="mb-1">
+                            <span class="badge bg-<%= get_event_badge_color(item[:event].event_type) %> me-2">
+                              <%= get_event_type_name(item[:event].event_type) %>
+                            </span>
+                            <%= item[:event].description %>
+                          </h6>
+                          <small class="text-muted">
+                            <i class="fas fa-user"></i> <%= item[:user].email.split('@').first %>
+                            <i class="fas fa-clock ms-2"></i> <%= item[:formatted_time] %>
+                            <% if item[:video_time] %>
+                              <i class="fas fa-play-circle ms-2"></i> <%= format_video_time(item[:video_time]) %>
+                            <% end %>
+                          </small>
+                        </div>
+                        <div class="text-end">
+                          <small class="text-muted">
+                            セッション経過: <%= format_duration(item[:session_elapsed]) %>
+                          </small>
+                          <% if item[:event].concentration_score %>
+                            <div>
+                              <small class="badge bg-info">スコア: <%= item[:event].concentration_score %></small>
+                            </div>
+                          <% end %>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <% if item[:event].additional_data.present? %>
+                      <div class="timeline-details mt-2">
+                        <small class="text-secondary">
+                          <% begin %>
+                            <% additional_data = JSON.parse(item[:event].additional_data) %>
+                            <% additional_data.each do |key, value| %>
+                              <span class="me-3"><strong><%= key.humanize %>:</strong> <%= value %></span>
+                            <% end %>
+                          <% rescue JSON::ParserError %>
+                            <span><%= item[:event].additional_data %></span>
+                          <% end %>
+                        </small>
+                      </div>
+                    <% end %>
+                  </div>
+                </div>
+              <% end %>
+            <% else %>
+              <div class="text-center py-5 text-muted">
+                <i class="fas fa-clock fa-3x mb-3"></i>
+                <h5>タイムライン データなし</h5>
+                <p>まだ学習活動が記録されていません。</p>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CSSスタイル -->
+<style>
+.timeline-container {
+  position: relative;
+  max-height: 800px;
+  overflow-y: auto;
+}
+
+.timeline-event {
+  position: relative;
+  display: flex;
+  margin-bottom: 2rem;
+  padding-left: 3rem;
+}
+
+.timeline-event::before {
+  content: '';
+  position: absolute;
+  left: 1.25rem;
+  top: 2rem;
+  bottom: -2rem;
+  width: 2px;
+  background: #dee2e6;
+}
+
+.timeline-event:last-child::before {
+  display: none;
+}
+
+.timeline-marker {
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.875rem;
+  z-index: 1;
+}
+
+.timeline-marker.session { background-color: #0d6efd; }
+.timeline-marker.video { background-color: #6610f2; }
+.timeline-marker.question { background-color: #fd7e14; }
+.timeline-marker.score { background-color: #198754; }
+.timeline-marker.interaction { background-color: #20c997; }
+.timeline-marker.default { background-color: #6c757d; }
+
+.timeline-content {
+  flex: 1;
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-left: 1rem;
+  border: 1px solid #dee2e6;
+  transition: all 0.2s ease;
+}
+
+.timeline-content:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+  transform: translateX(5px);
+}
+
+.timeline-event.filtered {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .timeline-event {
+    padding-left: 2rem;
+  }
+  
+  .timeline-marker {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.75rem;
+  }
+  
+  .timeline-content {
+    margin-left: 0.5rem;
+  }
+}
+</style>
+
+<!-- JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const eventTypeFilter = document.getElementById('event-type-filter');
+  const userFilter = document.getElementById('user-filter');
+  const searchText = document.getElementById('search-text');
+  const clearFilters = document.getElementById('clear-filters');
+  const autoRefresh = document.getElementById('auto-refresh');
+  const exportTimeline = document.getElementById('export-timeline');
+  
+  let refreshInterval = null;
+  
+  // フィルタリング機能
+  function filterTimeline() {
+    const events = document.querySelectorAll('.timeline-event');
+    const eventTypeValue = eventTypeFilter.value.toLowerCase();
+    const userValue = userFilter.value;
+    const searchValue = searchText.value.toLowerCase();
+    
+    let visibleCount = 0;
+    
+    events.forEach(event => {
+      const eventType = event.dataset.eventType.toLowerCase();
+      const userId = event.dataset.userId;
+      const description = event.dataset.description.toLowerCase();
+      
+      let showEvent = true;
+      
+      // イベントタイプフィルタ
+      if (eventTypeValue && !eventType.includes(eventTypeValue)) {
+        showEvent = false;
+      }
+      
+      // ユーザーフィルタ
+      if (userValue && userId !== userValue) {
+        showEvent = false;
+      }
+      
+      // テキスト検索
+      if (searchValue && !description.includes(searchValue)) {
+        showEvent = false;
+      }
+      
+      if (showEvent) {
+        event.classList.remove('filtered');
+        visibleCount++;
+      } else {
+        event.classList.add('filtered');
+      }
+    });
+    
+    console.log(`表示中のイベント: ${visibleCount}/${events.length}`);
+  }
+  
+  // イベントリスナー設定
+  eventTypeFilter.addEventListener('change', filterTimeline);
+  userFilter.addEventListener('change', filterTimeline);
+  searchText.addEventListener('input', filterTimeline);
+  
+  clearFilters.addEventListener('click', function() {
+    eventTypeFilter.value = '';
+    userFilter.value = '';
+    searchText.value = '';
+    filterTimeline();
+  });
+  
+  // 自動更新機能
+  autoRefresh.addEventListener('click', function() {
+    const enabled = this.dataset.enabled === 'true';
+    
+    if (enabled) {
+      clearInterval(refreshInterval);
+      refreshInterval = null;
+      this.dataset.enabled = 'false';
+      this.textContent = '自動更新 OFF';
+      this.classList.remove('btn-outline-success');
+      this.classList.add('btn-outline-secondary');
+    } else {
+      refreshInterval = setInterval(() => {
+        location.reload();
+      }, 30000); // 30秒間隔
+      this.dataset.enabled = 'true';
+      this.textContent = '自動更新 ON';
+      this.classList.remove('btn-outline-secondary');
+      this.classList.add('btn-outline-success');
+    }
+  });
+  
+  // CSVエクスポート機能
+  exportTimeline.addEventListener('click', function() {
+    const events = document.querySelectorAll('.timeline-event:not(.filtered)');
+    let csv = 'タイムスタンプ,ユーザー,イベントタイプ,説明,セッション経過時間,動画時間,集中スコア\n';
+    
+    events.forEach(event => {
+      const timestamp = new Date(parseInt(event.dataset.timestamp) * 1000).toLocaleString('ja-JP');
+      const userId = event.dataset.userId;
+      const eventType = event.dataset.eventType;
+      const description = event.dataset.description.replace(/"/g, '""');
+      
+      // 詳細データを取得（簡略化）
+      const timelineContent = event.querySelector('.timeline-content');
+      const sessionElapsed = timelineContent.textContent.match(/セッション経過: ([\d:]+)/)?.[1] || '';
+      const videoTime = timelineContent.textContent.match(/(\d+:\d+)/)?.[1] || '';
+      const score = timelineContent.textContent.match(/スコア: (\d+)/)?.[1] || '';
+      
+      csv += `"${timestamp}","${userId}","${eventType}","${description}","${sessionElapsed}","${videoTime}","${score}"\n`;
+    });
+    
+    // CSVダウンロード
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `timeline_<%= @video.title.gsub(/[^\w]/, '_') %>_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  });
+  
+  // 初期フィルタリング実行
+  filterTimeline();
+});
+</script>
+
+<% content_for :head do %>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<% end %>
