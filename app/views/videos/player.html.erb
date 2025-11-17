@@ -204,6 +204,12 @@
               <h7 class="settings-category-title">その他設定</h7>
               
               <div class="setting-item">
+                <label for="movement-detection-threshold">目線動き検出閾値:</label>
+                <input type="number" id="movement-detection-threshold" value="15" min="1" max="50" step="1">
+                <span class="setting-unit">ピクセル</span>
+              </div>
+              
+              <div class="setting-item">
                 <label for="center-gaze-threshold">中央注視判定範囲:</label>
                 <input type="number" id="center-gaze-threshold" value="15" min="5" max="50" step="1">
                 <span class="setting-unit">ピクセル</span>
@@ -1133,6 +1139,7 @@ document.addEventListener('DOMContentLoaded', function() {
         centerGazeInterval: 5000,       // 集中注視加点の間隔（ミリ秒）
         
         // その他設定
+        movementDetectionThreshold: 15, // 目線動き検出の閾値（ピクセル）
         gazeVelocityThreshold: 10,      // 問題確認と判定する視線速度（px/s）
         centerGazeThreshold: 15         // 中央注視と判定する範囲（ピクセル）
       };
@@ -1445,7 +1452,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // 動きがあった場合は記録
-        if (Math.abs(this.gazeX) > 5 || Math.abs(this.gazeY) > 5) {
+        if (Math.abs(this.gazeX) > this.scoreSettings.movementDetectionThreshold || 
+            Math.abs(this.gazeY) > this.scoreSettings.movementDetectionThreshold) {
           this.lastMovementTime = Date.now();
         }
         
@@ -3566,6 +3574,7 @@ document.addEventListener('DOMContentLoaded', function() {
         questionConfirmWindow: 3,
         frontFacingInterval: 5000,
         centerGazeInterval: 3000,
+        movementDetectionThreshold: 15,
         gazeVelocityThreshold: 10,
         centerGazeThreshold: 15
       };
