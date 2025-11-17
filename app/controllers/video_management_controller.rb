@@ -31,6 +31,37 @@ class VideoManagementController < ApplicationController
 
     @average_final_score = @learning_sessions.where.not(final_score: nil).average(:final_score)
 
+    # 動画操作統計（1分以上のセッションのみ）
+    valid_sessions = @learning_sessions.where.not(session_end_time: nil).select do |session|
+      session.duration >= 60 # 60秒以上
+    end
+
+    if valid_sessions.any?
+      total_pause = 0
+      total_forward_seek = 0
+      total_backward_seek = 0
+      total_playback_rate_change = 0
+
+      valid_sessions.each do |session|
+        stats = session.video_operation_stats
+        total_pause += stats[:pause_count]
+        total_forward_seek += stats[:forward_seek_count]
+        total_backward_seek += stats[:backward_seek_count]
+        total_playback_rate_change += stats[:playback_rate_change_count]
+      end
+
+      count = valid_sessions.count.to_f
+      @avg_pause_count = (total_pause / count).round(1)
+      @avg_forward_seek_count = (total_forward_seek / count).round(1)
+      @avg_backward_seek_count = (total_backward_seek / count).round(1)
+      @avg_playback_rate_change_count = (total_playback_rate_change / count).round(1)
+    else
+      @avg_pause_count = 0
+      @avg_forward_seek_count = 0
+      @avg_backward_seek_count = 0
+      @avg_playback_rate_change_count = 0
+    end
+
     # 問題別の統計
     @question_stats = @questions.map do |question|
       responses = question.user_responses.includes(:user)

@@ -46,4 +46,14 @@ class LearningSession < ApplicationRecord
   def interaction_events
     timestamp_events.where("event_type LIKE '%interaction%'")
   end
+
+  # 動画操作統計
+  def video_operation_stats
+    {
+      pause_count: timestamp_events.where("event_type LIKE '%pause%'").count,
+      forward_seek_count: timestamp_events.where("event_type LIKE '%seek%' AND description LIKE '%前進%' OR description LIKE '%進む%' OR description LIKE '%早送り%'").count,
+      backward_seek_count: timestamp_events.where("event_type LIKE '%seek%' AND description LIKE '%後退%' OR description LIKE '%戻る%' OR description LIKE '%巻き戻し%'").count,
+      playback_rate_change_count: timestamp_events.where("event_type LIKE '%playback%' OR event_type LIKE '%speed%' OR description LIKE '%再生速度%'").count
+    }
+  end
 end

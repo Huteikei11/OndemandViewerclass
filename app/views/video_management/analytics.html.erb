@@ -275,6 +275,53 @@
         </div>
       </div>
 
+      <!-- 動画操作統計（1分以上のセッション平均） -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h3>動画操作統計 <small class="text-muted">(1分以上のセッション平均)</small></h3>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-3">
+              <div class="card text-center">
+                <div class="card-body">
+                  <h5 class="card-title">⏸️ 一時停止</h5>
+                  <h2 class="text-warning"><%= @avg_pause_count %></h2>
+                  <p class="text-muted">回/セッション</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card text-center">
+                <div class="card-body">
+                  <h5 class="card-title">⏩ 前進スキップ</h5>
+                  <h2 class="text-primary"><%= @avg_forward_seek_count %></h2>
+                  <p class="text-muted">回/セッション</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card text-center">
+                <div class="card-body">
+                  <h5 class="card-title">⏪ 後退スキップ</h5>
+                  <h2 class="text-info"><%= @avg_backward_seek_count %></h2>
+                  <p class="text-muted">回/セッション</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="card text-center">
+                <div class="card-body">
+                  <h5 class="card-title">⚡ 再生速度変更</h5>
+                  <h2 class="text-success"><%= @avg_playback_rate_change_count %></h2>
+                  <p class="text-muted">回/セッション</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 学習セッション一覧 -->
       <div class="card mb-4">
         <div class="card-header">
@@ -292,11 +339,16 @@
                     <th>学習時間</th>
                     <th>最終スコア</th>
                     <th>イベント数</th>
+                    <th title="一時停止回数">⏸️</th>
+                    <th title="前進スキップ回数">⏩</th>
+                    <th title="後退スキップ回数">⏪</th>
+                    <th title="再生速度変更回数">⚡</th>
                     <th>詳細</th>
                   </tr>
                 </thead>
                 <tbody>
                   <% @learning_sessions.each do |session| %>
+                    <% operation_stats = session.video_operation_stats %>
                     <tr>
                       <td>
                         <%= session.user.name %>
@@ -321,6 +373,10 @@
                         <% end %>
                       </td>
                       <td><%= session.total_events || session.timestamp_events.count %></td>
+                      <td class="text-center"><%= operation_stats[:pause_count] %></td>
+                      <td class="text-center"><%= operation_stats[:forward_seek_count] %></td>
+                      <td class="text-center"><%= operation_stats[:backward_seek_count] %></td>
+                      <td class="text-center"><%= operation_stats[:playback_rate_change_count] %></td>
                       <td>
                         <button class="btn btn-sm btn-primary" onclick="showSessionDetail(<%= session.id %>)">
                           タイムライン表示
