@@ -1143,7 +1143,7 @@ document.addEventListener('DOMContentLoaded', function() {
         centerGazeInterval: 5000,       // 集中注視加点の間隔（ミリ秒）
         
         // その他設定
-        movementDetectionThreshold: 13, // 目線動き検出の閾値（ピクセル）
+        movementDetectionThreshold: 8, // 目線停止・目線動き検出の閾値（ピクセル）
         gazeVelocityThreshold: 5,      // 問題確認と判定する視線速度（px/s）
         centerGazeThreshold: 15         // 中央注視と判定する範囲（ピクセル）
       };
@@ -1455,17 +1455,28 @@ document.addEventListener('DOMContentLoaded', function() {
           this.calculateGazeFromFaceOrientation(landmarks);
         }
         
-        // 動きがあった場合は記録
-        if (Math.abs(this.gazeX) > this.scoreSettings.movementDetectionThreshold || 
-            Math.abs(this.gazeY) > this.scoreSettings.movementDetectionThreshold) {
-          this.lastMovementTime = Date.now();
-        }
-        
         // 視線データのスムージング処理
         this.applySmoothingToGaze();
         
         // 眼球動きの変化量を計算（スムージング後のデータを使用）
         this.calculateGazeMovementDelta();
+        
+        // 動きがあった場合は記録（ただし、急激な変化はまばたきとして除外）
+        const positionChange = Math.sqrt(
+          Math.pow(this.gazeX - this.previousGaze.x, 2) + 
+          Math.pow(this.gazeY - this.previousGaze.y, 2)
+        );
+        const velocityMagnitude = Math.sqrt(
+          Math.pow(this.gazeVelocity.x, 2) + 
+          Math.pow(this.gazeVelocity.y, 2)
+        );
+        
+        // 位置が閾値を超えていて、かつ速度が異常に高くない場合のみ動きとして記録
+        if ((Math.abs(this.gazeX) > this.scoreSettings.movementDetectionThreshold || 
+             Math.abs(this.gazeY) > this.scoreSettings.movementDetectionThreshold) &&
+            velocityMagnitude < 20) { // 20px/s以下の変化のみ有効な動きとする
+          this.lastMovementTime = Date.now();
+        }
         
         // 顔の向きを計算
         this.calculateHeadPoseFromLandmarks(landmarks);
