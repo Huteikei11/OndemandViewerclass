@@ -228,16 +228,16 @@ class VideoManagementController < ApplicationController
   end
 
   def export_session_detail
-    require 'csv'
-    
+    require "csv"
+
     learning_session = @video.learning_sessions.find(params[:session_id])
     events = learning_session.timestamp_events
     ops = learning_session.video_operation_stats
-    
+
     initial_score = 20
     final_score = learning_session.final_score || 0
     score_change = final_score - initial_score
-    
+
     # イベント集計
     face_not_detected = events.where("event_type LIKE '%face_not_detected%' OR description LIKE '%顔未検出%'").count
     movement_stop = events.where("event_type LIKE '%movement_stop%' OR description LIKE '%目線停止%'").count
@@ -247,103 +247,103 @@ class VideoManagementController < ApplicationController
     response_delay = events.where("event_type LIKE '%response_delay%' OR description LIKE '%回答遅延%'").count
     note_input = events.where("event_type LIKE '%note%' OR description LIKE '%メモ%'").count
     question_display = events.where("event_type LIKE '%question_display%' OR description LIKE '%問題表示%'").count
-    
+
     # 問題回答統計
     question_ids = @video.questions.pluck(:id)
     user_responses = UserResponse.where(user: learning_session.user, question_id: question_ids)
     correct_count = user_responses.where(is_correct: true).count
     incorrect_count = user_responses.where(is_correct: false).count
-    
-    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: 'UTF-8') do |csv|
-      csv << ['セッション詳細情報']
+
+    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: "UTF-8") do |csv|
+      csv << [ "セッション詳細情報" ]
       csv << []
-      csv << ['項目', '値']
-      csv << ['セッションID', learning_session.id]
-      csv << ['ユーザー名', learning_session.user.email]
-      csv << ['ユーザーID', learning_session.user.id]
-      csv << ['開始日時', learning_session.session_start_time.strftime('%Y-%m-%d %H:%M:%S')]
-      csv << ['終了日時', learning_session.session_end_time&.strftime('%Y-%m-%d %H:%M:%S') || '進行中']
-      csv << ['セッション時間(秒)', learning_session.duration]
-      csv << ['セッション時間(分)', learning_session.duration_in_minutes.round(1)]
+      csv << [ "項目", "値" ]
+      csv << [ "セッションID", learning_session.id ]
+      csv << [ "ユーザー名", learning_session.user.email ]
+      csv << [ "ユーザーID", learning_session.user.id ]
+      csv << [ "開始日時", learning_session.session_start_time.strftime("%Y-%m-%d %H:%M:%S") ]
+      csv << [ "終了日時", learning_session.session_end_time&.strftime("%Y-%m-%d %H:%M:%S") || "進行中" ]
+      csv << [ "セッション時間(秒)", learning_session.duration ]
+      csv << [ "セッション時間(分)", learning_session.duration_in_minutes.round(1) ]
       csv << []
-      csv << ['スコア情報']
-      csv << ['初期スコア', initial_score]
-      csv << ['最終スコア', final_score]
-      csv << ['スコア変動', score_change > 0 ? "+#{score_change}" : score_change]
+      csv << [ "スコア情報" ]
+      csv << [ "初期スコア", initial_score ]
+      csv << [ "最終スコア", final_score ]
+      csv << [ "スコア変動", score_change > 0 ? "+#{score_change}" : score_change ]
       csv << []
-      csv << ['動画操作']
-      csv << ['一時停止回数', ops[:pause_count]]
-      csv << ['早送り回数', ops[:forward_seek_count]]
-      csv << ['巻き戻し回数', ops[:backward_seek_count]]
-      csv << ['再生速度変更回数', ops[:playback_rate_change_count]]
+      csv << [ "動画操作" ]
+      csv << [ "一時停止回数", ops[:pause_count] ]
+      csv << [ "早送り回数", ops[:forward_seek_count] ]
+      csv << [ "巻き戻し回数", ops[:backward_seek_count] ]
+      csv << [ "再生速度変更回数", ops[:playback_rate_change_count] ]
       csv << []
-      csv << ['学習行動イベント']
-      csv << ['顔未検出回数', face_not_detected]
-      csv << ['目線停止回数', movement_stop]
-      csv << ['集中注視回数', center_gaze]
-      csv << ['問題確認回数', question_confirm]
-      csv << ['素早い回答回数', quick_response]
-      csv << ['回答遅延回数', response_delay]
-      csv << ['メモ入力回数', note_input]
+      csv << [ "学習行動イベント" ]
+      csv << [ "顔未検出回数", face_not_detected ]
+      csv << [ "目線停止回数", movement_stop ]
+      csv << [ "集中注視回数", center_gaze ]
+      csv << [ "問題確認回数", question_confirm ]
+      csv << [ "素早い回答回数", quick_response ]
+      csv << [ "回答遅延回数", response_delay ]
+      csv << [ "メモ入力回数", note_input ]
       csv << []
-      csv << ['問題対応']
-      csv << ['問題表示回数', question_display]
-      csv << ['正解回答数', correct_count]
-      csv << ['誤答回数', incorrect_count]
+      csv << [ "問題対応" ]
+      csv << [ "問題表示回数", question_display ]
+      csv << [ "正解回答数", correct_count ]
+      csv << [ "誤答回数", incorrect_count ]
     end
-    
-    send_data csv_data, filename: "session_#{learning_session.id}_detail_#{Time.current.strftime('%Y%m%d')}.csv", type: 'text/csv; charset=utf-8'
+
+    send_data csv_data, filename: "session_#{learning_session.id}_detail_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
   end
 
   def export_session_events
-    require 'csv'
-    
+    require "csv"
+
     learning_session = @video.learning_sessions.find(params[:session_id])
     events = learning_session.timestamp_events.order(:timestamp)
-    
-    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: 'UTF-8') do |csv|
+
+    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: "UTF-8") do |csv|
       csv << [
-        'イベント番号', 'タイムスタンプ', 'セッション経過時間(秒)', '動画再生時間(秒)', 
-        'イベントタイプ', '説明', 'スコア変動', '累積スコア', '追加データ'
+        "イベント番号", "タイムスタンプ", "セッション経過時間(秒)", "動画再生時間(秒)",
+        "イベントタイプ", "説明", "スコア変動", "累積スコア", "追加データ"
       ]
-      
+
       cumulative_score = 20
-      
+
       events.each_with_index do |event, index|
         # スコア変動を計算
         score_change = 0
-        if event.additional_data.is_a?(Hash) && event.additional_data['scoreChange']
-          score_change = event.additional_data['scoreChange']
+        if event.additional_data.is_a?(Hash) && event.additional_data["scoreChange"]
+          score_change = event.additional_data["scoreChange"]
           cumulative_score += score_change
         elsif event.additional_data.is_a?(String)
           begin
             data = JSON.parse(event.additional_data)
-            if data['scoreChange']
-              score_change = data['scoreChange']
+            if data["scoreChange"]
+              score_change = data["scoreChange"]
               cumulative_score += score_change
             end
           rescue JSON::ParserError
             # JSONパースエラーは無視
           end
         end
-        
+
         additional_data_str = event.additional_data.is_a?(Hash) ? event.additional_data.to_json : event.additional_data.to_s
-        
+
         csv << [
           index + 1,
-          event.timestamp.strftime('%Y-%m-%d %H:%M:%S.%L'),
+          event.timestamp.strftime("%Y-%m-%d %H:%M:%S.%L"),
           event.session_elapsed&.round(1) || 0,
           event.video_time&.round(1) || 0,
           event.event_type,
           event.description,
-          score_change != 0 ? (score_change > 0 ? "+#{score_change}" : score_change) : '',
+          score_change != 0 ? (score_change > 0 ? "+#{score_change}" : score_change) : "",
           cumulative_score,
           additional_data_str
         ]
       end
     end
-    
-    send_data csv_data, filename: "session_#{learning_session.id}_events_#{Time.current.strftime('%Y%m%d')}.csv", type: 'text/csv; charset=utf-8'
+
+    send_data csv_data, filename: "session_#{learning_session.id}_events_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
   end
 
   def set_video
@@ -514,21 +514,21 @@ class VideoManagementController < ApplicationController
 
   # CSV Export Methods
   def export_summary
-    require 'csv'
-    
+    require "csv"
+
     # 統計データを計算（analyticsアクションと同じロジック）
     questions = @video.questions.includes(:user_responses, :options).order(:time_position)
     user_responses = @video.user_responses.includes(:user, :question).order(:created_at)
     learning_sessions = @video.learning_sessions.includes(:user, :timestamp_events).order(:session_start_time)
-    
+
     total_responses = user_responses.count
     unique_users = user_responses.joins(:user).distinct.count(:user_id)
     correct_responses = user_responses.where(is_correct: true).count
     accuracy_rate = total_responses > 0 ? (correct_responses.to_f / total_responses * 100).round(1) : 0
-    
+
     total_sessions = learning_sessions.count
     completed_sessions = learning_sessions.where.not(session_end_time: nil).count
-    
+
     completed = learning_sessions.where.not(session_end_time: nil)
     if completed.any?
       durations = completed.map { |s| (s.session_end_time - s.session_start_time).to_i }
@@ -536,9 +536,9 @@ class VideoManagementController < ApplicationController
     else
       average_duration = 0
     end
-    
+
     average_score = learning_sessions.where.not(final_score: nil).average(:final_score)&.round(1) || 0
-    
+
     # 動画操作統計
     valid_sessions = learning_sessions.where.not(session_end_time: nil).select { |s| s.duration >= 60 }
     if valid_sessions.any?
@@ -546,7 +546,7 @@ class VideoManagementController < ApplicationController
       total_forward = valid_sessions.sum { |s| s.video_operation_stats[:forward_seek_count] }
       total_backward = valid_sessions.sum { |s| s.video_operation_stats[:backward_seek_count] }
       total_rate = valid_sessions.sum { |s| s.video_operation_stats[:playback_rate_change_count] }
-      
+
       avg_pause = (total_pause.to_f / valid_sessions.count).round(1)
       avg_forward = (total_forward.to_f / valid_sessions.count).round(1)
       avg_backward = (total_backward.to_f / valid_sessions.count).round(1)
@@ -554,58 +554,58 @@ class VideoManagementController < ApplicationController
     else
       avg_pause = avg_forward = avg_backward = avg_rate = 0
     end
-    
-    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: 'UTF-8') do |csv|
-      csv << ['項目', '値']
-      csv << ['動画タイトル', @video.title]
-      csv << ['分析日時', Time.current.strftime('%Y-%m-%d %H:%M:%S')]
+
+    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: "UTF-8") do |csv|
+      csv << [ "項目", "値" ]
+      csv << [ "動画タイトル", @video.title ]
+      csv << [ "分析日時", Time.current.strftime("%Y-%m-%d %H:%M:%S") ]
       csv << []
-      csv << ['基本統計']
-      csv << ['総学習セッション数', total_sessions]
-      csv << ['完了セッション数', completed_sessions]
-      csv << ['ユニークユーザー数', unique_users]
-      csv << ['平均セッション時間(分)', average_duration]
-      csv << ['平均最終スコア', average_score]
+      csv << [ "基本統計" ]
+      csv << [ "総学習セッション数", total_sessions ]
+      csv << [ "完了セッション数", completed_sessions ]
+      csv << [ "ユニークユーザー数", unique_users ]
+      csv << [ "平均セッション時間(分)", average_duration ]
+      csv << [ "平均最終スコア", average_score ]
       csv << []
-      csv << ['問題統計']
-      csv << ['総問題数', questions.count]
-      csv << ['総回答数', total_responses]
-      csv << ['正解数', correct_responses]
-      csv << ['正解率(%)', accuracy_rate]
+      csv << [ "問題統計" ]
+      csv << [ "総問題数", questions.count ]
+      csv << [ "総回答数", total_responses ]
+      csv << [ "正解数", correct_responses ]
+      csv << [ "正解率(%)", accuracy_rate ]
       csv << []
-      csv << ['動画操作統計(1分以上のセッション)']
-      csv << ['平均一時停止回数', avg_pause]
-      csv << ['平均早送り回数', avg_forward]
-      csv << ['平均巻き戻し回数', avg_backward]
-      csv << ['平均再生速度変更回数', avg_rate]
+      csv << [ "動画操作統計(1分以上のセッション)" ]
+      csv << [ "平均一時停止回数", avg_pause ]
+      csv << [ "平均早送り回数", avg_forward ]
+      csv << [ "平均巻き戻し回数", avg_backward ]
+      csv << [ "平均再生速度変更回数", avg_rate ]
     end
-    
-    send_data csv_data, filename: "analytics_summary_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: 'text/csv; charset=utf-8'
+
+    send_data csv_data, filename: "analytics_summary_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
   end
 
   def export_sessions
-    require 'csv'
-    
+    require "csv"
+
     learning_sessions = @video.learning_sessions.includes(:user, :timestamp_events).order(:session_start_time)
-    
-    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: 'UTF-8') do |csv|
+
+    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: "UTF-8") do |csv|
       csv << [
-        'セッションID', 'ユーザー名', 'ユーザーID', '開始日時', '終了日時', 
-        'セッション時間(秒)', 'セッション時間(分)', '初期スコア', '最終スコア', 'スコア変動',
-        '一時停止回数', '早送り回数', '巻き戻し回数', '再生速度変更回数',
-        '顔未検出回数', '目線停止回数', '集中注視回数', '問題確認回数', 
-        '素早い回答回数', '回答遅延回数', 'メモ入力回数',
-        '問題表示回数', '正解回答数', '誤答回数'
+        "セッションID", "ユーザー名", "ユーザーID", "開始日時", "終了日時",
+        "セッション時間(秒)", "セッション時間(分)", "初期スコア", "最終スコア", "スコア変動",
+        "一時停止回数", "早送り回数", "巻き戻し回数", "再生速度変更回数",
+        "顔未検出回数", "目線停止回数", "集中注視回数", "問題確認回数",
+        "素早い回答回数", "回答遅延回数", "メモ入力回数",
+        "問題表示回数", "正解回答数", "誤答回数"
       ]
-      
+
       learning_sessions.each do |session|
         events = session.timestamp_events
         ops = session.video_operation_stats
-        
+
         initial_score = 20
         final_score = session.final_score || 0
         score_change = final_score - initial_score
-        
+
         face_not_detected = events.where("event_type LIKE '%face_not_detected%' OR description LIKE '%顔未検出%'").count
         movement_stop = events.where("event_type LIKE '%movement_stop%' OR description LIKE '%目線停止%'").count
         center_gaze = events.where("event_type LIKE '%center_gaze%' OR description LIKE '%集中注視%'").count
@@ -614,19 +614,19 @@ class VideoManagementController < ApplicationController
         response_delay = events.where("event_type LIKE '%response_delay%' OR description LIKE '%回答遅延%'").count
         note_input = events.where("event_type LIKE '%note%' OR description LIKE '%メモ%'").count
         question_display = events.where("event_type LIKE '%question_display%' OR description LIKE '%問題表示%'").count
-        
+
         # 問題回答統計
         question_ids = @video.questions.pluck(:id)
         user_responses = UserResponse.where(user: session.user, question_id: question_ids)
         correct_count = user_responses.where(is_correct: true).count
         incorrect_count = user_responses.where(is_correct: false).count
-        
+
         csv << [
           session.id,
           session.user.email,
           session.user.id,
-          session.session_start_time.strftime('%Y-%m-%d %H:%M:%S'),
-          session.session_end_time&.strftime('%Y-%m-%d %H:%M:%S') || '進行中',
+          session.session_start_time.strftime("%Y-%m-%d %H:%M:%S"),
+          session.session_end_time&.strftime("%Y-%m-%d %H:%M:%S") || "進行中",
           session.duration,
           session.duration_in_minutes.round(1),
           initial_score,
@@ -649,86 +649,86 @@ class VideoManagementController < ApplicationController
         ]
       end
     end
-    
-    send_data csv_data, filename: "sessions_detail_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: 'text/csv; charset=utf-8'
+
+    send_data csv_data, filename: "sessions_detail_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
   end
 
   def export_events
-    require 'csv'
-    
+    require "csv"
+
     learning_sessions = @video.learning_sessions.includes(:user, :timestamp_events).order(:session_start_time)
-    
-    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: 'UTF-8') do |csv|
+
+    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: "UTF-8") do |csv|
       csv << [
-        'セッションID', 'ユーザー名', 'イベント番号', 'タイムスタンプ', 
-        'セッション経過時間(秒)', '動画再生時間(秒)', 'イベントタイプ', '説明', 
-        'スコア変動', '累積スコア', '追加データ'
+        "セッションID", "ユーザー名", "イベント番号", "タイムスタンプ",
+        "セッション経過時間(秒)", "動画再生時間(秒)", "イベントタイプ", "説明",
+        "スコア変動", "累積スコア", "追加データ"
       ]
-      
+
       learning_sessions.each do |session|
         events = session.timestamp_events.order(:timestamp)
         cumulative_score = 20
-        
+
         events.each_with_index do |event, index|
           # スコア変動を計算
           score_change = 0
-          if event.additional_data.is_a?(Hash) && event.additional_data['scoreChange']
-            score_change = event.additional_data['scoreChange']
+          if event.additional_data.is_a?(Hash) && event.additional_data["scoreChange"]
+            score_change = event.additional_data["scoreChange"]
             cumulative_score += score_change
           elsif event.additional_data.is_a?(String)
             begin
               data = JSON.parse(event.additional_data)
-              if data['scoreChange']
-                score_change = data['scoreChange']
+              if data["scoreChange"]
+                score_change = data["scoreChange"]
                 cumulative_score += score_change
               end
             rescue JSON::ParserError
               # JSONパースエラーは無視
             end
           end
-          
+
           additional_data_str = event.additional_data.is_a?(Hash) ? event.additional_data.to_json : event.additional_data.to_s
-          
+
           csv << [
             session.id,
             session.user.email,
             index + 1,
-            event.timestamp.strftime('%Y-%m-%d %H:%M:%S.%L'),
+            event.timestamp.strftime("%Y-%m-%d %H:%M:%S.%L"),
             event.session_elapsed&.round(1) || 0,
             event.video_time&.round(1) || 0,
             event.event_type,
             event.description,
-            score_change != 0 ? (score_change > 0 ? "+#{score_change}" : score_change) : '',
+            score_change != 0 ? (score_change > 0 ? "+#{score_change}" : score_change) : "",
             cumulative_score,
             additional_data_str
           ]
         end
       end
     end
-    
-    send_data csv_data, filename: "events_timeline_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: 'text/csv; charset=utf-8'
+
+    send_data csv_data, filename: "events_timeline_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
   end
 
   def export_questions
-    require 'csv'
-    
+    require "csv"
+
     questions = @video.questions.includes(:user_responses).order(:time_position)
-    
-    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: 'UTF-8') do |csv|
+
+    csv_data = "\uFEFF" + CSV.generate(headers: true, encoding: "UTF-8") do |csv|
       csv << [
-        '問題ID', '問題内容', '表示位置(秒)', '総回答数', '正解数', '誤答数', '正解率(%)'
+        "問題ID", "問題内容", "表示位置(秒)", "総回答数", "正解数", "誤答数", "正解率(%)"
       ]
-      
+
       questions.each do |question|
         responses = question.user_responses
         total_count = responses.count
         correct_count = responses.where(is_correct: true).count
         incorrect_count = responses.where(is_correct: false).count
         accuracy = total_count > 0 ? (correct_count.to_f / total_count * 100).round(1) : 0
-        
+
         csv << [
           question.id,
-          question.content.gsub(/\r?\n/, ' ').truncate(100),
+          question.content.gsub(/\r?\n/, " ").truncate(100),
           question.time_position,
           total_count,
           correct_count,
@@ -737,8 +737,8 @@ class VideoManagementController < ApplicationController
         ]
       end
     end
-    
-    send_data csv_data, filename: "questions_stats_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: 'text/csv; charset=utf-8'
+
+    send_data csv_data, filename: "questions_stats_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
   end
 
   private
@@ -754,53 +754,53 @@ class VideoManagementController < ApplicationController
   end
 
   def prepare_chart_data(events)
-    require 'csv'
-    
+    require "csv"
+
     session = @video.learning_sessions.find(params[:session_id])
     events = session.timestamp_events.order(:timestamp)
-    
-    csv_data = CSV.generate(headers: true, encoding: 'UTF-8') do |csv|
+
+    csv_data = CSV.generate(headers: true, encoding: "UTF-8") do |csv|
       csv << [
-        'イベント番号', 'タイムスタンプ', 'セッション経過時間(秒)', '動画再生時間(秒)', 
-        'イベントタイプ', '説明', 'スコア変動', '累積スコア', '追加データ'
+        "イベント番号", "タイムスタンプ", "セッション経過時間(秒)", "動画再生時間(秒)",
+        "イベントタイプ", "説明", "スコア変動", "累積スコア", "追加データ"
       ]
-      
+
       cumulative_score = 20
-      
+
       events.each_with_index do |event, index|
         # スコア変動を計算
         score_change = 0
-        if event.additional_data.is_a?(Hash) && event.additional_data['scoreChange']
-          score_change = event.additional_data['scoreChange']
+        if event.additional_data.is_a?(Hash) && event.additional_data["scoreChange"]
+          score_change = event.additional_data["scoreChange"]
           cumulative_score += score_change
         elsif event.additional_data.is_a?(String)
           begin
             data = JSON.parse(event.additional_data)
-            if data['scoreChange']
-              score_change = data['scoreChange']
+            if data["scoreChange"]
+              score_change = data["scoreChange"]
               cumulative_score += score_change
             end
           rescue JSON::ParserError
             # JSONパースエラーは無視
           end
         end
-        
+
         additional_data_str = event.additional_data.is_a?(Hash) ? event.additional_data.to_json : event.additional_data.to_s
-        
+
         csv << [
           index + 1,
-          event.timestamp.strftime('%Y-%m-%d %H:%M:%S.%L'),
+          event.timestamp.strftime("%Y-%m-%d %H:%M:%S.%L"),
           event.session_elapsed&.round(1) || 0,
           event.video_time&.round(1) || 0,
           event.event_type,
           event.description,
-          score_change != 0 ? (score_change > 0 ? "+#{score_change}" : score_change) : '',
+          score_change != 0 ? (score_change > 0 ? "+#{score_change}" : score_change) : "",
           cumulative_score,
           additional_data_str
         ]
       end
     end
-    
-    send_data csv_data, filename: "session_#{session.id}_events_#{Time.current.strftime('%Y%m%d')}.csv", type: 'text/csv; charset=utf-8'
+
+    send_data csv_data, filename: "session_#{session.id}_events_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
   end
 end
