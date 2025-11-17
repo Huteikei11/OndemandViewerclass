@@ -188,7 +188,13 @@
               
               <div class="setting-item">
                 <label for="front-facing-interval">正面注視加点間隔:</label>
-                <input type="number" id="front-facing-interval" value="1000" min="100" max="10000" step="100">
+                <input type="number" id="front-facing-interval" value="5000" min="100" max="10000" step="100">
+                <span class="setting-unit">ミリ秒</span>
+              </div>
+              
+              <div class="setting-item">
+                <label for="center-gaze-interval">集中注視加点間隔:</label>
+                <input type="number" id="center-gaze-interval" value="3000" min="100" max="10000" step="100">
                 <span class="setting-unit">ミリ秒</span>
               </div>
             </div>
@@ -1110,11 +1116,13 @@ document.addEventListener('DOMContentLoaded', function() {
         responseDelayPenalty: 1,        // 回答遅延時の減点（秒あたり）
         
         // 加点系
-        centerGazeBonus: 0.5,           // 中央注視時の加点
+        centerGazeBonus: 0,           // 中央注視時の加点
+        // 集中注視: 学習者が画面の中央（動画やコンテンツがある場所）に視線を向けている状態
         questionConfirmBonus: 5,        // 問題確認時の加点
         quickResponseBonus: 3,          // 素早い回答時の加点
         noteInputBonus: 3,              // メモ入力時の加点
-        frontFacingBonus: 1,            // 正面注視時の加点
+        frontFacingBonus: 1,            // 正面注視時の加点　
+        // 正面注視: 学習者が画面から離れたり、横を向いたりせず、正面を向いて学習している状態
         
         // 時間間隔設定
         movementStopThreshold: 10,      // 目線停止と判定する時間（秒）
@@ -1122,6 +1130,7 @@ document.addEventListener('DOMContentLoaded', function() {
         quickResponseThreshold: 5,      // 素早い回答と判定する時間（秒）
         questionConfirmWindow: 3,       // 問題確認判定の時間窓（秒）
         frontFacingInterval: 5000,      // 正面注視加点の間隔（ミリ秒）
+        centerGazeInterval: 5000,       // 集中注視加点の間隔（ミリ秒）
         
         // その他設定
         gazeVelocityThreshold: 10,      // 問題確認と判定する視線速度（px/s）
@@ -1130,6 +1139,8 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // 正面注視の最後の加点時刻
       this.lastFrontFacingBonus = 0;
+      // 集中注視の最後の加点時刻
+      this.lastCenterGazeBonus = 0;
       
       // バッチ保存用の管理変数
       this.lastSaveTime = Date.now();
@@ -2265,11 +2276,13 @@ document.addEventListener('DOMContentLoaded', function() {
           });
         }
         
-        // 目線方向による評価（目線をそらすだけでは減点しない）
+        // 目線方向による評価（間隔制御付き加点）
         if (Math.abs(this.gazeX) < this.scoreSettings.centerGazeThreshold && 
-            Math.abs(this.gazeY) < this.scoreSettings.centerGazeThreshold) {
+            Math.abs(this.gazeY) < this.scoreSettings.centerGazeThreshold &&
+            (currentTime - this.lastCenterGazeBonus) >= this.scoreSettings.centerGazeInterval) {
           const bonus = this.scoreSettings.centerGazeBonus;
           newScore += bonus;
+          this.lastCenterGazeBonus = currentTime;
           reasons.push({ 
             text: '集中注視', 
             change: bonus, 
@@ -3381,6 +3394,7 @@ document.addEventListener('DOMContentLoaded', function() {
         'response-delay-threshold': 'responseDelayThreshold',
         'quick-response-threshold': 'quickResponseThreshold',
         'front-facing-interval': 'frontFacingInterval',
+        'center-gaze-interval': 'centerGazeInterval',
         'center-gaze-threshold': 'centerGazeThreshold',
         'gaze-velocity-threshold': 'gazeVelocityThreshold'
       };
@@ -3418,7 +3432,8 @@ document.addEventListener('DOMContentLoaded', function() {
         responseDelayThreshold: 30,
         quickResponseThreshold: 5,
         questionConfirmWindow: 3,
-        frontFacingInterval: 1000,
+        frontFacingInterval: 5000,
+        centerGazeInterval: 3000,
         gazeVelocityThreshold: 10,
         centerGazeThreshold: 15
       };
@@ -3549,7 +3564,8 @@ document.addEventListener('DOMContentLoaded', function() {
         responseDelayThreshold: 30,
         quickResponseThreshold: 5,
         questionConfirmWindow: 3,
-        frontFacingInterval: 1000,
+        frontFacingInterval: 5000,
+        centerGazeInterval: 3000,
         gazeVelocityThreshold: 10,
         centerGazeThreshold: 15
       };
