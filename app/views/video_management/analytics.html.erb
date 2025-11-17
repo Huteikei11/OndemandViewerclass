@@ -10,6 +10,28 @@
         </div>
       </div>
 
+      <!-- CSVエクスポートボタン -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="card-title">📊 データエクスポート</h5>
+          <p class="text-muted mb-3">分析データをCSV形式でダウンロードできます（個別セッションは学習セッション履歴から）</p>
+          <div class="row">
+            <div class="col-md-6 mb-2">
+              <%= link_to video_management_export_summary_path(video_id: @video, format: :csv), class: "btn btn-success w-100", data: { turbo: false } do %>
+                <i class="bi bi-file-earmark-spreadsheet"></i> 全体サマリー
+              <% end %>
+              <small class="text-muted d-block mt-1">動画全体の統計情報</small>
+            </div>
+            <div class="col-md-6 mb-2">
+              <%= link_to video_management_export_questions_path(video_id: @video, format: :csv), class: "btn btn-success w-100", data: { turbo: false } do %>
+                <i class="bi bi-file-earmark-spreadsheet"></i> 問題別統計
+              <% end %>
+              <small class="text-muted d-block mt-1">各問題の回答統計</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 全体統計 -->
       <div class="row mb-4">
         <div class="col-md-3">
@@ -342,6 +364,7 @@
                     <th title="前進スキップ回数">⏩</th>
                     <th title="後退スキップ回数">⏪</th>
                     <th title="再生速度変更回数">⚡</th>
+                    <th>エクスポート</th>
                     <th>詳細</th>
                   </tr>
                 </thead>
@@ -376,6 +399,18 @@
                       <td class="text-center"><%= operation_stats[:forward_seek_count] %></td>
                       <td class="text-center"><%= operation_stats[:backward_seek_count] %></td>
                       <td class="text-center"><%= operation_stats[:playback_rate_change_count] %></td>
+                      <td>
+                        <div class="btn-group-vertical btn-group-sm">
+                          <%= link_to "📊", video_management_export_session_detail_path(video_id: @video, session_id: session.id, format: :csv), 
+                              class: "btn btn-sm btn-outline-success", 
+                              title: "セッション詳細CSV",
+                              data: { turbo: false } %>
+                          <%= link_to "📝", video_management_export_session_events_path(video_id: @video, session_id: session.id, format: :csv), 
+                              class: "btn btn-sm btn-outline-success", 
+                              title: "イベントタイムラインCSV",
+                              data: { turbo: false } %>
+                        </div>
+                      </td>
                       <td>
                         <button class="btn btn-sm btn-primary" onclick="showSessionDetail(<%= session.id %>)">
                           タイムライン表示

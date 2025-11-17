@@ -36,5 +36,11 @@ Rails.application.routes.draw do
     post "management/add_manager", to: "video_management#add_manager"
     get "management/session/:session_id", to: "video_management#session_detail", as: "management_session_detail"
     post "management/save_session", to: "video_management#save_session_data", as: "management_save_session"
+    
+    # CSV export routes
+    get "management/export_summary", to: "video_management#export_summary", as: "management_export_summary"
+    get "management/export_questions", to: "video_management#export_questions", as: "management_export_questions"
+    get "management/export_session_detail/:session_id", to: "video_management#export_session_detail", as: "management_export_session_detail"
+    get "management/export_session_events/:session_id", to: "video_management#export_session_events", as: "management_export_session_events"
   end
 end

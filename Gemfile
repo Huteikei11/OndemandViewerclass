@@ -23,6 +23,9 @@ gem "jbuilder"
 # Authentication
 gem "devise"
 
+# CSV support for Ruby 3.x+
+gem "csv"
+
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 
