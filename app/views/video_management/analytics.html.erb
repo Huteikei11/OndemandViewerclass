@@ -103,8 +103,9 @@
       <!-- タイムラインデータ可視化グラフ -->
       <% if @learning_sessions.any? %>
         <div class="card mb-4">
-          <div class="card-header">
-            <h3>学習タイムライン分析グラフ</h3>
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="mb-0">学習タイムライン分析グラフ</h3>
+            <small class="text-muted">💡 マウスホイールでズーム、ドラッグで移動、ダブルクリックでリセット</small>
           </div>
           <div class="card-body">
             <!-- グラフナビゲーション -->
@@ -394,6 +395,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <style>
   .timestamp-entry {
     padding: 8px;
@@ -693,6 +696,24 @@ function initializeAnalyticsCharts() {
         },
         plugins: {
           ...commonOptions.plugins,
+          zoom: {
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'xy',
+            },
+            pan: {
+              enabled: true,
+              mode: 'xy',
+            },
+            limits: {
+              y: {min: 0, max: 100}
+            }
+          },
           tooltip: {
             callbacks: {
               label: function(context) {
@@ -715,6 +736,11 @@ function initializeAnalyticsCharts() {
         }
       }
     });
+    
+    // ダブルクリックでズームリセット
+    scoreTimelineCtx.ondblclick = function() {
+      chartInstances.scoreTimeline.resetZoom();
+    };
   }
 
   // 2. イベント分布グラフ（円グラフ）
@@ -790,9 +816,32 @@ function initializeAnalyticsCharts() {
               stepSize: 1
             }
           }
+        },
+        plugins: {
+          ...commonOptions.plugins,
+          zoom: {
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'xy',
+            },
+            pan: {
+              enabled: true,
+              mode: 'xy',
+            }
+          }
         }
       }
     });
+    
+    // ダブルクリックでズームリセット
+    hourlyCtx.ondblclick = function() {
+      chartInstances.hourlyActivity.resetZoom();
+    };
   }
 
   // 4. ユーザー別平均スコアグラフ
@@ -893,6 +942,21 @@ function initializeAnalyticsCharts() {
         },
         plugins: {
           ...commonOptions.plugins,
+          zoom: {
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'xy',
+            },
+            pan: {
+              enabled: true,
+              mode: 'xy',
+            }
+          },
           tooltip: {
             callbacks: {
               label: function(context) {
@@ -903,6 +967,11 @@ function initializeAnalyticsCharts() {
         }
       }
     });
+    
+    // ダブルクリックでズームリセット
+    videoDensityCtx.ondblclick = function() {
+      chartInstances.videoDensity.resetZoom();
+    };
   }
 }
 
