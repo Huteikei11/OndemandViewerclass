@@ -100,6 +100,102 @@
         </div>
       </div>
 
+      <!-- タイムラインデータ可視化グラフ -->
+      <% if @learning_sessions.any? %>
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3>学習タイムライン分析グラフ</h3>
+          </div>
+          <div class="card-body">
+            <!-- グラフナビゲーション -->
+            <ul class="nav nav-tabs mb-3" id="chartTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="score-timeline-tab" data-bs-toggle="tab" data-bs-target="#score-timeline" type="button">
+                  集中スコア推移
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="event-distribution-tab" data-bs-toggle="tab" data-bs-target="#event-distribution" type="button">
+                  イベント分布
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="hourly-activity-tab" data-bs-toggle="tab" data-bs-target="#hourly-activity" type="button">
+                  時間帯別活動
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="user-scores-tab" data-bs-toggle="tab" data-bs-target="#user-scores" type="button">
+                  ユーザー別スコア
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="video-density-tab" data-bs-toggle="tab" data-bs-target="#video-density" type="button">
+                  動画イベント密度
+                </button>
+              </li>
+            </ul>
+
+            <!-- グラフコンテンツ -->
+            <div class="tab-content" id="chartTabsContent">
+              <!-- 1. 集中スコア推移グラフ -->
+              <div class="tab-pane fade show active" id="score-timeline" role="tabpanel">
+                <div class="chart-container" style="position: relative; height: 400px;">
+                  <canvas id="scoreTimelineChart"></canvas>
+                </div>
+                <p class="text-muted mt-2 text-center">
+                  <small>各セッションの集中スコアの時間的推移を表示します。セッション経過時間（秒）に対するスコアの変化を確認できます。</small>
+                </p>
+              </div>
+
+              <!-- 2. イベントタイプ分布グラフ -->
+              <div class="tab-pane fade" id="event-distribution" role="tabpanel">
+                <div class="row">
+                  <div class="col-md-6 offset-md-3">
+                    <div class="chart-container" style="position: relative; height: 400px;">
+                      <canvas id="eventDistributionChart"></canvas>
+                    </div>
+                  </div>
+                </div>
+                <p class="text-muted mt-2 text-center">
+                  <small>全セッションで記録されたイベントのカテゴリ別分布を表示します。</small>
+                </p>
+              </div>
+
+              <!-- 3. 時間帯別活動量グラフ -->
+              <div class="tab-pane fade" id="hourly-activity" role="tabpanel">
+                <div class="chart-container" style="position: relative; height: 400px;">
+                  <canvas id="hourlyActivityChart"></canvas>
+                </div>
+                <p class="text-muted mt-2 text-center">
+                  <small>1日の中でどの時間帯に学習活動が活発かを表示します。</small>
+                </p>
+              </div>
+
+              <!-- 4. ユーザー別平均スコアグラフ -->
+              <div class="tab-pane fade" id="user-scores" role="tabpanel">
+                <div class="chart-container" style="position: relative; height: 400px;">
+                  <canvas id="userScoresChart"></canvas>
+                </div>
+                <p class="text-muted mt-2 text-center">
+                  <small>各ユーザーの平均集中スコアを比較表示します。</small>
+                </p>
+              </div>
+
+              <!-- 5. 動画時間別イベント密度グラフ -->
+              <div class="tab-pane fade" id="video-density" role="tabpanel">
+                <div class="chart-container" style="position: relative; height: 400px;">
+                  <canvas id="videoDensityChart"></canvas>
+                </div>
+                <p class="text-muted mt-2 text-center">
+                  <small>動画のどの部分で学習活動が活発かを30秒単位で表示します。</small>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
       <!-- 学習セッション統計 -->
       <div class="row mb-4">
         <div class="col-md-3">
@@ -333,173 +429,496 @@
 </style>
 
 <script>
-let currentChart = null;
-
-function showSessionDetail(sessionId) {
-  // モーダルを表示
-  const modal = new bootstrap.Modal(document.getElementById('sessionDetailModal'));
-  modal.show();
+// グローバルスコープ汚染を避けるための即時実行関数
+(function() {
+  'use strict';
   
-  // セッションデータを取得
-  fetch(`<%= video_management_session_detail_path(video_id: @video, session_id: 'SESSION_ID') %>`.replace('SESSION_ID', sessionId), {
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest'
+  let sessionDetailChart = null;
+
+  window.showSessionDetail = function(sessionId) {
+    // モーダルを表示
+    const modal = new bootstrap.Modal(document.getElementById('sessionDetailModal'));
+    modal.show();
+    
+    // セッションデータを取得
+    fetch(`<%= video_management_session_detail_path(video_id: @video, session_id: 'SESSION_ID') %>`.replace('SESSION_ID', sessionId), {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      renderChart(data);
+      renderTimestampLog(data);
+    })
+    .catch(error => {
+      console.error('セッションデータ取得エラー:', error);
+    });
+  };
+
+  function renderChart(data) {
+    const ctx = document.getElementById('timelineChart').getContext('2d');
+    
+    // 既存のチャートを削除
+    if (sessionDetailChart) {
+      sessionDetailChart.destroy();
     }
-  })
-  .then(response => response.json())
-  .then(data => {
-    renderChart(data);
-    renderTimestampLog(data);
-  })
-  .catch(error => {
-    console.error('セッションデータ取得エラー:', error);
-  });
-}
-
-function renderChart(data) {
-  const ctx = document.getElementById('timelineChart').getContext('2d');
-  
-  // 既存のチャートを削除
-  if (currentChart) {
-    currentChart.destroy();
-  }
-  
-  currentChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      datasets: [
-        {
-          label: '集中度スコア',
-          data: data.timeline,
-          borderColor: '#007bff',
-          backgroundColor: 'rgba(0, 123, 255, 0.1)',
-          tension: 0.4,
-          parsing: {
-            xAxisKey: 'x',
-            yAxisKey: 'y'
-          }
-        },
-        {
-          label: 'スコア変化イベント',
-          data: data.score_changes,
-          borderColor: '#28a745',
-          backgroundColor: '#28a745',
-          pointRadius: 6,
-          showLine: false,
-          parsing: {
-            xAxisKey: 'time',
-            yAxisKey: 'score'
-          }
-        },
-        {
-          label: '動画操作',
-          data: data.video_operations,
-          borderColor: '#ffc107',
-          backgroundColor: '#ffc107',
-          pointRadius: 8,
-          pointStyle: 'triangle',
-          showLine: false,
-          parsing: {
-            xAxisKey: 'time',
-            yAxisKey: function(ctx) {
-              // 動画操作は固定の高さで表示
-              return 50;
+    
+    sessionDetailChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [
+          {
+            label: '集中度スコア',
+            data: data.timeline,
+            borderColor: '#007bff',
+            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+            tension: 0.4,
+            parsing: {
+              xAxisKey: 'x',
+              yAxisKey: 'y'
             }
-          }
-        },
-        {
-          label: 'ユーザー操作',
-          data: data.interactions,
-          borderColor: '#17a2b8',
-          backgroundColor: '#17a2b8',
-          pointRadius: 5,
-          pointStyle: 'circle',
-          showLine: false,
-          parsing: {
-            xAxisKey: 'time',
-            yAxisKey: function(ctx) {
-              // ユーザー操作は固定の高さで表示
-              return 30;
-            }
-          }
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        x: {
-          type: 'linear',
-          title: {
-            display: true,
-            text: '経過時間 (秒)'
-          }
-        },
-        y: {
-          title: {
-            display: true,
-            text: '集中度スコア'
           },
-          min: 0,
-          max: 100
-        }
+          {
+            label: 'スコア変化イベント',
+            data: data.score_changes,
+            borderColor: '#28a745',
+            backgroundColor: '#28a745',
+            pointRadius: 6,
+            showLine: false,
+            parsing: {
+              xAxisKey: 'time',
+              yAxisKey: 'score'
+            }
+          },
+          {
+            label: '動画操作',
+            data: data.video_operations,
+            borderColor: '#ffc107',
+            backgroundColor: '#ffc107',
+            pointRadius: 8,
+            pointStyle: 'triangle',
+            showLine: false,
+            parsing: {
+              xAxisKey: 'time',
+              yAxisKey: function(ctx) {
+                // 動画操作は固定の高さで表示
+                return 50;
+              }
+            }
+          },
+          {
+            label: 'ユーザー操作',
+            data: data.interactions,
+            borderColor: '#17a2b8',
+            backgroundColor: '#17a2b8',
+            pointRadius: 5,
+            pointStyle: 'circle',
+            showLine: false,
+            parsing: {
+              xAxisKey: 'time',
+              yAxisKey: function(ctx) {
+                // ユーザー操作は固定の高さで表示
+                return 30;
+              }
+            }
+          }
+        ]
       },
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: function(context) {
-              const point = context.parsed;
-              const rawData = context.raw;
-              
-              if (context.datasetIndex === 0) {
-                return `スコア: ${point.y.toFixed(1)}点 (${formatTime(point.x)})`;
-              } else if (context.datasetIndex === 1) {
-                return `${rawData.reason} (${rawData.change > 0 ? '+' : ''}${rawData.change.toFixed(1)}点)`;
-              } else if (context.datasetIndex === 2) {
-                return `${rawData.description} (動画時刻: ${formatTime(rawData.video_time)})`;
-              } else {
-                return rawData.description;
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            type: 'linear',
+            title: {
+              display: true,
+              text: '経過時間 (秒)'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: '集中度スコア'
+            },
+            min: 0,
+            max: 100
+          }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const point = context.parsed;
+                const rawData = context.raw;
+                
+                if (context.datasetIndex === 0) {
+                  return `スコア: ${point.y.toFixed(1)}点 (${formatTime(point.x)})`;
+                } else if (context.datasetIndex === 1) {
+                  return `${rawData.reason} (${rawData.change > 0 ? '+' : ''}${rawData.change.toFixed(1)}点)`;
+                } else if (context.datasetIndex === 2) {
+                  return `${rawData.description} (動画時刻: ${formatTime(rawData.video_time)})`;
+                } else {
+                  return rawData.description;
+                }
               }
             }
           }
         }
       }
+    });
+  }
+
+  function renderTimestampLog(data) {
+    const logContainer = document.getElementById('timestampLog');
+    
+    // 全イベントを時系列順に結合
+    const allEvents = [
+      ...data.timeline.map(e => ({...e, category: 'timeline'})),
+      ...data.score_changes.map(e => ({...e, category: 'score'})),
+      ...data.video_operations.map(e => ({...e, category: 'video'})),
+      ...data.interactions.map(e => ({...e, category: 'interaction'}))
+    ].sort((a, b) => (a.time || a.x) - (b.time || b.x));
+    
+    logContainer.innerHTML = allEvents.map(event => {
+      const time = event.time || event.x;
+      const category = event.category;
+      
+      return `
+        <div class="timestamp-entry ${category}-event">
+          <div class="timestamp-header">
+            <span>${formatTime(time)}</span>
+            <span class="badge bg-secondary">${category}</span>
+          </div>
+          <div class="timestamp-description">
+            ${event.description || event.reason || event.operation || event.type}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  }
+})();
+
+// タイムライン分析グラフの初期化
+<% if @learning_sessions.any? %>
+// Turbo対応: DOMContentLoadedとturbo:loadの両方に対応
+// チャートインスタンスを保持するグローバル変数
+let chartInstances = {};
+
+function initializeAnalyticsCharts() {
+  // 既存のチャートを破棄
+  Object.keys(chartInstances).forEach(key => {
+    if (chartInstances[key]) {
+      chartInstances[key].destroy();
+      chartInstances[key] = null;
     }
   });
-}
+  
+  // 共通のChart.jsオプション
+  const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top'
+      }
+    }
+  };
 
-function renderTimestampLog(data) {
-  const logContainer = document.getElementById('timestampLog');
-  
-  // 全イベントを時系列順に結合
-  const allEvents = [
-    ...data.timeline.map(e => ({...e, category: 'timeline'})),
-    ...data.score_changes.map(e => ({...e, category: 'score'})),
-    ...data.video_operations.map(e => ({...e, category: 'video'})),
-    ...data.interactions.map(e => ({...e, category: 'interaction'}))
-  ].sort((a, b) => (a.time || a.x) - (b.time || b.x));
-  
-  logContainer.innerHTML = allEvents.map(event => {
-    const time = event.time || event.x;
-    const category = event.category;
+  // 1. 集中スコア推移グラフ
+  const scoreTimelineCtx = document.getElementById('scoreTimelineChart');
+  if (scoreTimelineCtx) {
+    const scoreTimelineData = <%= raw @score_timeline_data.to_json %>;
     
-    return `
-      <div class="timestamp-entry ${category}-event">
-        <div class="timestamp-header">
-          <span>${formatTime(time)}</span>
-          <span class="badge bg-secondary">${category}</span>
-        </div>
-        <div class="timestamp-description">
-          ${event.description || event.reason || event.operation || event.type}
-        </div>
-      </div>
-    `;
-  }).join('');
+    // カラーパレット
+    const colors = [
+      'rgba(255, 99, 132, 1)',
+      'rgba(54, 162, 235, 1)',
+      'rgba(255, 206, 86, 1)',
+      'rgba(75, 192, 192, 1)',
+      'rgba(153, 102, 255, 1)',
+      'rgba(255, 159, 64, 1)',
+      'rgba(199, 199, 199, 1)',
+      'rgba(83, 102, 255, 1)'
+    ];
+
+    chartInstances.scoreTimeline = new Chart(scoreTimelineCtx, {
+      type: 'line',
+      data: {
+        datasets: scoreTimelineData.map((session, index) => ({
+          label: session.label,
+          data: session.data,
+          borderColor: colors[index % colors.length],
+          backgroundColor: colors[index % colors.length].replace('1)', '0.1)'),
+          tension: 0.3,
+          fill: false,
+          pointRadius: 3,
+          pointHoverRadius: 6
+        }))
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          x: {
+            type: 'linear',
+            title: {
+              display: true,
+              text: 'セッション経過時間（秒）'
+            },
+            ticks: {
+              callback: function(value) {
+                return Math.floor(value / 60) + '分';
+              }
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: '集中スコア'
+            },
+            beginAtZero: true,
+            max: 100
+          }
+        },
+        plugins: {
+          ...commonOptions.plugins,
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const point = context.raw;
+                let label = context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '点';
+                if (point.video_time !== undefined && point.video_time !== null) {
+                  const videoMinutes = Math.floor(point.video_time / 60);
+                  const videoSeconds = Math.floor(point.video_time % 60);
+                  label += ` (動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')})`;
+                }
+                return label;
+              },
+              title: function(context) {
+                const minutes = Math.floor(context[0].parsed.x / 60);
+                const seconds = Math.floor(context[0].parsed.x % 60);
+                return `経過時間: ${minutes}分${seconds}秒`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 2. イベント分布グラフ（円グラフ）
+  const eventDistCtx = document.getElementById('eventDistributionChart');
+  if (eventDistCtx) {
+    const eventData = <%= raw @event_distribution_data.to_json %>;
+    
+    chartInstances.eventDistribution = new Chart(eventDistCtx, {
+      type: 'doughnut',
+      data: {
+        labels: eventData.labels,
+        datasets: [{
+          data: eventData.values,
+          backgroundColor: Object.values(eventData.colors),
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        ...commonOptions,
+        plugins: {
+          ...commonOptions.plugins,
+          legend: {
+            position: 'right'
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                return context.label + ': ' + context.parsed + '件 (' + percentage + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 3. 時間帯別活動量グラフ
+  const hourlyCtx = document.getElementById('hourlyActivityChart');
+  if (hourlyCtx) {
+    const hourlyData = <%= raw @hourly_activity_data.to_json %>;
+    
+    chartInstances.hourlyActivity = new Chart(hourlyCtx, {
+      type: 'bar',
+      data: {
+        labels: hourlyData.labels.map(h => h + '時'),
+        datasets: [{
+          label: 'イベント数',
+          data: hourlyData.values,
+          backgroundColor: 'rgba(54, 162, 235, 0.8)',
+          borderColor: 'rgba(54, 162, 235, 1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: '時間帯'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'イベント数'
+            },
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 4. ユーザー別平均スコアグラフ
+  const userScoresCtx = document.getElementById('userScoresChart');
+  if (userScoresCtx) {
+    const userData = <%= raw @user_score_data.to_json %>;
+    
+    chartInstances.userScores = new Chart(userScoresCtx, {
+      type: 'bar',
+      data: {
+        labels: userData.labels,
+        datasets: [{
+          label: '平均スコア',
+          data: userData.values,
+          backgroundColor: userData.values.map(score => {
+            if (score >= 70) return 'rgba(40, 167, 69, 0.8)';
+            if (score >= 50) return 'rgba(255, 193, 7, 0.8)';
+            return 'rgba(220, 53, 69, 0.8)';
+          }),
+          borderWidth: 1
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        ...commonOptions,
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: '平均集中スコア'
+            },
+            beginAtZero: true,
+            max: 100
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'ユーザー'
+            }
+          }
+        },
+        plugins: {
+          ...commonOptions.plugins,
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const index = context.dataIndex;
+                const score = context.parsed.x.toFixed(1);
+                const sessions = userData.counts[index];
+                return [
+                  '平均スコア: ' + score + '点',
+                  'セッション数: ' + sessions + '回'
+                ];
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 5. 動画時間別イベント密度グラフ
+  const videoDensityCtx = document.getElementById('videoDensityChart');
+  if (videoDensityCtx) {
+    const densityData = <%= raw @video_time_density_data.to_json %>;
+    
+    chartInstances.videoDensity = new Chart(videoDensityCtx, {
+      type: 'bar',
+      data: {
+        labels: densityData.map(d => d.label),
+        datasets: [{
+          label: 'イベント数',
+          data: densityData.map(d => d.y),
+          backgroundColor: 'rgba(255, 99, 132, 0.8)',
+          borderColor: 'rgba(255, 99, 132, 1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: '動画時間（30秒単位）'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'イベント数'
+            },
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            }
+          }
+        },
+        plugins: {
+          ...commonOptions.plugins,
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return 'イベント数: ' + context.parsed.y + '件';
+              }
+            }
+          }
+        }
+      }
+    });
+  }
 }
 
-function formatTime(seconds) {
-  const minutes = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
-}
+// 初回読み込みとTurbo遷移の両方で実行
+document.addEventListener('DOMContentLoaded', initializeAnalyticsCharts);
+document.addEventListener('turbo:load', initializeAnalyticsCharts);
+
+// Turbo遷移前にチャートをクリーンアップ
+document.addEventListener('turbo:before-render', function() {
+  // 保持しているチャートインスタンスを破棄
+  Object.keys(chartInstances).forEach(key => {
+    if (chartInstances[key]) {
+      chartInstances[key].destroy();
+      chartInstances[key] = null;
+    }
+  });
+});
+<% end %>
 </script>

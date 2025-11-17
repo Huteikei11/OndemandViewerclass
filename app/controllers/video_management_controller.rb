@@ -46,6 +46,9 @@ class VideoManagementController < ApplicationController
         average_response_time: avg_time ? (avg_time / 1000.0).round(1) : 0
       }
     end
+
+    # グラフ用データを準備
+    prepare_analytics_chart_data
   end
 
   def session_detail
@@ -238,5 +241,70 @@ class VideoManagementController < ApplicationController
         }
       }
     }
+  end
+
+  def prepare_analytics_chart_data
+    # 全タイムスタンプイベントを取得
+    all_events = @learning_sessions.joins(:timestamp_events)
+                                   .includes(:timestamp_events, :user)
+                                   .flat_map(&:timestamp_events)
+
+    # 1. 集中スコア推移データ（セッション別）
+    @score_timeline_data = @learning_sessions.map do |session|
+      events = session.timestamp_events.where.not(concentration_score: nil).order(:session_elapsed)
+      {
+        label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')})",
+        data: events.map { |e| { x: e.session_elapsed.round(1), y: e.concentration_score, video_time: e.video_time } },
+        session_id: session.id
+      }
+    end.select { |data| data[:data].any? }
+
+    # 2. イベントタイプ別分布データ
+    event_counts = all_events.group_by(&:event_category).transform_values(&:count)
+    @event_distribution_data = {
+      labels: event_counts.keys.map(&:humanize),
+      values: event_counts.values,
+      colors: {
+        "score" => "#28a745",
+        "video" => "#6610f2",
+        "interaction" => "#20c997",
+        "question" => "#fd7e14",
+        "other" => "#6c757d"
+      }
+    }
+
+    # 3. 時間帯別活動量データ
+    hourly_events = all_events.group_by { |e| e.timestamp.hour }
+    @hourly_activity_data = {
+      labels: (0..23).to_a,
+      values: (0..23).map { |hour| hourly_events[hour]&.count || 0 }
+    }
+
+    # 4. ユーザー別平均スコアデータ
+    user_scores = @learning_sessions.group_by(&:user).map do |user, sessions|
+      scores = sessions.map(&:final_score).compact
+      {
+        user: user.email.split("@").first,
+        avg_score: scores.any? ? (scores.sum.to_f / scores.length).round(1) : 0,
+        session_count: sessions.count
+      }
+    end.sort_by { |data| -data[:avg_score] }
+
+    @user_score_data = {
+      labels: user_scores.map { |d| d[:user] },
+      values: user_scores.map { |d| d[:avg_score] },
+      counts: user_scores.map { |d| d[:session_count] }
+    }
+
+    # 5. 動画時間 vs イベント密度データ
+    video_time_events = all_events.select { |e| e.video_time && e.video_time > 0 }
+    time_buckets = video_time_events.group_by { |e| (e.video_time / 30).floor * 30 } # 30秒単位
+    @video_time_density_data = time_buckets.map do |time, events|
+      {
+        x: time,
+        y: events.count,
+        label: "#{time}s - #{time + 30}s"
+      }
+    end.sort_by { |d| d[:x] }
   end
 end
