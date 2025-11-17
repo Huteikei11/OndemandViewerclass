@@ -53,12 +53,14 @@ class VideoManagementController < ApplicationController
 
   def session_detail
     @session = LearningSession.find(params[:session_id])
-    @timestamp_events = @session.timestamp_events.order(:timestamp)
+    @timestamp_events = @session.timestamp_events.order(:session_elapsed)
 
     # グラフ用データの準備
     @chart_data = prepare_chart_data(@timestamp_events)
 
-    render json: @chart_data if request.xhr?
+    Rails.logger.info "Session #{params[:session_id]} chart data: #{@chart_data.inspect}"
+
+    render json: @chart_data
   end
 
   def timeline
@@ -218,10 +220,13 @@ class VideoManagementController < ApplicationController
         }
       },
       score_changes: events.score_changes.map { |e|
+        additional = e.additional_data
+        additional = JSON.parse(additional) if additional.is_a?(String)
+
         {
           time: e.session_elapsed,
           score: e.concentration_score,
-          change: e.additional_data&.dig("scoreChange") || 0,
+          change: additional&.dig("scoreChange") || 0,
           reason: e.description
         }
       },
@@ -306,5 +311,56 @@ class VideoManagementController < ApplicationController
         label: "#{time}s - #{time + 30}s"
       }
     end.sort_by { |d| d[:x] }
+
+    # 6. 動画操作マップデータ（一時停止・スキップの位置）
+    video_operations = all_events.select { |e|
+      e.event_category == "video" &&
+      e.video_time &&
+      e.video_time > 0 &&
+      (e.event_type&.include?("pause") || e.event_type&.include?("seek") || e.event_type&.include?("skip"))
+    }
+
+    # 全体の動画操作マップ
+    operation_buckets = video_operations.group_by { |e| (e.video_time / 10).floor * 10 } # 10秒単位
+    @video_operations_map_data = operation_buckets.map do |time, events|
+      pause_count = events.count { |e| e.event_type&.include?("pause") }
+      seek_count = events.count { |e| e.event_type&.include?("seek") || e.event_type&.include?("skip") }
+      minutes = time / 60
+      seconds = (time % 60).to_s.rjust(2, "0")
+      {
+        time: time,
+        label: "#{minutes}:#{seconds}",
+        pause: pause_count,
+        seek: seek_count,
+        total: events.count
+      }
+    end.sort_by { |d| d[:time] }
+
+    # ユーザー別の動画操作マップ
+    @user_operations_map_data = @learning_sessions.map do |session|
+      # メモリ上でフィルタリング（event_categoryはメソッドなのでSQLでは使えない）
+      user_ops = session.timestamp_events
+                        .where.not(video_time: nil)
+                        .where("video_time > 0")
+                        .where("event_type LIKE ? OR event_type LIKE ? OR event_type LIKE ?",
+                               "%pause%", "%seek%", "%skip%")
+                        .select { |e| e.event_type&.match?(/video/i) }
+
+      next nil if user_ops.empty?
+
+      ops_by_time = user_ops.group_by { |e| (e.video_time / 10).floor * 10 }
+      {
+        label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d %H:%M')})",
+        session_id: session.id,
+        data: ops_by_time.map do |time, events|
+          {
+            x: time,
+            y: events.count,
+            pause: events.count { |e| e.event_type&.include?("pause") },
+            seek: events.count { |e| e.event_type&.include?("seek") || e.event_type&.include?("skip") }
+          }
+        end.sort_by { |d| d[:x] }
+      }
+    end.compact
   end
 end

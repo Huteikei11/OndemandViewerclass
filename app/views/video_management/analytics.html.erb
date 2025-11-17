@@ -135,6 +135,16 @@
                   動画イベント密度
                 </button>
               </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="video-operations-tab" data-bs-toggle="tab" data-bs-target="#video-operations" type="button">
+                  動画操作マップ
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="user-operations-tab" data-bs-toggle="tab" data-bs-target="#user-operations" type="button">
+                  ユーザー別操作
+                </button>
+              </li>
             </ul>
 
             <!-- グラフコンテンツ -->
@@ -190,6 +200,26 @@
                 </div>
                 <p class="text-muted mt-2 text-center">
                   <small>動画のどの部分で学習活動が活発かを30秒単位で表示します。</small>
+                </p>
+              </div>
+
+              <!-- 6. 動画操作マップ（全体） -->
+              <div class="tab-pane fade" id="video-operations" role="tabpanel">
+                <div class="chart-container" style="position: relative; height: 400px;">
+                  <canvas id="videoOperationsChart"></canvas>
+                </div>
+                <p class="text-muted mt-2 text-center">
+                  <small>動画内のどの時間で一時停止やスキップ（シーク）が行われたかを表示します。棒が高いほど操作が多い箇所です。</small>
+                </p>
+              </div>
+
+              <!-- 7. ユーザー別動画操作 -->
+              <div class="tab-pane fade" id="user-operations" role="tabpanel">
+                <div class="chart-container" style="position: relative; height: 400px;">
+                  <canvas id="userOperationsChart"></canvas>
+                </div>
+                <p class="text-muted mt-2 text-center">
+                  <small>各ユーザーが動画のどの時間で操作を行ったかをセッション別に表示します。</small>
                 </p>
               </div>
             </div>
@@ -373,18 +403,21 @@
   <div class="modal-dialog modal-xl">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">学習セッション詳細</h5>
+        <div>
+          <h5 class="modal-title">学習セッション詳細タイムライン</h5>
+          <small class="text-muted">💡 マウスホイールでズーム、ドラッグで移動、ダブルクリックでリセット</small>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <!-- グラフエリア -->
-        <div id="chartContainer">
-          <canvas id="timelineChart" width="800" height="400"></canvas>
+        <div id="chartContainer" style="position: relative; height: 400px; margin-bottom: 20px;">
+          <canvas id="timelineChart"></canvas>
         </div>
         
         <!-- タイムスタンプログ -->
         <div class="mt-4">
-          <h6>タイムスタンプログ</h6>
+          <h6>詳細イベントログ</h6>
           <div id="timestampLog" style="max-height: 300px; overflow-y: auto;">
             <!-- JavaScriptで動的に生成 -->
           </div>
@@ -440,91 +473,109 @@
 
   window.showSessionDetail = function(sessionId) {
     // モーダルを表示
-    const modal = new bootstrap.Modal(document.getElementById('sessionDetailModal'));
-    modal.show();
+    const modalElement = document.getElementById('sessionDetailModal');
+    const modal = new bootstrap.Modal(modalElement);
     
-    // セッションデータを取得
-    fetch(`<%= video_management_session_detail_path(video_id: @video, session_id: 'SESSION_ID') %>`.replace('SESSION_ID', sessionId), {
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    })
-    .then(response => response.json())
-    .then(data => {
-      renderChart(data);
-      renderTimestampLog(data);
-    })
-    .catch(error => {
-      console.error('セッションデータ取得エラー:', error);
+    // モーダルが完全に表示された後にデータを取得
+    modalElement.addEventListener('shown.bs.modal', function onShown() {
+      // イベントリスナーを一度だけ実行
+      modalElement.removeEventListener('shown.bs.modal', onShown);
+      
+      // セッションデータを取得
+      const url = '<%= video_management_session_detail_path(video_id: @video, session_id: 'PLACEHOLDER') %>'.replace('PLACEHOLDER', sessionId);
+      console.log('Fetching session data from:', url);
+      
+      fetch(url, {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json'
+        }
+      })
+      .then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('セッションデータ:', data);
+        renderChart(data);
+        renderTimestampLog(data);
+      })
+      .catch(error => {
+        console.error('セッションデータ取得エラー:', error);
+        alert('セッションデータの取得に失敗しました: ' + error.message);
+      });
     });
+    
+    modal.show();
   };
 
   function renderChart(data) {
-    const ctx = document.getElementById('timelineChart').getContext('2d');
+    const ctx = document.getElementById('timelineChart');
+    if (!ctx) {
+      console.error('timelineChart canvas が見つかりません');
+      return;
+    }
+    
+    console.log('グラフ描画開始:', data);
+    
+    // データが空の場合
+    if (!data.timeline || data.timeline.length === 0) {
+      console.warn('タイムラインデータが空です');
+      ctx.parentElement.innerHTML = '<p class="text-muted text-center">このセッションにはタイムラインデータがありません</p>';
+      return;
+    }
     
     // 既存のチャートを削除
     if (sessionDetailChart) {
       sessionDetailChart.destroy();
     }
     
-    sessionDetailChart = new Chart(ctx, {
+    try {
+      sessionDetailChart = new Chart(ctx, {
       type: 'line',
       data: {
         datasets: [
           {
             label: '集中度スコア',
-            data: data.timeline,
+            data: data.timeline.map(e => ({x: e.x, y: e.y, video_time: e.video_time})),
             borderColor: '#007bff',
             backgroundColor: 'rgba(0, 123, 255, 0.1)',
-            tension: 0.4,
-            parsing: {
-              xAxisKey: 'x',
-              yAxisKey: 'y'
-            }
+            tension: 0.3,
+            fill: false,
+            pointRadius: 3,
+            pointHoverRadius: 6
           },
           {
             label: 'スコア変化イベント',
-            data: data.score_changes,
+            data: data.score_changes.map(e => ({x: e.time, y: e.score, reason: e.reason, change: e.change})),
             borderColor: '#28a745',
             backgroundColor: '#28a745',
             pointRadius: 6,
-            showLine: false,
-            parsing: {
-              xAxisKey: 'time',
-              yAxisKey: 'score'
-            }
+            pointHoverRadius: 8,
+            showLine: false
           },
           {
             label: '動画操作',
-            data: data.video_operations,
+            data: data.video_operations.map(e => ({x: e.time, y: 50, description: e.description, video_time: e.video_time})),
             borderColor: '#ffc107',
             backgroundColor: '#ffc107',
             pointRadius: 8,
+            pointHoverRadius: 10,
             pointStyle: 'triangle',
-            showLine: false,
-            parsing: {
-              xAxisKey: 'time',
-              yAxisKey: function(ctx) {
-                // 動画操作は固定の高さで表示
-                return 50;
-              }
-            }
+            showLine: false
           },
           {
             label: 'ユーザー操作',
-            data: data.interactions,
+            data: data.interactions.map(e => ({x: e.time, y: 30, description: e.description})),
             borderColor: '#17a2b8',
             backgroundColor: '#17a2b8',
             pointRadius: 5,
+            pointHoverRadius: 7,
             pointStyle: 'circle',
-            showLine: false,
-            parsing: {
-              xAxisKey: 'time',
-              yAxisKey: function(ctx) {
-                // ユーザー操作は固定の高さで表示
-                return 30;
-              }
-            }
+            showLine: false
           }
         ]
       },
@@ -536,22 +587,46 @@
             type: 'linear',
             title: {
               display: true,
-              text: '経過時間 (秒)'
+              text: 'セッション経過時間（秒）'
+            },
+            ticks: {
+              callback: function(value) {
+                return Math.floor(value / 60) + '分';
+              }
             }
           },
           y: {
             title: {
               display: true,
-              text: '集中度スコア'
+              text: '集中スコア'
             },
             min: 0,
-            max: 100
+            max: 100,
+            beginAtZero: true
           }
         },
         plugins: {
           legend: {
             display: true,
             position: 'top'
+          },
+          zoom: {
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'xy',
+            },
+            pan: {
+              enabled: true,
+              mode: 'xy',
+            },
+            limits: {
+              y: {min: 0, max: 100}
+            }
           },
           tooltip: {
             callbacks: {
@@ -560,20 +635,46 @@
                 const rawData = context.raw;
                 
                 if (context.datasetIndex === 0) {
-                  return `スコア: ${point.y.toFixed(1)}点 (${formatTime(point.x)})`;
+                  // 集中スコアのツールチップ
+                  let label = `スコア: ${point.y.toFixed(1)}点`;
+                  if (rawData.video_time !== undefined && rawData.video_time !== null) {
+                    const videoMinutes = Math.floor(rawData.video_time / 60);
+                    const videoSeconds = Math.floor(rawData.video_time % 60);
+                    label += ` (動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')})`;
+                  }
+                  return label;
                 } else if (context.datasetIndex === 1) {
+                  // スコア変化イベント
                   return `${rawData.reason} (${rawData.change > 0 ? '+' : ''}${rawData.change.toFixed(1)}点)`;
                 } else if (context.datasetIndex === 2) {
+                  // 動画操作
                   return `${rawData.description} (動画時刻: ${formatTime(rawData.video_time)})`;
                 } else {
+                  // ユーザー操作
                   return rawData.description;
                 }
+              },
+              title: function(context) {
+                const minutes = Math.floor(context[0].parsed.x / 60);
+                const seconds = Math.floor(context[0].parsed.x % 60);
+                return `経過時間: ${minutes}分${seconds}秒`;
               }
             }
           }
         }
       }
     });
+    
+    console.log('グラフ作成完了:', sessionDetailChart);
+    
+    // ダブルクリックでズームリセット
+    ctx.ondblclick = function() {
+      sessionDetailChart.resetZoom();
+    };
+    } catch (error) {
+      console.error('グラフ作成エラー:', error);
+      ctx.parentElement.innerHTML = '<p class="text-danger text-center">グラフの作成に失敗しました: ' + error.message + '</p>';
+    }
   }
 
   function renderTimestampLog(data) {
@@ -971,6 +1072,198 @@ function initializeAnalyticsCharts() {
     // ダブルクリックでズームリセット
     videoDensityCtx.ondblclick = function() {
       chartInstances.videoDensity.resetZoom();
+    };
+  }
+
+  // 6. 動画操作マップ（全体）
+  const videoOperationsCtx = document.getElementById('videoOperationsChart');
+  if (videoOperationsCtx) {
+    const operationsData = <%= raw @video_operations_map_data.to_json %>;
+    
+    chartInstances.videoOperations = new Chart(videoOperationsCtx, {
+      type: 'bar',
+      data: {
+        labels: operationsData.map(d => d.label),
+        datasets: [
+          {
+            label: '一時停止',
+            data: operationsData.map(d => d.pause),
+            backgroundColor: 'rgba(255, 193, 7, 0.8)',
+            borderColor: 'rgba(255, 193, 7, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'スキップ/シーク',
+            data: operationsData.map(d => d.seek),
+            backgroundColor: 'rgba(220, 53, 69, 0.8)',
+            borderColor: 'rgba(220, 53, 69, 1)',
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: '動画時間'
+            },
+            ticks: {
+              maxRotation: 45,
+              minRotation: 45
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: '操作回数'
+            },
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            }
+          }
+        },
+        plugins: {
+          ...commonOptions.plugins,
+          zoom: {
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'xy',
+            },
+            pan: {
+              enabled: true,
+              mode: 'xy',
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return context.dataset.label + ': ' + context.parsed.y + '回';
+              },
+              footer: function(context) {
+                const index = context[0].dataIndex;
+                const total = operationsData[index].total;
+                return '合計: ' + total + '回';
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    videoOperationsCtx.ondblclick = function() {
+      chartInstances.videoOperations.resetZoom();
+    };
+  }
+
+  // 7. ユーザー別動画操作
+  const userOperationsCtx = document.getElementById('userOperationsChart');
+  if (userOperationsCtx) {
+    const userOpsData = <%= raw @user_operations_map_data.to_json %>;
+    
+    const colors = [
+      'rgba(255, 99, 132, 0.6)',
+      'rgba(54, 162, 235, 0.6)',
+      'rgba(255, 206, 86, 0.6)',
+      'rgba(75, 192, 192, 0.6)',
+      'rgba(153, 102, 255, 0.6)',
+      'rgba(255, 159, 64, 0.6)',
+      'rgba(199, 199, 199, 0.6)',
+      'rgba(83, 102, 255, 0.6)'
+    ];
+    
+    chartInstances.userOperations = new Chart(userOperationsCtx, {
+      type: 'scatter',
+      data: {
+        datasets: userOpsData.map((session, index) => ({
+          label: session.label,
+          data: session.data,
+          backgroundColor: colors[index % colors.length],
+          borderColor: colors[index % colors.length].replace('0.6', '1'),
+          pointRadius: function(context) {
+            const point = context.raw;
+            return 3 + (point.y * 2); // 操作回数に応じてポイントサイズを変更
+          },
+          pointHoverRadius: function(context) {
+            const point = context.raw;
+            return 5 + (point.y * 2);
+          }
+        }))
+      },
+      options: {
+        ...commonOptions,
+        scales: {
+          x: {
+            type: 'linear',
+            title: {
+              display: true,
+              text: '動画時間（秒）'
+            },
+            ticks: {
+              callback: function(value) {
+                const minutes = Math.floor(value / 60);
+                const seconds = value % 60;
+                return minutes + ':' + seconds.toString().padStart(2, '0');
+              }
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: '操作回数'
+            },
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            }
+          }
+        },
+        plugins: {
+          ...commonOptions.plugins,
+          zoom: {
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'xy',
+            },
+            pan: {
+              enabled: true,
+              mode: 'xy',
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const point = context.raw;
+                const minutes = Math.floor(point.x / 60);
+                const seconds = Math.floor(point.x % 60);
+                return [
+                  context.dataset.label,
+                  `動画時間: ${minutes}:${seconds.toString().padStart(2, '0')}`,
+                  `操作回数: ${point.y}回`,
+                  `  一時停止: ${point.pause}回`,
+                  `  スキップ: ${point.seek}回`
+                ];
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    userOperationsCtx.ondblclick = function() {
+      chartInstances.userOperations.resetZoom();
     };
   }
 }
