@@ -1,0 +1,406 @@
+<div class="container mt-4">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>閲覧履歴</h1>
+        <%= link_to "← ホームに戻る", root_path, class: "btn btn-outline-secondary" %>
+      </div>
+
+      <!-- セッション履歴テーブル -->
+      <div class="card">
+        <div class="card-header">
+          <h3>視聴履歴一覧</h3>
+        </div>
+        <div class="card-body">
+          <% if @learning_sessions.any? %>
+            <div class="table-responsive">
+              <table class="table table-striped table-hover">
+                <thead>
+                  <tr>
+                    <th>動画タイトル</th>
+                    <th>開始時刻</th>
+                    <th>終了時刻</th>
+                    <th>視聴時間</th>
+                    <th>最終スコア</th>
+                    <th>回答数</th>
+                    <th>正解率</th>
+                    <th style="min-width: 200px;">動作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% @learning_sessions.each do |session| %>
+                    <tr>
+                      <td>
+                        <strong><%= session.video.title %></strong>
+                        <% if session.video.is_private %>
+                          <span class="badge bg-warning text-dark ms-1">限定公開</span>
+                        <% end %>
+                      </td>
+                      <td><%= session.session_start_time.strftime("%Y/%m/%d %H:%M") %></td>
+                      <td>
+                        <% if session.session_end_time %>
+                          <%= session.session_end_time.strftime("%Y/%m/%d %H:%M") %>
+                        <% else %>
+                          <span class="text-muted">-</span>
+                        <% end %>
+                      </td>
+                      <td>
+                        <% if session.session_end_time %>
+                          <% duration = session.session_end_time - session.session_start_time %>
+                          <% if duration >= 3600 %>
+                            <%= (duration / 3600).floor %>時間<%= ((duration % 3600) / 60).round %>分
+                          <% elsif duration >= 60 %>
+                            <%= (duration / 60).round %>分
+                          <% else %>
+                            <%= duration.round %>秒
+                          <% end %>
+                        <% else %>
+                          <span class="text-muted">進行中</span>
+                        <% end %>
+                      </td>
+                      <td>
+                        <% if session.final_score %>
+                          <span class="badge bg-primary"><%= session.final_score.round(1) %>点</span>
+                        <% else %>
+                          <span class="text-muted">-</span>
+                        <% end %>
+                      </td>
+                      <td>
+                        <% user_responses = UserResponse.where(user_id: session.user_id).joins(:question).where(questions: { video_id: session.video_id }).where("user_responses.created_at BETWEEN ? AND ?", session.session_start_time, session.session_end_time || Time.current) %>
+                        <%= user_responses.count %>問
+                      </td>
+                      <td>
+                        <% if user_responses.any? %>
+                          <% correct = user_responses.where(is_correct: true).count %>
+                          <% total = user_responses.count %>
+                          <% rate = (correct.to_f / total * 100).round(1) %>
+                          <% if rate >= 80 %>
+                            <span class="badge bg-success"><%= rate %>%</span>
+                          <% elsif rate >= 60 %>
+                            <span class="badge bg-warning text-dark"><%= rate %>%</span>
+                          <% else %>
+                            <span class="badge bg-danger"><%= rate %>%</span>
+                          <% end %>
+                          <small class="text-muted">(<%= correct %>/<%= total %>)</small>
+                        <% else %>
+                          <span class="text-muted">-</span>
+                        <% end %>
+                      </td>
+                      <td>
+                        <div class="d-flex flex-column gap-1">
+                          <%= link_to "もう一度視聴", player_video_path(session.video), class: "btn btn-sm btn-primary" %>
+                          <button class="btn btn-sm btn-info" onclick="showSessionDetail(<%= session.id %>)">詳細表示</button>
+                          <div class="btn-group" role="group">
+                            <%= link_to "詳細CSV", viewing_history_export_detail_path(session.id), class: "btn btn-sm btn-outline-secondary" %>
+                            <%= link_to "イベントCSV", viewing_history_export_events_path(session.id), class: "btn btn-sm btn-outline-secondary" %>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
+          <% else %>
+            <div class="text-center py-5">
+              <p class="text-muted mb-3">まだ視聴した動画がありません。</p>
+              <%= link_to "動画を探す", root_path, class: "btn btn-primary" %>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- セッション詳細モーダル -->
+<div class="modal fade" id="sessionDetailModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title">セッション詳細タイムライン</h5>
+          <small class="text-muted">💡 マウスホイールでズーム、ドラッグで移動、ダブルクリックでリセット</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <!-- グラフエリア -->
+        <div id="chartContainer" style="position: relative; height: 400px; margin-bottom: 20px;">
+          <canvas id="timelineChart"></canvas>
+        </div>
+        
+        <!-- タイムスタンプログ -->
+        <div class="mt-4">
+          <h6>詳細イベントログ</h6>
+          <div id="timestampLog" style="max-height: 300px; overflow-y: auto;">
+            <!-- JavaScriptで動的に生成 -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<style>
+  .timestamp-entry {
+    padding: 8px;
+    margin-bottom: 4px;
+    border-left: 3px solid #007bff;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+  }
+  
+  .timestamp-entry.score-event {
+    border-left-color: #28a745;
+  }
+  
+  .timestamp-entry.video-event {
+    border-left-color: #ffc107;
+  }
+  
+  .timestamp-entry.interaction-event {
+    border-left-color: #17a2b8;
+  }
+  
+  .timestamp-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  
+  .timestamp-description {
+    font-size: 0.9em;
+    color: #6c757d;
+  }
+</style>
+
+<script>
+(function() {
+  'use strict';
+  
+  let sessionDetailChart = null;
+
+  window.showSessionDetail = function(sessionId) {
+    const modalElement = document.getElementById('sessionDetailModal');
+    const modal = new bootstrap.Modal(modalElement);
+    
+    modalElement.addEventListener('shown.bs.modal', function onShown() {
+      modalElement.removeEventListener('shown.bs.modal', onShown);
+      
+      const url = '/viewing_history/session/' + sessionId;
+      
+      fetch(url, {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json'
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        renderChart(data);
+        renderTimestampLog(data);
+      })
+      .catch(error => {
+        console.error('セッションデータ取得エラー:', error);
+        alert('セッションデータの取得に失敗しました: ' + error.message);
+      });
+    });
+    
+    modal.show();
+  };
+
+  function renderChart(data) {
+    const ctx = document.getElementById('timelineChart');
+    if (!ctx) return;
+    
+    if (!data.timeline || data.timeline.length === 0) {
+      ctx.parentElement.innerHTML = '<p class="text-muted text-center">このセッションにはタイムラインデータがありません</p>';
+      return;
+    }
+    
+    if (sessionDetailChart) {
+      sessionDetailChart.destroy();
+    }
+    
+    try {
+      sessionDetailChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [
+            {
+              label: '集中度スコア',
+              data: data.timeline.map(e => ({x: e.x, y: e.y, video_time: e.video_time})),
+              borderColor: '#007bff',
+              backgroundColor: 'rgba(0, 123, 255, 0.1)',
+              tension: 0.3,
+              fill: false,
+              pointRadius: 3,
+              pointHoverRadius: 6
+            },
+            {
+              label: 'スコア変化イベント',
+              data: data.score_changes.map(e => ({x: e.time, y: e.score, reason: e.reason, change: e.change})),
+              borderColor: '#28a745',
+              backgroundColor: '#28a745',
+              pointRadius: 6,
+              pointHoverRadius: 8,
+              showLine: false
+            },
+            {
+              label: '動画操作',
+              data: data.video_operations.map(e => ({x: e.time, y: 50, description: e.description, video_time: e.video_time})),
+              borderColor: '#ffc107',
+              backgroundColor: '#ffc107',
+              pointRadius: 8,
+              pointHoverRadius: 10,
+              pointStyle: 'triangle',
+              showLine: false
+            },
+            {
+              label: 'ユーザー操作',
+              data: data.interactions.map(e => ({x: e.time, y: 30, description: e.description})),
+              borderColor: '#17a2b8',
+              backgroundColor: '#17a2b8',
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              pointStyle: 'circle',
+              showLine: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              type: 'linear',
+              title: {
+                display: true,
+                text: 'セッション経過時間（秒）'
+              },
+              ticks: {
+                callback: function(value) {
+                  return Math.floor(value / 60) + '分';
+                }
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: '集中スコア'
+              },
+              min: 0,
+              max: 100,
+              beginAtZero: true
+            }
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top'
+            },
+            zoom: {
+              zoom: {
+                wheel: {
+                  enabled: true,
+                },
+                pinch: {
+                  enabled: true
+                },
+                mode: 'xy',
+              },
+              pan: {
+                enabled: true,
+                mode: 'xy',
+              },
+              limits: {
+                y: {min: 0, max: 100}
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const point = context.parsed;
+                  const rawData = context.raw;
+                  
+                  if (context.datasetIndex === 0) {
+                    let label = `スコア: ${point.y.toFixed(1)}点`;
+                    if (rawData.video_time !== undefined && rawData.video_time !== null) {
+                      const videoMinutes = Math.floor(rawData.video_time / 60);
+                      const videoSeconds = Math.floor(rawData.video_time % 60);
+                      label += ` (動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')})`;
+                    }
+                    return label;
+                  } else if (context.datasetIndex === 1) {
+                    return `${rawData.reason} (${rawData.change > 0 ? '+' : ''}${rawData.change.toFixed(1)}点)`;
+                  } else if (context.datasetIndex === 2) {
+                    return `${rawData.description} (動画時刻: ${formatTime(rawData.video_time)})`;
+                  } else {
+                    return rawData.description;
+                  }
+                },
+                title: function(context) {
+                  const minutes = Math.floor(context[0].parsed.x / 60);
+                  const seconds = Math.floor(context[0].parsed.x % 60);
+                  return `経過時間: ${minutes}分${seconds}秒`;
+                }
+              }
+            }
+          }
+        }
+      });
+      
+      ctx.ondblclick = function() {
+        sessionDetailChart.resetZoom();
+      };
+    } catch (error) {
+      console.error('グラフ作成エラー:', error);
+      ctx.parentElement.innerHTML = '<p class="text-danger text-center">グラフの作成に失敗しました: ' + error.message + '</p>';
+    }
+  }
+
+  function renderTimestampLog(data) {
+    const logContainer = document.getElementById('timestampLog');
+    
+    const allEvents = [
+      ...data.timeline.map(e => ({...e, category: 'timeline'})),
+      ...data.score_changes.map(e => ({...e, category: 'score'})),
+      ...data.video_operations.map(e => ({...e, category: 'video'})),
+      ...data.interactions.map(e => ({...e, category: 'interaction'}))
+    ].sort((a, b) => (a.time || a.x) - (b.time || b.x));
+    
+    logContainer.innerHTML = allEvents.map(event => {
+      const time = event.time || event.x;
+      const category = event.category;
+      
+      return `
+        <div class="timestamp-entry ${category}-event">
+          <div class="timestamp-header">
+            <span>${formatTime(time)}</span>
+            <span class="badge bg-secondary">${category}</span>
+          </div>
+          <div class="timestamp-description">
+            ${event.description || event.reason || event.operation || event.type}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  }
+})();
+</script>

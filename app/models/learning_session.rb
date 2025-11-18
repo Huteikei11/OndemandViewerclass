@@ -56,4 +56,21 @@ class LearningSession < ApplicationRecord
       playback_rate_change_count: timestamp_events.where("event_type LIKE '%playback%' OR event_type LIKE '%speed%' OR description LIKE '%再生速度%'").count
     }
   end
+
+  # 平均集中度スコアを計算
+  def average_concentration_score
+    concentration_events = timestamp_events.where("event_type LIKE '%concentration%'")
+    return nil if concentration_events.empty?
+
+    scores = concentration_events.map do |event|
+      if event.description && event.description.match(/(\d+\.?\d*)/)
+        $1.to_f
+      else
+        nil
+      end
+    end.compact
+
+    return nil if scores.empty?
+    scores.sum / scores.length
+  end
 end

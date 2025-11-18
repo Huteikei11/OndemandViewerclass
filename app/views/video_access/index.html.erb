@@ -6,6 +6,7 @@
       <%= link_to "限定公開動画にアクセス", video_access_new_path, class: "btn btn-primary" %>
       <% if user_signed_in? %>
         <%= link_to "新しい動画をアップロード", new_video_path, class: "btn btn-success ms-2" %>
+        <%= link_to "閲覧履歴を見る", viewing_history_path, class: "btn btn-info ms-2" %>
       <% end %>
     </div>
 

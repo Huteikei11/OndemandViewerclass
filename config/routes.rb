@@ -15,6 +15,12 @@ Rails.application.routes.draw do
   get "video_access/new", to: "video_access#new"
   post "video_access/create", to: "video_access#create"
 
+  # Viewing history route
+  get "viewing_history", to: "viewing_history#index", as: "viewing_history"
+  get "viewing_history/session/:id", to: "viewing_history#session_detail", as: "viewing_history_session_detail"
+  get "viewing_history/export_detail/:id", to: "viewing_history#export_session_detail", as: "viewing_history_export_detail"
+  get "viewing_history/export_events/:id", to: "viewing_history#export_session_events", as: "viewing_history_export_events"
+
   # Video resources
   resources :videos do
     # Nested resources for questions and notes
