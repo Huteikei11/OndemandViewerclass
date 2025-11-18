@@ -18,21 +18,17 @@ bundle exec rake assets:precompile
 bundle exec rake assets:clean
 
 echo "Setting up database..."
-# データベースのセットアップ
-set +e  # 一時的にエラーで停止しないようにする
-bundle exec rake db:create RAILS_ENV=production
-CREATE_EXIT=$?
-set -e  # エラーで停止を再開
-
-echo "Database create exit code: $CREATE_EXIT"
-echo "Running schema load..."
-bundle exec rake db:schema:load RAILS_ENV=production
-echo "Schema load completed!"
-
-echo "Verifying tables..."
-bundle exec rails runner "puts 'Tables: ' + ActiveRecord::Base.connection.tables.join(', ')" RAILS_ENV=production
-
-echo "Loading seed data..."
-bundle exec rake db:seed RAILS_ENV=production || echo "Seed failed or no seeds to load"
+# データベースファイルが存在しない場合のみセットアップ
+if [ ! -f storage/production.sqlite3 ]; then
+  echo "Creating new database..."
+  bundle exec rake db:create RAILS_ENV=production
+  echo "Loading schema..."
+  bundle exec rake db:schema:load RAILS_ENV=production
+  echo "Loading seed data..."
+  bundle exec rake db:seed RAILS_ENV=production
+else
+  echo "Database exists, running migrations..."
+  bundle exec rake db:migrate RAILS_ENV=production
+fi
 
 echo "=== Build Complete ==="
