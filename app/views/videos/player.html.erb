@@ -67,22 +67,26 @@
               <h7 class="category-title">👀 目線・注視</h7>
               <div class="factor-item positive">
                 <div class="factor-header">集中注視 (+0.5点)</div>
-                <div class="factor-detail">画面中央を注視している場合に加点されます</div>
+                <div class="factor-detail">画面中央15px以内を注視している場合、5秒ごとに加点されます</div>
+              </div>
+              <div class="factor-item positive">
+                <div class="factor-header">正面注視 (+1点)</div>
+                <div class="factor-detail">正面を向いて学習している場合、5秒ごとに加点されます</div>
               </div>
               <div class="factor-item positive">
                 <div class="factor-header">問題確認 (+5点)</div>
-                <div class="factor-detail">問題表示後3秒以内に右向きの視線速度が10px/s以上になった場合に加点されます</div>
+                <div class="factor-detail">問題表示後3秒以内に視線速度が10px/s以上になった場合に加点されます</div>
               </div>
               <div class="factor-item negative">
-                <div class="factor-header">目線停止 (-20点まで)</div>
-                <div class="factor-detail">10秒以上目線の動きがない場合に減点されます</div>
+                <div class="factor-header">目線停止 (-1点/秒)</div>
+                <div class="factor-detail">10秒以上目線の動き(10px以上)がない場合に減点されます</div>
               </div>
             </div>
             
             <div class="factor-category">
               <h7 class="category-title">⚡ 反応速度</h7>
               <div class="factor-item negative">
-                <div class="factor-header">回答遅延 (-15点まで)</div>
+                <div class="factor-header">回答遅延 (-1点/秒)</div>
                 <div class="factor-detail">問題表示から30秒以上経過して回答した場合に減点されます</div>
               </div>
               <div class="factor-item positive">
@@ -204,6 +208,12 @@
               <h7 class="settings-category-title">その他設定</h7>
               
               <div class="setting-item">
+                <label for="movement-detection-threshold">目線動き検出閾値:</label>
+                <input type="number" id="movement-detection-threshold" value="13" min="1" max="50" step="1">
+                <span class="setting-unit">ピクセル</span>
+              </div>
+              
+              <div class="setting-item">
                 <label for="center-gaze-threshold">中央注視判定範囲:</label>
                 <input type="number" id="center-gaze-threshold" value="15" min="5" max="50" step="1">
                 <span class="setting-unit">ピクセル</span>
@@ -211,7 +221,7 @@
               
               <div class="setting-item">
                 <label for="gaze-velocity-threshold">問題確認判定速度:</label>
-                <input type="number" id="gaze-velocity-threshold" value="10" min="1" max="50" step="1">
+                <input type="number" id="gaze-velocity-threshold" value="5" min="1" max="50" step="1">
                 <span class="setting-unit">px/s</span>
               </div>
             </div>
@@ -1094,7 +1104,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // 集中度管理クラス
   class ConcentrationTracker {
     constructor() {
-      this.score = 100;
+      this.score = 20;
       this.faceDetected = false;
       this.gazeX = 0;
       this.gazeY = 0;
@@ -1112,28 +1122,29 @@ document.addEventListener('DOMContentLoaded', function() {
       this.scoreSettings = {
         // 減点系
         faceNotDetectedPenalty: 2,      // 顔未検出時の減点
-        movementStopPenalty: 1,         // 目線停止時の減点（秒あたり）
-        responseDelayPenalty: 1,        // 回答遅延時の減点（秒あたり）
+        movementStopPenalty: 2,         // 目線停止時の減点（秒あたり）
+        responseDelayPenalty: 5,        // 回答遅延時の減点（秒あたり）
         
         // 加点系
         centerGazeBonus: 0,           // 中央注視時の加点
         // 集中注視: 学習者が画面の中央（動画やコンテンツがある場所）に視線を向けている状態
-        questionConfirmBonus: 5,        // 問題確認時の加点
-        quickResponseBonus: 3,          // 素早い回答時の加点
+        questionConfirmBonus: 15,        // 問題確認時の加点
+        quickResponseBonus: 15,          // 素早い回答時の加点
         noteInputBonus: 3,              // メモ入力時の加点
         frontFacingBonus: 1,            // 正面注視時の加点　
         // 正面注視: 学習者が画面から離れたり、横を向いたりせず、正面を向いて学習している状態
         
         // 時間間隔設定
-        movementStopThreshold: 10,      // 目線停止と判定する時間（秒）
-        responseDelayThreshold: 30,     // 回答遅延と判定する時間（秒）
-        quickResponseThreshold: 5,      // 素早い回答と判定する時間（秒）
-        questionConfirmWindow: 3,       // 問題確認判定の時間窓（秒）
+        movementStopThreshold: 5,      // 目線停止と判定する時間（秒）
+        responseDelayThreshold: 20,     // 回答遅延と判定する時間（秒）
+        quickResponseThreshold: 10,      // 素早い回答と判定する時間（秒）
+        questionConfirmWindow: 4,       // 問題確認判定の時間窓（秒）
         frontFacingInterval: 5000,      // 正面注視加点の間隔（ミリ秒）
         centerGazeInterval: 5000,       // 集中注視加点の間隔（ミリ秒）
         
         // その他設定
-        gazeVelocityThreshold: 10,      // 問題確認と判定する視線速度（px/s）
+        movementDetectionThreshold: 8, // 目線停止・目線動き検出の閾値（ピクセル）
+        gazeVelocityThreshold: 5,      // 問題確認と判定する視線速度（px/s）
         centerGazeThreshold: 15         // 中央注視と判定する範囲（ピクセル）
       };
       
@@ -1444,16 +1455,28 @@ document.addEventListener('DOMContentLoaded', function() {
           this.calculateGazeFromFaceOrientation(landmarks);
         }
         
-        // 動きがあった場合は記録
-        if (Math.abs(this.gazeX) > 5 || Math.abs(this.gazeY) > 5) {
-          this.lastMovementTime = Date.now();
-        }
-        
         // 視線データのスムージング処理
         this.applySmoothingToGaze();
         
         // 眼球動きの変化量を計算（スムージング後のデータを使用）
         this.calculateGazeMovementDelta();
+        
+        // 動きがあった場合は記録（ただし、急激な変化はまばたきとして除外）
+        const positionChange = Math.sqrt(
+          Math.pow(this.gazeX - this.previousGaze.x, 2) + 
+          Math.pow(this.gazeY - this.previousGaze.y, 2)
+        );
+        const velocityMagnitude = Math.sqrt(
+          Math.pow(this.gazeVelocity.x, 2) + 
+          Math.pow(this.gazeVelocity.y, 2)
+        );
+        
+        // 位置が閾値を超えていて、かつ速度が異常に高くない場合のみ動きとして記録
+        if ((Math.abs(this.gazeX) > this.scoreSettings.movementDetectionThreshold || 
+             Math.abs(this.gazeY) > this.scoreSettings.movementDetectionThreshold) &&
+            velocityMagnitude < 20) { // 20px/s以下の変化のみ有効な動きとする
+          this.lastMovementTime = Date.now();
+        }
         
         // 顔の向きを計算
         this.calculateHeadPoseFromLandmarks(landmarks);
@@ -2297,8 +2320,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (this.questionDisplayTime && !this.responseStartTime && !this.questionConfirmed) {
           const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
           if (timeFromQuestion < this.scoreSettings.questionConfirmWindow) {
-            // 右向きの視線速度をチェック
-            if (this.gazeVelocity.x > this.scoreSettings.gazeVelocityThreshold) {
+            // 視線速度の絶対値をチェック
+            if (Math.abs(this.gazeVelocity.x) > this.scoreSettings.gazeVelocityThreshold) {
               const gazeBonus = this.scoreSettings.questionConfirmBonus;
               newScore += gazeBonus;
               this.questionConfirmed = true; // フラグを立てて一度だけ実行
@@ -2307,7 +2330,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 change: gazeBonus, 
                 type: 'positive',
                 category: '目線',
-                detail: `問題表示後${timeFromQuestion.toFixed(1)}秒で右向き速度${this.gazeVelocity.x.toFixed(1)}px/sを検出しました`
+                detail: `問題表示後${timeFromQuestion.toFixed(1)}秒で視線速度${Math.abs(this.gazeVelocity.x).toFixed(1)}px/sを検出しました`
               });
             }
           }
@@ -3566,8 +3589,9 @@ document.addEventListener('DOMContentLoaded', function() {
         questionConfirmWindow: 3,
         frontFacingInterval: 5000,
         centerGazeInterval: 3000,
+        movementDetectionThreshold: 10,
         gazeVelocityThreshold: 10,
-        centerGazeThreshold: 15
+        centerGazeThreshold: 10
       };
       
       // 設定をデフォルトに戻す
