@@ -19,10 +19,10 @@ bundle exec rake assets:clean
 
 echo "Setting up database..."
 # データベースのセットアップ
-bundle exec rake db:create RAILS_ENV=production
+bundle exec rake db:create RAILS_ENV=production || true
 echo "Running migrations..."
-bundle exec rake db:migrate RAILS_ENV=production
+bundle exec rake db:schema:load RAILS_ENV=production
 echo "Loading seed data..."
-bundle exec rake db:seed RAILS_ENV=production
+bundle exec rake db:seed RAILS_ENV=production || true
 
 echo "=== Build Complete ==="
