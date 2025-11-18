@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: ondemand-viewer
+    runtime: ruby
+    buildCommand: "./bin/render-build.sh"
+    startCommand: "bundle exec puma -C config/puma.rb"
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite3:storage/production.sqlite3
+      - key: RAILS_ENV
+        value: production
+      - key: RAILS_LOG_TO_STDOUT
+        value: enabled
+      - key: RAILS_SERVE_STATIC_FILES
+        value: enabled
+      - key: RAILS_MASTER_KEY
+        sync: false
+    disk:
+      name: ondemand-viewer-storage
+      mountPath: /opt/render/project/src/storage
+      sizeGB: 1
