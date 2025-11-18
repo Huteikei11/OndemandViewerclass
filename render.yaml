@@ -2,6 +2,7 @@ services:
   - type: web
     name: ondemand-viewer
     runtime: ruby
+    branch: TimeLine
     buildCommand: "./bin/render-build.sh"
     startCommand: "bundle exec puma -C config/puma.rb"
     envVars:
