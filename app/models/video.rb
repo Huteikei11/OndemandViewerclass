@@ -13,6 +13,9 @@ class Video < ApplicationRecord
   has_one_attached :video_file
   has_one_attached :pdf_file
 
+  # Password authentication for private videos
+  has_secure_password validations: false
+
   # Validations
   validates :title, presence: true
   validates :video_file, presence: true
@@ -36,6 +39,6 @@ class Video < ApplicationRecord
 
   def authenticate_with_password(input_password)
     return true unless is_private?
-    password == input_password
+    authenticate(input_password)
   end
 end
