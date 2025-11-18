@@ -17,13 +17,19 @@ class User < ApplicationRecord
   # Validations
   validates :name, presence: true, length: { minimum: 1 }
 
+  # Check if user is admin
+  def admin?
+    admin == true
+  end
+
   # Check if user can manage a video
   def can_manage_video?(video)
-    video.creator == self || managed_videos.include?(video)
+    admin? || video.creator == self || managed_videos.include?(video)
   end
 
   # Check if user can access a video
   def can_access_video?(video)
+    return true if admin?
     return true unless video.is_private?
     can_manage_video?(video) || accessible_videos.include?(video)
   end
