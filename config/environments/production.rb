@@ -90,4 +90,7 @@ Rails.application.configure do
   
   # Allow Render.com hosts
   config.hosts << /.*\.onrender\.com/
+  
+  # 本番環境でのエラーをより詳細に表示（デバッグ用、問題解決後は削除推奨）
+  config.consider_all_requests_local = true if ENV['DEBUG_MODE']
 end
