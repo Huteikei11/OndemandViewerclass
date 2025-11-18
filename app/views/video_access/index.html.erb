@@ -15,11 +15,15 @@
               <div class="card-body">
                 <h5 class="card-title"><%= video.title %></h5>
                 <p class="card-text"><%= truncate(video.description, length: 100) if video.description %></p>
-                <%= link_to "視聴する", player_video_path(video), class: "btn btn-success" %>
-                <% if user_signed_in? && current_user.can_manage_video?(video) %>
-                  <%= link_to "編集", edit_video_path(video), class: "btn btn-outline-primary btn-sm" %>
-                  <%= link_to "分析", video_management_analytics_path(video_id: video), class: "btn btn-outline-info btn-sm" %>
-                <% end %>
+                <div class="d-flex flex-wrap gap-1">
+                  <%= link_to "視聴する", player_video_path(video), class: "btn btn-success btn-sm" %>
+                  <% if user_signed_in? && current_user.can_manage_video?(video) %>
+                    <%= link_to "編集", edit_video_path(video), class: "btn btn-outline-primary btn-sm" %>
+                    <%= link_to "分析", video_management_analytics_path(video_id: video), class: "btn btn-outline-info btn-sm" %>
+                    <%= link_to "削除", video_path(video), data: { "turbo-method": :delete, "turbo-confirm": "本当に削除しますか？" }, 
+                        class: "btn btn-outline-danger btn-sm" %>
+                  <% end %>
+                </div>
               </div>
             </div>
           </div>
@@ -68,11 +72,15 @@
               <div class="card-body">
                 <h5 class="card-title"><%= video.title %></h5>
                 <p class="card-text"><%= truncate(video.description, length: 100) if video.description %></p>
-                <%= link_to "視聴する", player_video_path(video), class: "btn btn-success" %>
-                <% if current_user.can_manage_video?(video) %>
-                  <%= link_to "編集", edit_video_path(video), class: "btn btn-outline-primary btn-sm" %>
-                  <%= link_to "分析", video_management_analytics_path(video_id: video), class: "btn btn-outline-info btn-sm" %>
-                <% end %>
+                <div class="d-flex flex-wrap gap-1">
+                  <%= link_to "視聴する", player_video_path(video), class: "btn btn-success btn-sm" %>
+                  <% if current_user.can_manage_video?(video) %>
+                    <%= link_to "編集", edit_video_path(video), class: "btn btn-outline-primary btn-sm" %>
+                    <%= link_to "分析", video_management_analytics_path(video_id: video), class: "btn btn-outline-info btn-sm" %>
+                    <%= link_to "削除", video_path(video), data: { "turbo-method": :delete, "turbo-confirm": "本当に削除しますか？" }, 
+                        class: "btn btn-outline-danger btn-sm" %>
+                  <% end %>
+                </div>
               </div>
             </div>
           </div>
