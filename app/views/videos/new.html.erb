@@ -47,7 +47,7 @@
 
       <div class="form-group" id="password-field" style="display: none;">
         <%= form.label :password, "アクセスパスワード" %>
-        <%= form.password_field :password, class: "form-control" %>
+        <%= form.password_field :password, class: "form-control", autocomplete: "new-password" %>
         <small class="form-text text-muted">限定公開の場合、このパスワードが必要になります。</small>
       </div>
 
