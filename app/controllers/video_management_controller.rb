@@ -1,7 +1,7 @@
 class VideoManagementController < ApplicationController
   before_action :authenticate_user!
   before_action :set_video
-  before_action :check_management_permission
+  before_action :check_management_permission, except: [:save_session_data]
 
   def analytics
     @questions = @video.questions.includes(:user_responses, :options).order(:time_position)
