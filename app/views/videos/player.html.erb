@@ -4285,9 +4285,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        // メモ欄をクリア
-        noteTextarea.value = '';
-        
         // 保存成功メッセージ
         alert('メモをtxtファイルとしてダウンロードしました！');
       } else {
