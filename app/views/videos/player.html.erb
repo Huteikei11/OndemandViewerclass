@@ -363,20 +363,6 @@
       
       <div class="notes-content">
         <textarea id="note-textarea" rows="10" class="form-control" placeholder="ここにメモを入力できます..."></textarea>
-        
-        <div class="saved-notes" id="saved-notes">
-          <% if @notes.any? %>
-            <h4>保存したメモ</h4>
-            <ul class="notes-list">
-              <% @notes.each do |note| %>
-                <li class="note-item">
-                  <div class="note-time"><%= format_time_position(note.time_position) %></div>
-                  <div class="note-text"><%= note.content %></div>
-                </li>
-              <% end %>
-            </ul>
-          <% end %>
-        </div>
       </div>
     </div>
   </div>
