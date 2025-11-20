@@ -233,51 +233,43 @@
     }
     
     try {
+      // 集中度スコアで色分けした点データを作成
+      const getColorByScore = (score) => {
+        if (score <= 25) return '#dc3545'; // 赤
+        if (score <= 50) return '#fd7e14'; // オレンジ
+        if (score <= 75) return '#ffc107'; // 黄色
+        return '#28a745'; // 緑
+      };
+      
+      // タイムラインデータを集中度スコアで色分け
+      const scoreRanges = [
+        { label: '集中度: 0-25 (低)', color: '#dc3545', data: [] },
+        { label: '集中度: 26-50', color: '#fd7e14', data: [] },
+        { label: '集中度: 51-75', color: '#ffc107', data: [] },
+        { label: '集中度: 76-100 (高)', color: '#28a745', data: [] }
+      ];
+      
+      data.timeline.forEach(e => {
+        const point = {x: e.x, y: e.video_time || 0, score: e.y, description: e.description};
+        if (e.y <= 25) scoreRanges[0].data.push(point);
+        else if (e.y <= 50) scoreRanges[1].data.push(point);
+        else if (e.y <= 75) scoreRanges[2].data.push(point);
+        else scoreRanges[3].data.push(point);
+      });
+      
+      const datasets = scoreRanges.map(range => ({
+        label: range.label,
+        data: range.data,
+        borderColor: range.color,
+        backgroundColor: range.color,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        showLine: false
+      }));
+      
       sessionDetailChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          datasets: [
-            {
-              label: '集中度スコア',
-              data: data.timeline.map(e => ({x: e.x, y: e.y, video_time: e.video_time})),
-              borderColor: '#007bff',
-              backgroundColor: 'rgba(0, 123, 255, 0.1)',
-              tension: 0.3,
-              fill: false,
-              pointRadius: 3,
-              pointHoverRadius: 6
-            },
-            {
-              label: 'スコア変化イベント',
-              data: data.score_changes.map(e => ({x: e.time, y: e.score, reason: e.reason, change: e.change})),
-              borderColor: '#28a745',
-              backgroundColor: '#28a745',
-              pointRadius: 6,
-              pointHoverRadius: 8,
-              showLine: false
-            },
-            {
-              label: '動画操作',
-              data: data.video_operations.map(e => ({x: e.time, y: 50, description: e.description, video_time: e.video_time})),
-              borderColor: '#ffc107',
-              backgroundColor: '#ffc107',
-              pointRadius: 8,
-              pointHoverRadius: 10,
-              pointStyle: 'triangle',
-              showLine: false
-            },
-            {
-              label: 'ユーザー操作',
-              data: data.interactions.map(e => ({x: e.time, y: 30, description: e.description})),
-              borderColor: '#17a2b8',
-              backgroundColor: '#17a2b8',
-              pointRadius: 5,
-              pointHoverRadius: 7,
-              pointStyle: 'circle',
-              showLine: false
-            }
-          ]
-        },
+        type: 'scatter',
+        data: { datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -290,17 +282,25 @@
               },
               ticks: {
                 callback: function(value) {
-                  return Math.floor(value / 60) + '分';
+                  const minutes = Math.floor(value / 60);
+                  const seconds = Math.floor(value % 60);
+                  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
                 }
               }
             },
             y: {
+              type: 'linear',
               title: {
                 display: true,
-                text: '集中スコア'
+                text: '動画再生時間（秒）'
               },
-              min: 0,
-              max: 100,
+              ticks: {
+                callback: function(value) {
+                  const minutes = Math.floor(value / 60);
+                  const seconds = Math.floor(value % 60);
+                  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+              },
               beginAtZero: true
             }
           },
@@ -333,21 +333,11 @@
                   const point = context.parsed;
                   const rawData = context.raw;
                   
-                  if (context.datasetIndex === 0) {
-                    let label = `スコア: ${point.y.toFixed(1)}点`;
-                    if (rawData.video_time !== undefined && rawData.video_time !== null) {
-                      const videoMinutes = Math.floor(rawData.video_time / 60);
-                      const videoSeconds = Math.floor(rawData.video_time % 60);
-                      label += ` (動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')})`;
-                    }
-                    return label;
-                  } else if (context.datasetIndex === 1) {
-                    return `${rawData.reason} (${rawData.change > 0 ? '+' : ''}${rawData.change.toFixed(1)}点)`;
-                  } else if (context.datasetIndex === 2) {
-                    return `${rawData.description} (動画時刻: ${formatTime(rawData.video_time)})`;
-                  } else {
-                    return rawData.description;
-                  }
+                  const score = rawData.score !== undefined ? rawData.score : 0;
+                  const videoMinutes = Math.floor(point.y / 60);
+                  const videoSeconds = Math.floor(point.y % 60);
+                  
+                  return `集中度: ${score.toFixed(1)}点 | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}`;
                 },
                 title: function(context) {
                   const minutes = Math.floor(context[0].parsed.x / 60);
