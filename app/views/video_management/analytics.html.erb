@@ -676,7 +676,7 @@
       // ユーザーインタラクション（問題回答、メモなど）
       const interactionsData = (data.interactions || []).map(i => ({
         x: i.time,
-        y: 0, // video_timeがない場合は0
+        y: i.video_time || 0,
         description: i.description,
         type: i.type
       }));

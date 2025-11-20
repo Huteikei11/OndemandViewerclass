@@ -173,7 +173,8 @@ class ViewingHistoryController < ApplicationController
         {
           time: e.session_elapsed,
           type: e.event_type,
-          description: e.description
+          description: e.description,
+          video_time: e.video_time
         }
       }
     }
