@@ -2767,9 +2767,17 @@ document.addEventListener('DOMContentLoaded', function() {
       // videoElementが未設定の場合は再取得を試みる
       if (!this.videoElement) {
         this.videoElement = document.getElementById('video-player');
+        console.log('videoElement再取得:', this.videoElement ? 'Success' : 'Failed');
       }
       
       const videoTime = this.videoElement ? this.videoElement.currentTime : 0;
+      
+      // デバッグログ：特にメモ入力時のvideo_timeを確認
+      if (eventType.includes('note') || eventType.includes('interaction')) {
+        console.log(`[${eventType}] videoElement:`, this.videoElement);
+        console.log(`[${eventType}] videoTime:`, videoTime);
+        console.log(`[${eventType}] currentTime from element:`, this.videoElement?.currentTime);
+      }
       
       const timestampEntry = {
         id: this.timestampLog.length + 1,
