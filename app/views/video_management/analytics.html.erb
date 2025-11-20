@@ -832,19 +832,40 @@ function initializeAnalyticsCharts() {
       'rgba(83, 102, 255, 1)'
     ];
 
+    // 集中度スコアで色を決定する関数
+    const getColorByScore = (score) => {
+      if (score <= 25) return '#dc3545'; // 赤
+      if (score <= 50) return '#fd7e14'; // オレンジ
+      if (score <= 75) return '#ffc107'; // 黄色
+      return '#28a745'; // 緑
+    };
+
     chartInstances.scoreTimeline = new Chart(scoreTimelineCtx, {
-      type: 'line',
+      type: 'scatter',
       data: {
-        datasets: scoreTimelineData.map((session, index) => ({
-          label: session.label,
-          data: session.data,
-          borderColor: colors[index % colors.length],
-          backgroundColor: colors[index % colors.length].replace('1)', '0.1)'),
-          tension: 0.3,
-          fill: false,
-          pointRadius: 3,
-          pointHoverRadius: 6
-        }))
+        datasets: scoreTimelineData.map((session, index) => {
+          // 各セッションのデータに色情報を追加
+          const sessionData = session.data.map(point => ({
+            x: point.x,
+            y: point.video_time || 0,
+            score: point.y,
+            video_time: point.video_time,
+            color: getColorByScore(point.y)
+          }));
+          
+          return {
+            label: session.label,
+            data: sessionData,
+            borderColor: colors[index % colors.length],
+            borderWidth: 2,
+            showLine: true,
+            tension: 0,
+            pointRadius: 4,
+            pointHoverRadius: 7,
+            pointBackgroundColor: sessionData.map(d => d.color),
+            pointBorderColor: sessionData.map(d => d.color)
+          };
+        })
       },
       options: {
         ...commonOptions,
@@ -857,17 +878,26 @@ function initializeAnalyticsCharts() {
             },
             ticks: {
               callback: function(value) {
-                return Math.floor(value / 60) + '分';
+                const minutes = Math.floor(value / 60);
+                const seconds = Math.floor(value % 60);
+                return `${minutes}:${seconds.toString().padStart(2, '0')}`;
               }
             }
           },
           y: {
+            type: 'linear',
             title: {
               display: true,
-              text: '集中スコア'
+              text: '動画再生時間（秒）'
             },
-            beginAtZero: true,
-            max: 100
+            ticks: {
+              callback: function(value) {
+                const minutes = Math.floor(value / 60);
+                const seconds = Math.floor(value % 60);
+                return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+              }
+            },
+            beginAtZero: true
           }
         },
         plugins: {
@@ -885,27 +915,22 @@ function initializeAnalyticsCharts() {
             pan: {
               enabled: true,
               mode: 'xy',
-            },
-            limits: {
-              y: {min: 0, max: 100}
             }
           },
           tooltip: {
             callbacks: {
               label: function(context) {
                 const point = context.raw;
-                let label = context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '点';
-                if (point.video_time !== undefined && point.video_time !== null) {
-                  const videoMinutes = Math.floor(point.video_time / 60);
-                  const videoSeconds = Math.floor(point.video_time % 60);
-                  label += ` (動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')})`;
-                }
-                return label;
+                const score = point.score !== undefined ? point.score : 0;
+                const videoMinutes = Math.floor(context.parsed.y / 60);
+                const videoSeconds = Math.floor(context.parsed.y % 60);
+                
+                return `${context.dataset.label} - 集中度: ${score.toFixed(1)}点 | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}`;
               },
               title: function(context) {
                 const minutes = Math.floor(context[0].parsed.x / 60);
                 const seconds = Math.floor(context[0].parsed.x % 60);
-                return `経過時間: ${minutes}分${seconds}秒`;
+                return `経過時間: ${minutes}:${seconds.toString().padStart(2, '0')}`;
               }
             }
           }
