@@ -641,7 +641,52 @@
         color: getColorByScore(e.y)
       }));
       
+      // 動画操作イベントをスキップと停止に分類
+      const skipOpsData = (data.video_operations || []).filter(op => 
+        op.operation.includes('skip') || op.operation.includes('seek') || op.description.includes('スキップ') || op.description.includes('シーク')
+      ).map(op => ({
+        x: op.time,
+        y: op.video_time || 0,
+        description: op.description,
+        operation: op.operation
+      }));
+      
+      const pauseOpsData = (data.video_operations || []).filter(op => 
+        op.operation.includes('pause') || op.operation.includes('stop') || op.description.includes('停止') || op.description.includes('一時停止')
+      ).map(op => ({
+        x: op.time,
+        y: op.video_time || 0,
+        description: op.description,
+        operation: op.operation
+      }));
+      
+      // その他の動画操作
+      const otherOpsData = (data.video_operations || []).filter(op => 
+        !op.operation.includes('skip') && !op.operation.includes('seek') && 
+        !op.operation.includes('pause') && !op.operation.includes('stop') &&
+        !op.description.includes('スキップ') && !op.description.includes('シーク') &&
+        !op.description.includes('停止') && !op.description.includes('一時停止')
+      ).map(op => ({
+        x: op.time,
+        y: op.video_time || 0,
+        description: op.description,
+        operation: op.operation
+      }));
+      
+      // ユーザーインタラクション（問題回答、メモなど）
+      const interactionsData = (data.interactions || []).map(i => ({
+        x: i.time,
+        y: 0, // video_timeがない場合は0
+        description: i.description,
+        type: i.type
+      }));
+      
       const datasets = [
+        // 凡例用のダミーデータセット（最初に配置して凡例の順序を制御）
+        { label: '集中度: 0-25 (低)', data: [], borderColor: '#dc3545', backgroundColor: '#dc3545', pointRadius: 5 },
+        { label: '集中度: 26-50', data: [], borderColor: '#fd7e14', backgroundColor: '#fd7e14', pointRadius: 5 },
+        { label: '集中度: 51-75', data: [], borderColor: '#ffc107', backgroundColor: '#ffc107', pointRadius: 5 },
+        { label: '集中度: 76-100 (高)', data: [], borderColor: '#28a745', backgroundColor: '#28a745', pointRadius: 5 },
         {
           label: '視聴タイムライン',
           data: timelineData,
@@ -654,11 +699,46 @@
           pointBackgroundColor: timelineData.map(d => d.color),
           pointBorderColor: timelineData.map(d => d.color)
         },
-        // 凡例用のダミーデータセット
-        { label: '集中度: 0-25 (低)', data: [], borderColor: '#dc3545', backgroundColor: '#dc3545', pointRadius: 5 },
-        { label: '集中度: 26-50', data: [], borderColor: '#fd7e14', backgroundColor: '#fd7e14', pointRadius: 5 },
-        { label: '集中度: 51-75', data: [], borderColor: '#ffc107', backgroundColor: '#ffc107', pointRadius: 5 },
-        { label: '集中度: 76-100 (高)', data: [], borderColor: '#28a745', backgroundColor: '#28a745', pointRadius: 5 }
+        {
+          label: 'スキップ/シーク',
+          data: skipOpsData,
+          borderColor: '#6f42c1',
+          backgroundColor: '#6f42c1',
+          pointRadius: 10,
+          pointHoverRadius: 13,
+          pointStyle: 'triangle',
+          showLine: false
+        },
+        {
+          label: '一時停止',
+          data: pauseOpsData,
+          borderColor: '#6f42c1',
+          backgroundColor: '#6f42c1',
+          pointRadius: 10,
+          pointHoverRadius: 13,
+          pointStyle: 'rect',
+          showLine: false
+        },
+        {
+          label: 'その他の操作',
+          data: otherOpsData,
+          borderColor: '#6f42c1',
+          backgroundColor: '#6f42c1',
+          pointRadius: 9,
+          pointHoverRadius: 12,
+          pointStyle: 'circle',
+          showLine: false
+        },
+        {
+          label: 'ユーザー操作',
+          data: interactionsData,
+          borderColor: '#20c997',
+          backgroundColor: '#20c997',
+          pointRadius: 9,
+          pointHoverRadius: 12,
+          pointStyle: 'star',
+          showLine: false
+        }
       ];
       
       sessionDetailChart = new Chart(ctx, {
@@ -725,6 +805,15 @@
             callbacks: {
               label: function(context) {
                 const rawData = context.raw;
+                
+                // イベントマーカーの場合（datasetIndexが5以上）
+                if (context.datasetIndex >= 5) {
+                  const videoMinutes = Math.floor(context.parsed.y / 60);
+                  const videoSeconds = Math.floor(context.parsed.y % 60);
+                  return `${rawData.description} | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}`;
+                }
+                
+                // 通常のタイムラインポイント
                 const videoMinutes = Math.floor(context.parsed.y / 60);
                 const videoSeconds = Math.floor(context.parsed.y % 60);
                 return `集中度: ${rawData.score.toFixed(1)}点 | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}`;
