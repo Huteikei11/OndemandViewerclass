@@ -2763,6 +2763,12 @@ document.addEventListener('DOMContentLoaded', function() {
     addTimestamp(eventType, description, additionalData = {}) {
       const currentTime = Date.now();
       const sessionElapsed = (currentTime - this.sessionStartTime) / 1000; // 秒
+      
+      // videoElementが未設定の場合は再取得を試みる
+      if (!this.videoElement) {
+        this.videoElement = document.getElementById('video-player');
+      }
+      
       const videoTime = this.videoElement ? this.videoElement.currentTime : 0;
       
       const timestampEntry = {
