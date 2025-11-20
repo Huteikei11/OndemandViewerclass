@@ -15,7 +15,7 @@ class VideosController < ApplicationController
   # Player view for watching videos with questions
   def player
     @questions = @video.questions.order(:time_position)
-    @notes = @video.notes.order(:time_position)
+    @notes = @video.notes.where(user: current_user).order(:time_position)
     @user_responses = current_user&.user_responses&.joins(:question)&.where(questions: { video_id: @video.id }) || []
   end
 
