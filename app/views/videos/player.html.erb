@@ -4278,59 +4278,33 @@ document.addEventListener('DOMContentLoaded', function() {
         // 集中度トラッカーにメモ入力を通知
         concentrationTracker.onNoteInput();
         
-        const formData = new FormData();
-        formData.append('note[content]', noteContent);
-        formData.append('note[time_position]', Math.floor(videoPlayer.currentTime));
+        // 現在の動画時刻を取得
+        const currentTime = Math.floor(videoPlayer.currentTime);
+        const minutes = Math.floor(currentTime / 60);
+        const seconds = Math.floor(currentTime % 60);
+        const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         
-        // Send note to the server
-        fetch(`/videos/<%= @video.id %>/notes`, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
-          }
-        })
-        .then(response => response.json())
-        .then(data => {
-          // Add the new note to the list
-          const notesList = document.querySelector('.notes-list') || document.createElement('ul');
-          
-          if (!notesList.classList.contains('notes-list')) {
-            notesList.className = 'notes-list';
-            
-            const heading = document.createElement('h4');
-            heading.textContent = '保存したメモ';
-            
-            savedNotes.innerHTML = '';
-            savedNotes.appendChild(heading);
-            savedNotes.appendChild(notesList);
-          }
-          
-          const noteItem = document.createElement('li');
-          noteItem.className = 'note-item';
-          
-          const noteTime = document.createElement('div');
-          noteTime.className = 'note-time';
-          
-          const minutes = Math.floor(data.time_position / 60);
-          const seconds = Math.floor(data.time_position % 60);
-          noteTime.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-          
-          const noteText = document.createElement('div');
-          noteText.className = 'note-text';
-          noteText.textContent = data.content;
-          
-          noteItem.appendChild(noteTime);
-          noteItem.appendChild(noteText);
-          notesList.appendChild(noteItem);
-          
-          // Clear the textarea
-          noteTextarea.value = '';
-        })
-        .catch(error => {
-          console.error('Error:', error);
-          alert('メモの保存中にエラーが発生しました。');
-        });
+        // txtファイルの内容を生成
+        const videoTitle = '<%= @video.title.gsub("'", "\\'") %>';
+        const timestamp = new Date().toLocaleString('ja-JP');
+        const txtContent = `動画タイトル: ${videoTitle}\n作成日時: ${timestamp}\n動画時刻: ${timeString}\n\n${noteContent}`;
+        
+        // Blobを作成してダウンロード
+        const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `memo_${videoTitle.replace(/[\\/:*?"<>|]/g, '_')}_${timeString.replace(':', '-')}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // メモ欄をクリア
+        noteTextarea.value = '';
+        
+        // 保存成功メッセージ
+        alert('メモをtxtファイルとしてダウンロードしました！');
       } else {
         alert('メモを入力してください');
       }
