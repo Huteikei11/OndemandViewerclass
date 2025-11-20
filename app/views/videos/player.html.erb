@@ -1079,6 +1079,12 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
 <script>
+// 初回アクセス時のみ自動リロード
+if (!sessionStorage.getItem('videoPageLoaded')) {
+  sessionStorage.setItem('videoPageLoaded', 'true');
+  location.reload();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   const videoPlayer = document.getElementById('video-player');
   
@@ -4295,6 +4301,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Clean up interval when leaving the page
     window.addEventListener('beforeunload', function() {
       clearInterval(videoCheckInterval);
+      // 動画ページを離れるときにsessionStorageをクリア（次回アクセス時にリロードするため）
+      sessionStorage.removeItem('videoPageLoaded');
     });
   }
 });
