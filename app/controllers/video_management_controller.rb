@@ -1,7 +1,7 @@
 class VideoManagementController < ApplicationController
   before_action :authenticate_user!
   before_action :set_video
-  before_action :check_management_permission, except: [:save_session_data]
+  before_action :check_management_permission, except: [ :save_session_data ]
 
   def analytics
     @questions = @video.questions.includes(:user_responses, :options).order(:time_position)
@@ -739,6 +739,18 @@ class VideoManagementController < ApplicationController
     end
 
     send_data csv_data, filename: "questions_stats_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
+  end
+
+  def destroy_session
+    @session = LearningSession.find(params[:session_id])
+
+    # セッションが存在し、管理権限があることを確認
+    if @session && @session.video_id == @video.id
+      @session.destroy
+      redirect_to video_management_analytics_path(video_id: @video), notice: "学習セッションを削除しました。"
+    else
+      redirect_to video_management_analytics_path(video_id: @video), alert: "セッションの削除に失敗しました。"
+    end
   end
 
   private
