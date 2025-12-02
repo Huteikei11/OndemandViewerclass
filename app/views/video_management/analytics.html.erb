@@ -174,13 +174,17 @@
               <div class="tab-pane fade show active" id="score-timeline" role="tabpanel">
                 <div class="mb-3">
                   <div class="d-flex justify-content-between align-items-center mb-2">
-                    <strong>表示するセッション:</strong>
+                    <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#scoreTimelineTogglesCollapse" aria-expanded="true">
+                      <i class="bi bi-chevron-down"></i> 表示するセッション
+                    </button>
                     <div>
                       <button class="btn btn-sm btn-outline-primary" onclick="toggleAllSessions('scoreTimeline', true)">すべて表示</button>
                       <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllSessions('scoreTimeline', false)">すべて非表示</button>
                     </div>
                   </div>
-                  <div id="scoreTimelineSessionToggles" class="row"></div>
+                  <div class="collapse show" id="scoreTimelineTogglesCollapse">
+                    <div id="scoreTimelineSessionToggles" class="row"></div>
+                  </div>
                 </div>
                 <div class="chart-container" style="position: relative; height: 400px;">
                   <canvas id="scoreTimelineChart"></canvas>
@@ -248,13 +252,17 @@
               <div class="tab-pane fade" id="user-operations" role="tabpanel">
                 <div class="mb-3">
                   <div class="d-flex justify-content-between align-items-center mb-2">
-                    <strong>表示するセッション:</strong>
+                    <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#userOperationsTogglesCollapse" aria-expanded="true">
+                      <i class="bi bi-chevron-down"></i> 表示するセッション
+                    </button>
                     <div>
                       <button class="btn btn-sm btn-outline-primary" onclick="toggleAllSessions('userOperations', true)">すべて表示</button>
                       <button class="btn btn-sm btn-outline-secondary" onclick="toggleAllSessions('userOperations', false)">すべて非表示</button>
                     </div>
                   </div>
-                  <div id="userOperationsSessionToggles" class="row"></div>
+                  <div class="collapse show" id="userOperationsTogglesCollapse">
+                    <div id="userOperationsSessionToggles" class="row"></div>
+                  </div>
                 </div>
                 <div class="chart-container" style="position: relative; height: 400px;">
                   <canvas id="userOperationsChart"></canvas>
@@ -583,12 +591,39 @@
     font-size: 0.9em;
     color: #6c757d;
   }
+  
+  /* トグルボタンのアイコン回転アニメーション */
+  [data-bs-toggle="collapse"] i.bi-chevron-down {
+    transition: transform 0.3s ease;
+  }
+  
+  [data-bs-toggle="collapse"][aria-expanded="false"] i.bi-chevron-down {
+    transform: rotate(-90deg);
+  }
 </style>
 
 <script>
 // グローバルスコープ汚染を避けるための即時実行関数
 (function() {
   'use strict';
+  
+  // トグルボタンのアイコン回転制御
+  document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(button => {
+      const targetId = button.getAttribute('data-bs-target');
+      const target = document.querySelector(targetId);
+      
+      if (target) {
+        target.addEventListener('show.bs.collapse', function() {
+          button.setAttribute('aria-expanded', 'true');
+        });
+        
+        target.addEventListener('hide.bs.collapse', function() {
+          button.setAttribute('aria-expanded', 'false');
+        });
+      }
+    });
+  });
   
   let sessionDetailChart = null;
 
