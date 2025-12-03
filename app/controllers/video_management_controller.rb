@@ -407,7 +407,7 @@ class VideoManagementController < ApplicationController
     @score_timeline_data = @learning_sessions.where(video_id: @video.id).map do |session|
       events = session.timestamp_events.where.not(concentration_score: nil).order(:session_elapsed)
       {
-        label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')})",
+        label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')} ID:#{session.id})",
         data: events.map { |e| { x: e.session_elapsed.round(1), y: e.concentration_score, video_time: e.video_time } },
         session_id: session.id
       }
@@ -499,7 +499,7 @@ class VideoManagementController < ApplicationController
 
       ops_by_time = user_ops.group_by { |e| (e.video_time / 10).floor * 10 }
       {
-        label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d %H:%M')})",
+        label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d %H:%M')} ID:#{session.id})",
         session_id: session.id,
         data: ops_by_time.map do |time, events|
           {
