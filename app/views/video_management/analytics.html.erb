@@ -1021,17 +1021,8 @@ function initializeAnalyticsCharts() {
   if (scoreTimelineCtx) {
     const scoreTimelineData = <%= raw @score_timeline_data.to_json %>;
     
-    // カラーパレット
-    const colors = [
-      'rgba(255, 99, 132, 1)',
-      'rgba(54, 162, 235, 1)',
-      'rgba(255, 206, 86, 1)',
-      'rgba(75, 192, 192, 1)',
-      'rgba(153, 102, 255, 1)',
-      'rgba(255, 159, 64, 1)',
-      'rgba(199, 199, 199, 1)',
-      'rgba(83, 102, 255, 1)'
-    ];
+    // 線の色をグレーに統一
+    const lineColor = 'rgba(128, 128, 128, 0.5)'; // グレー
 
     // 集中度スコアで色を決定する関数
     const getColorByScore = (score) => {
@@ -1057,7 +1048,7 @@ function initializeAnalyticsCharts() {
           return {
             label: session.label,
             data: sessionData,
-            borderColor: colors[index % colors.length],
+            borderColor: lineColor,
             borderWidth: 2,
             showLine: true,
             tension: 0,
