@@ -397,13 +397,14 @@ class VideoManagementController < ApplicationController
   end
 
   def prepare_analytics_chart_data
-    # 全タイムスタンプイベントを取得
-    all_events = @learning_sessions.joins(:timestamp_events)
+    # 全タイムスタンプイベントを取得（この動画のセッションのみ）
+    all_events = @learning_sessions.where(video_id: @video.id)
+                                   .joins(:timestamp_events)
                                    .includes(:timestamp_events, :user)
                                    .flat_map(&:timestamp_events)
 
     # 1. 集中スコア推移データ（セッション別）
-    @score_timeline_data = @learning_sessions.map do |session|
+    @score_timeline_data = @learning_sessions.where(video_id: @video.id).map do |session|
       events = session.timestamp_events.where.not(concentration_score: nil).order(:session_elapsed)
       {
         label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')})",
@@ -434,7 +435,7 @@ class VideoManagementController < ApplicationController
     }
 
     # 4. ユーザー別平均スコアデータ
-    user_scores = @learning_sessions.group_by(&:user).map do |user, sessions|
+    user_scores = @learning_sessions.where(video_id: @video.id).group_by(&:user).map do |user, sessions|
       scores = sessions.map(&:final_score).compact
       {
         user: user.email.split("@").first,
@@ -485,7 +486,7 @@ class VideoManagementController < ApplicationController
     end.sort_by { |d| d[:time] }
 
     # ユーザー別の動画操作マップ
-    @user_operations_map_data = @learning_sessions.map do |session|
+    @user_operations_map_data = @learning_sessions.where(video_id: @video.id).map do |session|
       # メモリ上でフィルタリング（event_categoryはメソッドなのでSQLでは使えない）
       user_ops = session.timestamp_events
                         .where.not(video_time: nil)
