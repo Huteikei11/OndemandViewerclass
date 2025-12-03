@@ -1026,9 +1026,6 @@ function createSessionToggles(chartType, datasets) {
         </div>
       </div>
     </div>
-    <div class="col-12 mb-2">
-      <strong class="text-muted">セッション別表示:</strong>
-    </div>
   `;
   
   // セッションリストを追加
@@ -1120,54 +1117,47 @@ function initializeAnalyticsCharts() {
       // このセッションに属するデータセットのインデックスを記録
       sessionDatasetGroups[session.session_id] = [lineDatasetIndex];
       
-      // 対応する動画操作マーカーを追加
+      // 対応する動画操作マーカーをまとめて追加
       const ops = videoOperationsMarkers.find(o => o.session_id === session.session_id);
       if (ops) {
-        // スキップ/シークマーカー
+        // すべての操作マーカーを1つの配列にまとめる
+        const allOperations = [];
+        
+        // スキップ/シークマーカー（三角形）
         if (ops.skip && ops.skip.length > 0) {
-          sessionDatasetGroups[session.session_id].push(datasets.length);
-          datasets.push({
-            label: `${ops.label} - スキップ`,
-            data: ops.skip,
-            backgroundColor: operationColor,
-            borderColor: operationColor,
-            pointRadius: 2,
-            pointHoverRadius: 4,
-            pointStyle: 'triangle',
-            showLine: false,
-            order: 1,
-            sessionId: session.session_id
+          ops.skip.forEach(point => {
+            allOperations.push({ ...point, style: 'triangle', type: 'スキップ' });
           });
         }
         
-        // 一時停止マーカー
+        // 一時停止マーカー（四角形）
         if (ops.pause && ops.pause.length > 0) {
-          sessionDatasetGroups[session.session_id].push(datasets.length);
-          datasets.push({
-            label: `${ops.label} - 一時停止`,
-            data: ops.pause,
-            backgroundColor: operationColor,
-            borderColor: operationColor,
-            pointRadius: 2,
-            pointHoverRadius: 4,
-            pointStyle: 'rect',
-            showLine: false,
-            order: 1,
-            sessionId: session.session_id
+          ops.pause.forEach(point => {
+            allOperations.push({ ...point, style: 'rect', type: '一時停止' });
           });
         }
         
-        // その他の操作マーカー
+        // その他の操作マーカー（円形）
         if (ops.other && ops.other.length > 0) {
+          ops.other.forEach(point => {
+            allOperations.push({ ...point, style: 'circle', type: 'その他' });
+          });
+        }
+        
+        // すべての操作を1つのデータセットとして追加
+        if (allOperations.length > 0) {
           sessionDatasetGroups[session.session_id].push(datasets.length);
           datasets.push({
-            label: `${ops.label} - その他`,
-            data: ops.other,
+            label: `${ops.label} - 操作`,
+            data: allOperations,
             backgroundColor: operationColor,
             borderColor: operationColor,
             pointRadius: 2,
             pointHoverRadius: 4,
-            pointStyle: 'circle',
+            pointStyle: function(context) {
+              const point = context.raw;
+              return point.style || 'circle';
+            },
             showLine: false,
             order: 1,
             sessionId: session.session_id
@@ -1237,10 +1227,9 @@ function initializeAnalyticsCharts() {
                 const videoSeconds = Math.floor(context.parsed.y % 60);
                 
                 // 動画操作マーカーの場合
-                if (context.dataset.label.includes('スキップ') || 
-                    context.dataset.label.includes('一時停止') || 
-                    context.dataset.label.includes('その他')) {
-                  return `${context.dataset.label} | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}${point.description ? ' - ' + point.description : ''}`;
+                if (context.dataset.label.includes('操作')) {
+                  const operationType = point.type || '操作';
+                  return `${operationType} | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}${point.description ? ' - ' + point.description : ''}`;
                 }
                 
                 // 集中スコアラインの場合
