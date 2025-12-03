@@ -413,6 +413,26 @@ class VideoManagementController < ApplicationController
       }
     end.select { |data| data[:data].any? }
 
+    # 1-2. 動画操作マーカーデータ（セッション別）
+    @video_operations_markers = @learning_sessions.where(video_id: @video.id).map do |session|
+      video_events = session.timestamp_events
+                           .where("event_type LIKE ?", "%video%")
+                           .where.not(video_time: nil)
+                           .order(:session_elapsed)
+
+      pause_events = video_events.select { |e| e.event_type&.include?("pause") }
+      skip_events = video_events.select { |e| e.event_type&.include?("skip") || e.event_type&.include?("seek") }
+      other_events = video_events.reject { |e| e.event_type&.include?("pause") || e.event_type&.include?("skip") || e.event_type&.include?("seek") }
+
+      {
+        session_id: session.id,
+        label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')} ID:#{session.id})",
+        pause: pause_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description } },
+        skip: skip_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description } },
+        other: other_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description } }
+      }
+    end
+
     # 2. イベントタイプ別分布データ
     event_counts = all_events.group_by(&:event_category).transform_values(&:count)
     @event_distribution_data = {

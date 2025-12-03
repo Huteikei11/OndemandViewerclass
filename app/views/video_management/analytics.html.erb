@@ -969,12 +969,24 @@ function toggleAllSessions(chartType, show) {
   }
 }
 
-function toggleSession(chartType, datasetIndex) {
+function toggleSession(chartType, sessionId) {
   const chart = chartInstances[chartType];
   if (!chart) return;
   
-  const meta = chart.getDatasetMeta(datasetIndex);
-  meta.hidden = !meta.hidden;
+  // このセッションに属する全てのデータセット（スコアライン＋操作マーカー）を切り替え
+  let newHiddenState = null;
+  
+  chart.data.datasets.forEach((dataset, index) => {
+    if (dataset.sessionId === sessionId) {
+      const meta = chart.getDatasetMeta(index);
+      // 最初のデータセットの状態を基準に切り替え
+      if (newHiddenState === null) {
+        newHiddenState = !meta.hidden;
+      }
+      meta.hidden = newHiddenState;
+    }
+  });
+  
   chart.update();
 }
 
@@ -985,9 +997,9 @@ function createSessionToggles(chartType, datasets) {
   container.innerHTML = datasets.map((dataset, index) => `
     <div class="col-md-4 col-sm-6 mb-2">
       <div class="form-check">
-        <input class="form-check-input" type="checkbox" id="${chartType}_session_${index}" 
-               checked onchange="toggleSession('${chartType}', ${index})">
-        <label class="form-check-label" for="${chartType}_session_${index}" style="font-size: 0.9em;">
+        <input class="form-check-input" type="checkbox" id="${chartType}_session_${dataset.session_id}" 
+               checked onchange="toggleSession('${chartType}', ${dataset.session_id})">
+        <label class="form-check-label" for="${chartType}_session_${dataset.session_id}" style="font-size: 0.9em;">
           ${dataset.label}
         </label>
       </div>
@@ -1020,9 +1032,11 @@ function initializeAnalyticsCharts() {
   const scoreTimelineCtx = document.getElementById('scoreTimelineChart');
   if (scoreTimelineCtx) {
     const scoreTimelineData = <%= raw @score_timeline_data.to_json %>;
+    const videoOperationsMarkers = <%= raw @video_operations_markers.to_json %>;
     
     // 線の色をグレーに統一
     const lineColor = 'rgba(128, 128, 128, 0.5)'; // グレー
+    const operationColor = '#6f42c1'; // 紫色
 
     // 集中度スコアで色を決定する関数
     const getColorByScore = (score) => {
@@ -1032,33 +1046,99 @@ function initializeAnalyticsCharts() {
       return '#28a745'; // 緑
     };
 
+    // データセットを作成（セッションごとにグループ化）
+    const datasets = [];
+    const sessionDatasetGroups = {}; // セッションIDごとのデータセットインデックスを記録
+    
+    // 各セッションのデータを追加
+    scoreTimelineData.forEach((session, sessionIndex) => {
+      const sessionData = session.data.map(point => ({
+        x: point.x,
+        y: point.video_time || 0,
+        score: point.y,
+        video_time: point.video_time,
+        color: getColorByScore(point.y)
+      }));
+      
+      // 集中スコアラインを追加
+      const lineDatasetIndex = datasets.length;
+      datasets.push({
+        label: session.label,
+        data: sessionData,
+        borderColor: lineColor,
+        borderWidth: 2,
+        showLine: true,
+        tension: 0,
+        pointRadius: 1,
+        pointHoverRadius: 5,
+        pointBackgroundColor: sessionData.map(d => d.color),
+        pointBorderColor: sessionData.map(d => d.color),
+        order: 2,
+        sessionId: session.session_id
+      });
+      
+      // このセッションに属するデータセットのインデックスを記録
+      sessionDatasetGroups[session.session_id] = [lineDatasetIndex];
+      
+      // 対応する動画操作マーカーを追加
+      const ops = videoOperationsMarkers.find(o => o.session_id === session.session_id);
+      if (ops) {
+        // スキップ/シークマーカー
+        if (ops.skip && ops.skip.length > 0) {
+          sessionDatasetGroups[session.session_id].push(datasets.length);
+          datasets.push({
+            label: `${ops.label} - スキップ`,
+            data: ops.skip,
+            backgroundColor: operationColor,
+            borderColor: operationColor,
+            pointRadius: 2,
+            pointHoverRadius: 4,
+            pointStyle: 'triangle',
+            showLine: false,
+            order: 1,
+            sessionId: session.session_id
+          });
+        }
+        
+        // 一時停止マーカー
+        if (ops.pause && ops.pause.length > 0) {
+          sessionDatasetGroups[session.session_id].push(datasets.length);
+          datasets.push({
+            label: `${ops.label} - 一時停止`,
+            data: ops.pause,
+            backgroundColor: operationColor,
+            borderColor: operationColor,
+            pointRadius: 2,
+            pointHoverRadius: 4,
+            pointStyle: 'rect',
+            showLine: false,
+            order: 1,
+            sessionId: session.session_id
+          });
+        }
+        
+        // その他の操作マーカー
+        if (ops.other && ops.other.length > 0) {
+          sessionDatasetGroups[session.session_id].push(datasets.length);
+          datasets.push({
+            label: `${ops.label} - その他`,
+            data: ops.other,
+            backgroundColor: operationColor,
+            borderColor: operationColor,
+            pointRadius: 2,
+            pointHoverRadius: 4,
+            pointStyle: 'circle',
+            showLine: false,
+            order: 1,
+            sessionId: session.session_id
+          });
+        }
+      }
+    });
+
     chartInstances.scoreTimeline = new Chart(scoreTimelineCtx, {
       type: 'scatter',
-      data: {
-        datasets: scoreTimelineData.map((session, index) => {
-          // 各セッションのデータに色情報を追加
-          const sessionData = session.data.map(point => ({
-            x: point.x,
-            y: point.video_time || 0,
-            score: point.y,
-            video_time: point.video_time,
-            color: getColorByScore(point.y)
-          }));
-          
-          return {
-            label: session.label,
-            data: sessionData,
-            borderColor: lineColor,
-            borderWidth: 2,
-            showLine: true,
-            tension: 0,
-            pointRadius: 1,
-            pointHoverRadius: 5,
-            pointBackgroundColor: sessionData.map(d => d.color),
-            pointBorderColor: sessionData.map(d => d.color)
-          };
-        })
-      },
+      data: { datasets },
       options: {
         ...commonOptions,
         scales: {
@@ -1113,10 +1193,18 @@ function initializeAnalyticsCharts() {
             callbacks: {
               label: function(context) {
                 const point = context.raw;
-                const score = point.score !== undefined ? point.score : 0;
                 const videoMinutes = Math.floor(context.parsed.y / 60);
                 const videoSeconds = Math.floor(context.parsed.y % 60);
                 
+                // 動画操作マーカーの場合
+                if (context.dataset.label.includes('スキップ') || 
+                    context.dataset.label.includes('一時停止') || 
+                    context.dataset.label.includes('その他')) {
+                  return `${context.dataset.label} | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}${point.description ? ' - ' + point.description : ''}`;
+                }
+                
+                // 集中スコアラインの場合
+                const score = point.score !== undefined ? point.score : 0;
                 return `${context.dataset.label} - 集中度: ${score.toFixed(1)}点 | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}`;
               },
               title: function(context) {
