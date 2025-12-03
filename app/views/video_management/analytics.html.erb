@@ -1247,6 +1247,53 @@ function initializeAnalyticsCharts() {
       }
     });
     
+    // マーカーホバー時に同じセッションのラインの色を変更
+    let currentHoveredSessionId = null;
+    
+    chartInstances.scoreTimeline.options.onHover = function(event, activeElements) {
+      if (activeElements.length > 0) {
+        const hoveredDatasetIndex = activeElements[0].datasetIndex;
+        const hoveredDataset = this.data.datasets[hoveredDatasetIndex];
+        const hoveredSessionId = hoveredDataset.sessionId;
+        
+        // 既に同じセッションをホバー中なら何もしない
+        if (currentHoveredSessionId === hoveredSessionId) {
+          return;
+        }
+        
+        currentHoveredSessionId = hoveredSessionId;
+        
+        // すべてのラインを元の色に戻してから、ホバー中のセッションのラインを青色に
+        this.data.datasets.forEach((dataset) => {
+          if (dataset.showLine) {
+            if (dataset.sessionId === hoveredSessionId) {
+              dataset.borderColor = 'rgba(54, 162, 235, 0.8)'; // 青色
+              dataset.borderWidth = 3;
+            } else {
+              dataset.borderColor = lineColor;
+              dataset.borderWidth = 2;
+            }
+          }
+        });
+        
+        this.update('none'); // アニメーションなしで更新
+      } else {
+        // ホバーが外れた場合は元の色に戻す
+        if (currentHoveredSessionId !== null) {
+          currentHoveredSessionId = null;
+          
+          this.data.datasets.forEach((dataset) => {
+            if (dataset.showLine) {
+              dataset.borderColor = lineColor;
+              dataset.borderWidth = 2;
+            }
+          });
+          
+          this.update('none');
+        }
+      }
+    };
+    
     // セッション切り替えトグルを作成
     createSessionToggles('scoreTimeline', scoreTimelineData);
     
