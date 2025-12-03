@@ -186,7 +186,7 @@
                     <div id="scoreTimelineSessionToggles" class="row"></div>
                   </div>
                 </div>
-                <div class="chart-container" style="position: relative; height: 400px;">
+                <div class="chart-container" style="position: relative; height: 800px;">
                   <canvas id="scoreTimelineChart"></canvas>
                 </div>
                 <p class="text-muted mt-2 text-center">
@@ -990,11 +990,49 @@ function toggleSession(chartType, sessionId) {
   chart.update();
 }
 
+function toggleOperationMarkers(chartType, show) {
+  const chart = chartInstances[chartType];
+  if (!chart) return;
+  
+  // 操作マーカーのデータセットのみを切り替え（ラベルに「スキップ」「一時停止」「その他」を含むもの）
+  chart.data.datasets.forEach((dataset, index) => {
+    if (dataset.label && (dataset.label.includes('スキップ') || 
+                          dataset.label.includes('一時停止') || 
+                          (dataset.label.includes('その他') && dataset.pointStyle))) {
+      const meta = chart.getDatasetMeta(index);
+      meta.hidden = !show;
+    }
+  });
+  
+  chart.update();
+}
+
 function createSessionToggles(chartType, datasets) {
   const container = document.getElementById(chartType + 'SessionToggles');
   if (!container) return;
   
-  container.innerHTML = datasets.map((dataset, index) => `
+  // 操作マーカーの表示/非表示トグルを先頭に配置
+  let html = `
+    <div class="col-12 mb-3">
+      <div class="card bg-light">
+        <div class="card-body py-2">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="${chartType}_operation_markers" 
+                   checked onchange="toggleOperationMarkers('${chartType}', this.checked)">
+            <label class="form-check-label" for="${chartType}_operation_markers">
+              <span style="color: #6f42c1; font-size: 1.2em;">●</span> <strong>操作マーカー（紫）を表示</strong>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 mb-2">
+      <strong class="text-muted">セッション別表示:</strong>
+    </div>
+  `;
+  
+  // セッションリストを追加
+  html += datasets.map((dataset, index) => `
     <div class="col-md-4 col-sm-6 mb-2">
       <div class="form-check">
         <input class="form-check-input" type="checkbox" id="${chartType}_session_${dataset.session_id}" 
@@ -1005,6 +1043,8 @@ function createSessionToggles(chartType, datasets) {
       </div>
     </div>
   `).join('');
+  
+  container.innerHTML = html;
 }
 
 function initializeAnalyticsCharts() {
