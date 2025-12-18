@@ -436,7 +436,7 @@ class VideoManagementController < ApplicationController
     # 1-3. 反応速度マーカーデータ（セッション別）
     @response_time_markers = @learning_sessions.where(video_id: @video.id).map do |session|
       response_events = session.timestamp_events
-                              .where("event_type IN (?)", ["response_quick", "response_normal", "response_slow"])
+                              .where("event_type IN (?)", [ "response_quick", "response_normal", "response_slow" ])
                               .where.not(video_time: nil)
                               .order(:session_elapsed)
 
