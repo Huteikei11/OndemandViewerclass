@@ -4199,6 +4199,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Display result
         resultMessage.style.display = 'block';
         
+        console.log('回答結果データ:', {
+          correct: data.correct,
+          show_answer: data.show_answer,
+          correct_answer: data.correct_answer
+        });
+        
         let resultText = '';
         
         if (data.correct) {

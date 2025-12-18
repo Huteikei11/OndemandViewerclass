@@ -205,6 +205,9 @@
                           <span class="badge <%= question_type_badge_class(question.question_type) %>">
                             <%= question_type_display(question.question_type) %>
                           </span>
+                          <span class="badge <%= question.show_answer ? 'badge-success' : 'badge-secondary' %>">
+                            <%= question.show_answer ? '解答表示あり' : '解答表示なし' %>
+                          </span>
                           <div class="question-actions">
                             <button class="btn btn-sm btn-outline-primary edit-question-btn" data-question-id="<%= question.id %>" data-video-id="<%= @video.id %>">編集</button>
                             <%= button_to '削除', 
@@ -281,7 +284,8 @@
           <div class="form-group">
             <label for="edit_question_show_answer">解答表示</label>
             <div>
-              <input type="checkbox" name="question[show_answer]" id="edit_question_show_answer">
+              <input type="hidden" name="question[show_answer]" value="false">
+              <input type="checkbox" name="question[show_answer]" id="edit_question_show_answer" value="true">
               <label for="edit_question_show_answer" class="checkbox-label">回答後に正解を表示する</label>
             </div>
           </div>
