@@ -1102,6 +1102,9 @@ document.addEventListener('DOMContentLoaded', function() {
       this.gazeY = 0;
       this.frontFacingRatio = 100;
       this.lastMovementTime = Date.now();
+      
+      // 視線データの平滑化用（3フレーム平均）
+      this.gazeHistory = [];
       this.noteInputs = 0;
       this.lastNoteCount = 0;
       this.responseStartTime = null;
@@ -1286,8 +1289,9 @@ document.addEventListener('DOMContentLoaded', function() {
         this.faceMesh.setOptions({
           maxNumFaces: 1,
           refineLandmarks: true, // より詳細なランドマーク検出を有効
-          minDetectionConfidence: 0.7, // 検出精度を向上
-          minTrackingConfidence: 0.5
+          refineIris: true, // 虹彩検出を有効化（視線推定精度向上）
+          minDetectionConfidence: 0.8, // 検出精度を向上（0.7 → 0.8）
+          minTrackingConfidence: 0.7  // トラッキング精度を向上（0.5 → 0.7）
         });
         
         // 結果処理のコールバック設定
@@ -1301,8 +1305,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 await this.faceMesh.send({ image: this.cameraVideo });
               }
             },
-            width: 640,
-            height: 480
+            width: 1280,  // 解像度向上: 640 → 1280
+            height: 720,  // 解像度向上: 480 → 720
+            fps: 30       // フレームレート指定
           });
           
           await this.camera.start();
@@ -1431,9 +1436,12 @@ document.addEventListener('DOMContentLoaded', function() {
           // 上下の動き: 負の値が上、正の値が下（変更なし）
           const normalizedGazeY = (avgPupilY - 0.5) * 2;
           
-          // スケールして最終的な値に変換（-50 to 50の範囲）
-          this.gazeX = Math.max(-50, Math.min(50, normalizedGazeX * 50));
-          this.gazeY = Math.max(-50, Math.min(50, normalizedGazeY * 50));
+          // スケールして生の値を計算（-50 to 50の範囲）
+          const rawGazeX = Math.max(-50, Math.min(50, normalizedGazeX * 50));
+          const rawGazeY = Math.max(-50, Math.min(50, normalizedGazeY * 50));
+          
+          // 平滑化を適用
+          this.updateGazeWithSmoothing(rawGazeX, rawGazeY);
           
           // 眼球の詳細データを保存（デバッグ用）
           this.eyeballData = {
@@ -1606,8 +1614,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const normalizedGazeX = -((eyeCenter.x - faceCenter.x) / (faceWidth * 0.5));
         const normalizedGazeY = (eyeCenter.y - faceCenter.y) / (faceHeight * 0.5);
         
-        this.gazeX = Math.max(-50, Math.min(50, normalizedGazeX * 50));
-        this.gazeY = Math.max(-50, Math.min(50, normalizedGazeY * 50));
+        const rawGazeX = Math.max(-50, Math.min(50, normalizedGazeX * 50));
+        const rawGazeY = Math.max(-50, Math.min(50, normalizedGazeY * 50));
+        
+        // 平滑化を適用
+        this.updateGazeWithSmoothing(rawGazeX, rawGazeY);
         
       } catch (error) {
         console.error('フォールバック視線計算エラー:', error);
@@ -1837,6 +1848,24 @@ document.addEventListener('DOMContentLoaded', function() {
         y: currentGaze.y, 
         timestamp: currentTime 
       };
+    }
+    
+    updateGazeWithSmoothing(newGazeX, newGazeY) {
+      // 視線データを履歴に追加
+      this.gazeHistory.push({x: newGazeX, y: newGazeY});
+      
+      // 最新3フレームのみ保持
+      if (this.gazeHistory.length > 3) {
+        this.gazeHistory.shift();
+      }
+      
+      // 平均値を計算（平滑化）
+      const avgX = this.gazeHistory.reduce((sum, g) => sum + g.x, 0) / this.gazeHistory.length;
+      const avgY = this.gazeHistory.reduce((sum, g) => sum + g.y, 0) / this.gazeHistory.length;
+      
+      // 平滑化された値を設定
+      this.gazeX = avgX;
+      this.gazeY = avgY;
     }
     
     updateFrontFacingRatio() {
