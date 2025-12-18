@@ -20,28 +20,34 @@
         
         <!-- 基本情報タブ -->
         <div id="debug-tab-info" class="debug-tab-content">
-          <div>検出方式: <span id="detection-method">初期化中...</span></div>
-          <div>顔検出: <span id="face-detected">-</span></div>
-          <div>目線方向X: <span id="gaze-x">-</span></div>
-          <div>目線方向Y: <span id="gaze-y">-</span></div>
-          <div>目線方向: <span id="gaze-direction">-</span></div>
-          <div>正面向き割合: <span id="front-facing">-</span>%</div>
-          <div>最後の動き: <span id="last-movement">-</span>秒前</div>
-          <div>メモ入力回数: <span id="note-inputs">0</span></div>
-          
-          <!-- 眼球データ詳細 -->
-          <div class="eyeball-details" style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">
-            <div style="font-weight: bold; color: #4fc3f7; margin-bottom: 5px;">🔍 眼球追跡データ</div>
-            <pre id="eyeball-details" style="font-size: 9px; line-height: 1.2; margin: 0; white-space: pre-wrap;">眼球データ待機中...</pre>
-          </div>
-          
           <!-- カメラプレビュー -->
-          <div class="camera-preview" id="camera-preview" style="display: none;">
+          <div class="camera-preview" id="camera-preview" style="display: none; margin-bottom: 10px;">
             <div class="camera-container" style="position: relative; display: inline-block;">
               <video id="debug-camera" width="320" height="240" autoplay muted></video>
               <canvas id="gaze-overlay-canvas" width="320" height="240" 
                       style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
             </div>
+          </div>
+          
+          <div>検出方式: <span id="detection-method">初期化中...</span></div>
+          <div>顔検出: <span id="face-detected">-</span></div>
+          <div>目線方向X: <span id="gaze-x">-</span></div>
+          <div>目線方向Y: <span id="gaze-y">-</span></div>
+          <div>目線方向: <span id="gaze-direction">-</span></div>
+          <div>集中度スコア: <span id="front-facing">-</span></div>
+          <div>最後の動き: <span id="last-movement">-</span>秒前</div>
+          <div>メモ入力回数: <span id="note-inputs">0</span></div>
+          
+          <!-- 新しい集中度システム詳細 -->
+          <div class="concentration-details" style="margin-top: 10px; padding: 8px; background: rgba(76, 175, 80, 0.1); border-radius: 4px; border: 1px solid rgba(76, 175, 80, 0.3);">
+            <div style="font-weight: bold; color: #4caf50; margin-bottom: 5px;">📊 安定版集中度システム</div>
+            <pre id="concentration-detail" style="font-size: 9px; line-height: 1.3; margin: 0; white-space: pre-wrap; color: #e0e0e0;">データ収集中...</pre>
+          </div>
+          
+          <!-- 眼球データ詳細 -->
+          <div class="eyeball-details" style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+            <div style="font-weight: bold; color: #4fc3f7; margin-bottom: 5px;">🔍 眼球追跡データ</div>
+            <pre id="eyeball-details" style="font-size: 9px; line-height: 1.2; margin: 0; white-space: pre-wrap;">眼球データ待機中...</pre>
           </div>
           
           <!-- 集中度変動ログ -->
@@ -1105,6 +1111,29 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // 視線データの平滑化用（3フレーム平均）
       this.gazeHistory = [];
+      
+      // 新しい集中度システム（5秒窓 + 1分窓）
+      this.recentGazeData = []; // 過去5秒間の状態データ
+      this.stateHistory = [];   // 過去60秒間の状態データ
+      this.displayScore = 50;    // 前回の1分間のスコア（表示用）
+      this.currentWindowScore = 50; // 現在計測中の1分間のスコア
+      this.currentState = null;  // 現在の5秒窓の状態（インジケーター表示用）
+      this.lastWindowUpdate = Date.now(); // 最後に1分窓を確定した時刻
+      this.lastTimestampRecord = Date.now(); // 最後にタイムスタンプを記録した時刻
+      this.lastRecordedScore = 50; // 最後に記録したスコア
+      this.showCalculationDetail = false; // 計算式の表示フラグ
+      
+      // 集中度判定の設定
+      this.concentrationSettings = {
+        gazeCenterThreshold: 5,       // 視線中央判定の閾値
+        stabilityWindow: 5,           // 安定性判定用の窓（秒）
+        faceDetectionMinRate: 0.2,    // 離席と判定する顔検出率の閾値
+        windowSize: 60,               // 1分間窓（秒）
+        windowUpdateInterval: 60000,  // 1分ごとにスコア確定（ミリ秒）
+        timestampInterval: 5000,      // 5秒ごとにタイムスタンプ記録（ミリ秒）
+        scoreChangeThreshold: 10      // スコア変化がこの値以上なら即座に記録
+      };
+      
       this.noteInputs = 0;
       this.lastNoteCount = 0;
       this.responseStartTime = null;
@@ -1346,28 +1375,30 @@ document.addEventListener('DOMContentLoaded', function() {
       const cameraPreview = document.getElementById('camera-preview');
       const debugCamera = document.getElementById('debug-camera');
       
-      toggleCameraButton.addEventListener('click', () => {
-        if (cameraPreview.style.display === 'none') {
-          cameraPreview.style.display = 'block';
-          // カメラ映像をデバッグ用videoに表示
-          if (this.cameraVideo && this.cameraVideo.srcObject) {
-            debugCamera.srcObject = this.cameraVideo.srcObject;
+      if (toggleCameraButton) {
+        toggleCameraButton.addEventListener('click', () => {
+          if (cameraPreview.style.display === 'none' || !cameraPreview.style.display) {
+            cameraPreview.style.display = 'block';
+            // カメラ映像をデバッグ用videoに表示
+            if (this.cameraVideo && this.cameraVideo.srcObject) {
+              debugCamera.srcObject = this.cameraVideo.srcObject;
+            }
+            // 視線オーバーレイを更新開始
+            this.startGazeOverlayUpdates();
+          } else {
+            cameraPreview.style.display = 'none';
+            // 視線オーバーレイを停止
+            this.stopGazeOverlayUpdates();
+            
+            // オーバーレイキャンバスをクリア
+            const overlayCanvas = document.getElementById('gaze-overlay-canvas');
+            if (overlayCanvas) {
+              const ctx = overlayCanvas.getContext('2d');
+              ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            }
           }
-          // 視線オーバーレイを更新開始
-          this.startGazeOverlayUpdates();
-        } else {
-          cameraPreview.style.display = 'none';
-          // 視線オーバーレイを停止
-          this.stopGazeOverlayUpdates();
-          
-          // オーバーレイキャンバスをクリア
-          const overlay = document.getElementById('gazeOverlay');
-          if (overlay) {
-            const ctx = overlay.getContext('2d');
-            ctx.clearRect(0, 0, overlay.width, overlay.height);
-          }
-        }
-      });
+        });
+      }
       
       this.debugElements = {
         detectionMethod: document.getElementById('detection-method'),
@@ -1378,8 +1409,18 @@ document.addEventListener('DOMContentLoaded', function() {
         frontFacing: document.getElementById('front-facing'),
         lastMovement: document.getElementById('last-movement'),
         noteInputs: document.getElementById('note-inputs'),
-        eyeballDetails: document.getElementById('eyeball-details')
+        eyeballDetails: document.getElementById('eyeball-details'),
+        concentrationDetail: document.getElementById('concentration-detail')
       };
+      
+      // 集中度詳細のクリックイベント（トグル機能）
+      if (this.debugElements.concentrationDetail) {
+        this.debugElements.concentrationDetail.style.cursor = 'pointer';
+        this.debugElements.concentrationDetail.addEventListener('click', () => {
+          this.showCalculationDetail = !this.showCalculationDetail;
+          this.updateDebugInfo(); // 表示を即座に更新
+        });
+      }
       
       // ログ機能の初期化
       this.logElement = document.getElementById('concentration-log');
@@ -1868,6 +1909,243 @@ document.addEventListener('DOMContentLoaded', function() {
       this.gazeY = avgY;
     }
     
+    // 新しい集中度システム: 5秒窓のデータ追加
+    addGazeData() {
+      const now = Date.now();
+      
+      // 現在の状態を記録（頭の角度も含める）
+      this.recentGazeData.push({
+        timestamp: now,
+        gazeX: this.gazeX,
+        gazeY: this.gazeY,
+        headPoseY: this.headPoseY || 0,
+        faceDetected: this.faceDetected
+      });
+      
+      // 5秒より古いデータを削除
+      const cutoff = now - (this.concentrationSettings.stabilityWindow * 1000);
+      this.recentGazeData = this.recentGazeData.filter(d => d.timestamp > cutoff);
+    }
+    
+    // 新しい集中度システム: 画面正面を見ているかを評価
+    determineConcentrationLevel() {
+      // データが不足している場合は中立
+      if (this.recentGazeData.length === 0) {
+        return {
+          level: 2,
+          label: '計測中',
+          score: 50,
+          detail: 'データ収集中...'
+        };
+      }
+      
+      // 顔検出率を計算
+      const faceDetectedCount = this.recentGazeData.filter(d => d.faceDetected).length;
+      const faceDetectionRate = faceDetectedCount / this.recentGazeData.length;
+      
+      // レベル1: 離席判定（顔検出率が低い）
+      if (faceDetectionRate < this.concentrationSettings.faceDetectionMinRate) {
+        return {
+          level: 1,
+          label: '離席',
+          score: 0,
+          detail: `顔検出率: ${(faceDetectionRate * 100).toFixed(0)}%`
+        };
+      }
+      
+      // 視線と頭の角度の平均を計算（顔が検出されているデータのみ）
+      const validData = this.recentGazeData.filter(d => d.faceDetected);
+      if (validData.length === 0) {
+        return {
+          level: 1,
+          label: '離席',
+          score: 0,
+          detail: '有効な視線データなし'
+        };
+      }
+      
+      const avgGazeX = validData.reduce((sum, d) => sum + d.gazeX, 0) / validData.length;
+      const avgGazeY = validData.reduce((sum, d) => sum + d.gazeY, 0) / validData.length;
+      
+      // 頭の角度の平均も計算（5秒窓から）
+      const avgHeadPoseY = validData.reduce((sum, d) => sum + (d.headPoseY || 0), 0) / validData.length;
+      
+      // 視線の中央からの距離を計算
+      const gazeDistance = Math.sqrt(avgGazeX * avgGazeX + avgGazeY * avgGazeY);
+      
+      // 頭の角度ペナルティ（40～45度の範囲が正常、範囲外で減点）
+      let headDownPenalty = 0;
+      if (avgHeadPoseY < 40) {
+        // 40度未満（上向きすぎ）
+        headDownPenalty = 40 - avgHeadPoseY;
+      } else if (avgHeadPoseY > 45) {
+        // 45度超（下向きすぎ）
+        headDownPenalty = avgHeadPoseY - 45;
+      }
+      
+      // スコア計算: 中央からの距離が近いほど高得点
+      // gazeDistance: 0 = 100点、50 = 0点（線形）
+      let score = Math.max(0, 100 - (gazeDistance * 2));
+      
+      // 頭が正常範囲外の場合はペナルティ（1度につき10点減点）
+      score = Math.max(0, score - (headDownPenalty * 10));
+      
+      // 顔検出率が低い場合もペナルティ（50%未満で減点）
+      if (faceDetectionRate < 0.5) {
+        score = score * (faceDetectionRate * 2);
+      }
+      
+      // レベル判定
+      let level, label;
+      if (score >= 70) {
+        level = 3;
+        label = '正面視';
+      } else if (score >= 30) {
+        level = 2;
+        label = '視線ズレ';
+      } else {
+        level = 1;
+        label = '画面外';
+      }
+      
+      // 詳細情報
+      const direction = this.getGazeDirectionText(avgGazeX, avgGazeY);
+      const headAngle = avgHeadPoseY >= 40 && avgHeadPoseY <= 45 ? `${avgHeadPoseY.toFixed(0)}°(正常)` :
+                        avgHeadPoseY > 45 ? `${avgHeadPoseY.toFixed(0)}°(下向きすぎ)` :
+                        avgHeadPoseY < 40 ? `${avgHeadPoseY.toFixed(0)}°(上向きすぎ)` : '正面';
+      
+      // 計算詳細を保存
+      const baseScore = Math.max(0, 100 - (gazeDistance * 2));
+      const headPenalty = headDownPenalty * 10;
+      const faceRatePenalty = faceDetectionRate < 0.5 ? baseScore - (baseScore * faceDetectionRate * 2) : 0;
+      
+      return {
+        level: level,
+        label: label,
+        score: Math.round(score),
+        detail: `視線: ${direction} (距離: ${gazeDistance.toFixed(1)}) | 頭: ${headAngle} | 顔検出: ${(faceDetectionRate * 100).toFixed(0)}%`,
+        calculation: {
+          gazeDistance: gazeDistance,
+          baseScore: baseScore,
+          headAngle: avgHeadPoseY,
+          headPenalty: headPenalty,
+          faceRate: faceDetectionRate,
+          faceRatePenalty: faceRatePenalty,
+          finalScore: score
+        }
+      };
+    }
+    
+    // 視線方向をテキストで取得
+    getGazeDirectionText(gazeX, gazeY) {
+      let vertical = '中央';
+      let horizontal = '中央';
+      
+      if (gazeY < -5) vertical = '上';
+      else if (gazeY > 5) vertical = '下';
+      
+      if (gazeX < -5) horizontal = '左';
+      else if (gazeX > 5) horizontal = '右';
+      
+      if (vertical === '中央' && horizontal === '中央') {
+        return '中央';
+      }
+      return `${vertical}/${horizontal}`;
+    }
+    
+    // 新しい集中度システム: 1分窓に状態を追加
+    addToStateHistory(state) {
+      const now = Date.now();
+      
+      this.stateHistory.push({
+        timestamp: now,
+        level: state.level,
+        score: state.score,
+        label: state.label,
+        detail: state.detail
+      });
+      
+      // 61秒以上前のデータを削除
+      const cutoff = now - (this.concentrationSettings.windowSize + 1) * 1000;
+      this.stateHistory = this.stateHistory.filter(s => s.timestamp > cutoff);
+    }
+    
+    // 新しい集中度システム: 現在窓のスコアを計算
+    calculateWindowScore() {
+      if (this.stateHistory.length === 0) return 50;
+      
+      // 単純平均
+      const sum = this.stateHistory.reduce((acc, s) => acc + s.score, 0);
+      return sum / this.stateHistory.length;
+    }
+    
+    // 新しい集中度システム: 5秒窓スコアをタイムスタンプに記録
+    recordConcentrationTimestamp(state) {
+      const changeStr = state.score - this.lastRecordedScore;
+      const changeSymbol = changeStr > 0 ? '+' : '';
+      
+      this.addTimestamp('concentration_5sec', `集中度: ${state.score}点 [${state.label}] (${changeSymbol}${changeStr.toFixed(0)})`, {
+        score: state.score,
+        level: state.level,
+        label: state.label,
+        detail: state.detail,
+        scoreChange: changeStr,
+        previousScore: this.lastRecordedScore,
+        calculation: state.calculation
+      });
+    }
+    
+    // 新しい集中度システム: 1分窓のスコアを確定
+    finalizeWindowScore() {
+      const previousScore = this.displayScore;
+      
+      // 前回の1分間が確定
+      this.displayScore = this.currentWindowScore;
+      
+      // ログに記録
+      const levelCounts = {1: 0, 2: 0, 3: 0};
+      this.stateHistory.forEach(s => {
+        if (levelCounts[s.level] !== undefined) {
+          levelCounts[s.level]++;
+        }
+      });
+      
+      const total = this.stateHistory.length;
+      const breakdown = `集中:${((levelCounts[3]/total)*100).toFixed(0)}% よそ見:${((levelCounts[2]/total)*100).toFixed(0)}% 離席:${((levelCounts[1]/total)*100).toFixed(0)}%`;
+      
+      this.addLog([], 0, 0); // ログ追加用のダミー
+      const logText = `[1分間集中度] ${this.displayScore.toFixed(0)}点 (${breakdown})`;
+      this.logs.unshift({
+        text: logText,
+        detail: `過去1分間の集中度が確定されました`,
+        reasons: [],
+        type: this.displayScore >= 70 ? 'positive' : this.displayScore >= 40 ? 'neutral' : 'negative',
+        timestamp: Date.now(),
+        change: 0
+      });
+      
+      this.updateLogDisplay();
+      
+      // タイムスタンプ記録: 1分ごとの集中度確定
+      const scoreChange = this.displayScore - previousScore;
+      const changeStr = scoreChange > 0 ? `+${scoreChange.toFixed(1)}` : scoreChange.toFixed(1);
+      
+      this.addTimestamp('concentration_window', `1分間集中度確定: ${this.displayScore.toFixed(0)}点 (${changeStr}) ${breakdown}`, {
+        windowScore: this.displayScore,
+        previousWindowScore: previousScore,
+        scoreChange: scoreChange,
+        levelBreakdown: {
+          concentration: levelCounts[3],
+          distraction: levelCounts[2],
+          absence: levelCounts[1]
+        },
+        totalSamples: total
+      });
+      
+      // 次の更新時刻を記録
+      this.lastWindowUpdate = Date.now();
+    }
+    
     updateFrontFacingRatio() {
       // 正面向きかどうかの判定
       const isFrontFacing = Math.abs(this.gazeX) < 20 && Math.abs(this.gazeY) < 20;
@@ -1897,7 +2175,38 @@ document.addEventListener('DOMContentLoaded', function() {
     startTracking() {
       setInterval(() => {
         this.updateFaceTracking();
-        this.calculateConcentration();
+        
+        // 新しい集中度システム: 5秒窓にデータ追加
+        this.addGazeData();
+        
+        // 新しい集中度システム: 3段階判定
+        const state = this.determineConcentrationLevel();
+        this.currentState = state; // インジケーター表示用に保存
+        
+        // 新しい集中度システム: 1分窓に状態追加
+        this.addToStateHistory(state);
+        
+        // 新しい集中度システム: 現在窓のスコア計算
+        this.currentWindowScore = this.calculateWindowScore();
+        
+        // 新しい集中度システム: 5秒窓スコアのタイムスタンプ記録
+        const now = Date.now();
+        const timeSinceLastRecord = now - this.lastTimestampRecord;
+        const scoreChange = Math.abs(state.score - this.lastRecordedScore);
+        
+        // 5秒経過、またはスコアが大きく変化した場合に記録
+        if (timeSinceLastRecord >= this.concentrationSettings.timestampInterval || 
+            scoreChange >= this.concentrationSettings.scoreChangeThreshold) {
+          this.recordConcentrationTimestamp(state);
+          this.lastTimestampRecord = now;
+          this.lastRecordedScore = state.score;
+        }
+        
+        // 新しい集中度システム: 1分ごとにスコア確定
+        if (now - this.lastWindowUpdate >= this.concentrationSettings.windowUpdateInterval) {
+          this.finalizeWindowScore();
+        }
+        
         this.updateGauge();
         this.updateDebugInfo();
       }, 1000); // 1秒ごとに更新
@@ -1907,7 +2216,6 @@ document.addEventListener('DOMContentLoaded', function() {
       // MediaPipeが使用可能で初期化済みの場合は、MediaPipeに処理を委ねる
       if (this.useMediaPipe && this.mediaPipeInitialized) {
         // MediaPipeのonFaceMeshResultsメソッドで処理されるため、ここでは何もしない
-        console.log('MediaPipeで視線検出中...');
         return;
       }
       
@@ -1915,7 +2223,6 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!this.cameraVideo || !this.canvas) return;
       
       try {
-        console.log('フォールバックモードで視線検出中...');
         
         // カメラ映像をcanvasに描画
         this.ctx.drawImage(this.cameraVideo, 0, 0, 640, 480);
@@ -2287,7 +2594,8 @@ document.addEventListener('DOMContentLoaded', function() {
       return avgBrightness > 50; // 明度が50以上なら顔があると判定
     }
     
-    calculateConcentration() {
+    // 旧システム（削除予定 - 新しい集中度システムを使用）
+    calculateConcentrationOld() {
       const oldScore = this.score;
       let newScore = this.score; // 現在のスコアから開始
       const reasons = [];
@@ -2575,19 +2883,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
       
-      // スコアに応じてゲージを更新
-      if (this.score >= 75) {
+      // 5秒窓の現在スコアを表示（リアルタイム）
+      const currentScore = this.currentState ? this.currentState.score : this.displayScore;
+      
+      if (currentScore >= 75) {
         this.gaugeElements.green?.classList.add('active');
-      } else if (this.score >= 50) {
+      } else if (currentScore >= 50) {
         this.gaugeElements.yellow?.classList.add('active');
-      } else if (this.score >= 25) {
+      } else if (currentScore >= 25) {
         this.gaugeElements.orange?.classList.add('active');
       } else {
         this.gaugeElements.red?.classList.add('active');
       }
       
       if (this.gaugeElements.score) {
-        this.gaugeElements.score.textContent = Math.round(this.score) + '%';
+        this.gaugeElements.score.textContent = Math.round(currentScore) + '%';
       }
     }
     
@@ -2605,13 +2915,13 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // 目線方向を分かりやすく表示
       if (this.debugElements.gazeX) {
-        const horizontalDirection = this.gazeX > 15 ? '右' : 
-                                   this.gazeX < -15 ? '左' : '中央';
+        const horizontalDirection = this.gazeX > 5 ? '右' : 
+                                   this.gazeX < -5 ? '左' : '中央';
         this.debugElements.gazeX.textContent = `${this.gazeX.toFixed(1)} (${horizontalDirection})`;
       }
       if (this.debugElements.gazeY) {
-        const verticalDirection = this.gazeY > 15 ? '下' : 
-                                 this.gazeY < -15 ? '上' : '中央';
+        const verticalDirection = this.gazeY > 5 ? '下' : 
+                                 this.gazeY < -5 ? '上' : '中央';
         this.debugElements.gazeY.textContent = `${this.gazeY.toFixed(1)} (${verticalDirection})`;
       }
       
@@ -2620,12 +2930,12 @@ document.addEventListener('DOMContentLoaded', function() {
         let direction = '';
         
         // 垂直方向を先に判定
-        if (this.gazeY < -15) direction += '上';
-        else if (this.gazeY > 15) direction += '下';
+        if (this.gazeY < -5) direction += '上';
+        else if (this.gazeY > 5) direction += '下';
         
         // 水平方向を後に判定
-        if (this.gazeX < -15) direction += '左';
-        else if (this.gazeX > 15) direction += '右';
+        if (this.gazeX < -5) direction += '左';
+        else if (this.gazeX > 5) direction += '右';
         
         // 正面の場合
         if (!direction) direction = '正面';
@@ -2674,8 +2984,101 @@ document.addEventListener('DOMContentLoaded', function() {
         this.debugElements.eyeballDetails.textContent = details;
       }
       
+      // 新しい集中度システムの表示
       if (this.debugElements.frontFacing) {
-        this.debugElements.frontFacing.textContent = this.frontFacingRatio.toFixed(1);
+        const state = this.stateHistory.length > 0 ? this.stateHistory[this.stateHistory.length - 1] : null;
+        if (state) {
+          const displayText = `${this.displayScore.toFixed(0)}点 [${state.label}] (現在窓: ${this.currentWindowScore.toFixed(0)}点)`;
+          this.debugElements.frontFacing.textContent = displayText;
+          
+          // デバッグログに詳細情報を表示
+          if (this.debugElements.concentrationDetail) {
+            const windowSize = this.stateHistory.length;
+            const faceDetectedCount = this.recentGazeData.filter(d => d.faceDetected).length;
+            const faceRate = this.recentGazeData.length > 0 ? (faceDetectedCount / this.recentGazeData.length * 100).toFixed(0) : 0;
+            
+            // 現在の視線と頭の角度
+            const validData = this.recentGazeData.filter(d => d.faceDetected);
+            const avgGazeX = validData.length > 0 ? validData.reduce((sum, d) => sum + d.gazeX, 0) / validData.length : 0;
+            const avgGazeY = validData.length > 0 ? validData.reduce((sum, d) => sum + d.gazeY, 0) / validData.length : 0;
+            const avgHeadY = validData.length > 0 ? validData.reduce((sum, d) => sum + (d.headPoseY || 0), 0) / validData.length : 0;
+            const gazeDistance = Math.sqrt(avgGazeX * avgGazeX + avgGazeY * avgGazeY);
+            
+            let detailText = `【画面正面視判定システム】\n`;
+            detailText += `表示スコア: ${this.displayScore.toFixed(0)}点 (前回1分間の確定値)\n`;
+            detailText += `現在窓スコア: ${this.currentWindowScore.toFixed(0)}点 (計測中)\n`;
+            detailText += `現在の状態: ${state.label} (${state.detail})\n`;
+            detailText += `\n`;
+            
+            // 計算式の表示状態を管理
+            if (!this.showCalculationDetail) {
+              detailText += `📊 [クリックで計算式を表示]\n\n`;
+            } else {
+              detailText += `📊 [クリックで計算式を非表示]\n`;
+              // スコア計算詳細を表示
+              if (state.calculation) {
+                const calc = state.calculation;
+                detailText += `\n【スコア計算式】\n`;
+                detailText += `基本スコア = 100 - (視線距離 × 2)\n`;
+                detailText += `          = 100 - (${calc.gazeDistance.toFixed(1)} × 2)\n`;
+                detailText += `          = ${calc.baseScore.toFixed(1)}点\n\n`;
+                detailText += `頭角度ペナルティ = 角度が40°～45°の範囲外で減点\n`;
+                detailText += `                = 角度 < 40° ? (40 - 角度) × 10\n`;
+                detailText += `                = 角度 > 45° ? (角度 - 45) × 10\n`;
+                detailText += `                = ${calc.headAngle.toFixed(1)}° → ${calc.headPenalty.toFixed(1)}点\n\n`;
+                detailText += `顔検出ペナルティ = 顔検出率 < 50% ? スコア × (率 × 2) : 0\n`;
+                detailText += `                = ${(calc.faceRate * 100).toFixed(0)}% ${calc.faceRate < 0.5 ? '<' : '>='} 50%\n`;
+                detailText += `                = ${calc.faceRatePenalty.toFixed(1)}点\n\n`;
+                detailText += `最終スコア = ${calc.baseScore.toFixed(1)} - ${calc.headPenalty.toFixed(1)} - ${calc.faceRatePenalty.toFixed(1)}\n`;
+                detailText += `          = ${calc.finalScore.toFixed(1)}点\n\n`;
+              }
+            }
+            
+            // スコア要因の詳細分析
+            let headStatus = '';
+            let headPenaltyAmount = 0;
+            if (avgHeadY < 40) {
+              headPenaltyAmount = (40 - avgHeadY) * 10;
+              headStatus = `上向きすぎ (-${headPenaltyAmount.toFixed(0)}点)`;
+            } else if (avgHeadY > 45) {
+              headPenaltyAmount = (avgHeadY - 45) * 10;
+              headStatus = `下向きすぎ (-${headPenaltyAmount.toFixed(0)}点)`;
+            } else {
+              headStatus = `正常範囲 (0点)`;
+            }
+            
+            const gazeScore = Math.max(0, 100 - (gazeDistance * 2));
+            let faceStatus = '';
+            if (faceRate < 50) {
+              faceStatus = `低い (-${(gazeScore * (1 - faceRate / 50)).toFixed(0)}点)`;
+            } else {
+              faceStatus = `良好 (0点)`;
+            }
+            
+            detailText += `【スコア要因の詳細】\n`;
+            detailText += `┌─ 視線位置 (基本スコア)\n`;
+            detailText += `│  中央距離: ${gazeDistance.toFixed(1)} → ${gazeScore.toFixed(0)}点\n`;
+            detailText += `│  状態: ${gazeDistance < 5 ? '✓ 中央' : gazeDistance < 15 ? '△ やや外れ' : '✗ 大きく外れ'}\n`;
+            detailText += `│\n`;
+            detailText += `┌─ 頭の角度 (ペナルティ)\n`;
+            detailText += `│  現在角度: ${avgHeadY.toFixed(1)}°\n`;
+            detailText += `│  正常範囲: 40° ～ 45°\n`;
+            detailText += `│  状態: ${headStatus}\n`;
+            detailText += `│\n`;
+            detailText += `└─ 顔検出率 (ペナルティ)\n`;
+            detailText += `   検出率: ${faceRate}% (5秒平均)\n`;
+            detailText += `   基準: 50%以上が必要\n`;
+            detailText += `   状態: ${faceStatus}\n\n`;
+            detailText += `【データ統計】\n`;
+            detailText += `5秒窓データ: ${this.recentGazeData.length}件\n`;
+            detailText += `1分窓データ: ${windowSize}件\n`;
+            detailText += `次回確定まで: ${((this.concentrationSettings.windowUpdateInterval - (Date.now() - this.lastWindowUpdate)) / 1000).toFixed(0)}秒`;
+            
+            this.debugElements.concentrationDetail.textContent = detailText;
+          }
+        } else {
+          this.debugElements.frontFacing.textContent = this.frontFacingRatio.toFixed(1);
+        }
       }
       if (this.debugElements.lastMovement) {
         const timeSince = (Date.now() - this.lastMovementTime) / 1000;
@@ -2822,7 +3225,7 @@ document.addEventListener('DOMContentLoaded', function() {
         videoTime: videoTime,
         eventType: eventType,
         description: description,
-        concentrationScore: this.score,
+        concentrationScore: this.displayScore, // 新しい集中度システムのスコアを使用
         videoState: this.videoState,
         playbackRate: this.videoElement ? this.videoElement.playbackRate : 1.0,
         ...additionalData
@@ -2943,7 +3346,7 @@ document.addEventListener('DOMContentLoaded', function() {
           videoId: videoId
         },
         timestampLog: this.timestampLog,
-        finalScore: this.score
+        finalScore: this.displayScore // 新しい集中度システムのスコアを使用
       };
     }
     
@@ -3268,7 +3671,7 @@ document.addEventListener('DOMContentLoaded', function() {
             sessionStartTime: this.sessionStartTime,
             sessionEndTime: Date.now(),
             timestampLog: this.timestampLog,
-            finalScore: this.score,
+            finalScore: this.displayScore, // 新しい集中度システムのスコアを使用
             videoId: videoId,
             saved: false // サーバー保存成功フラグ
           };
