@@ -93,6 +93,38 @@
               <h4>新しい問題を追加</h4>
               <%= form_with(model: [@video, Question.new], local: true, id: "new-question-form", onsubmit: "prepareFormSubmission()") do |form| %>
                 <div class="form-group">
+                  <%= form.label :time_position, "出題時刻（先頭からの経過時間）" %>
+                  <div class="input-group mb-2">
+                    <input type="number" id="time-hours" class="form-control" placeholder="時" min="0" style="max-width: 80px;">
+                    <span class="input-group-text">:</span>
+                    <input type="number" id="time-minutes" class="form-control" placeholder="分" min="0" max="59" style="max-width: 80px;">
+                    <span class="input-group-text">:</span>
+                    <input type="number" id="time-seconds" class="form-control" placeholder="秒" min="0" max="59" style="max-width: 80px;">
+                  </div>
+                  <%= form.hidden_field :time_position, id: "time-position" %>
+                  <div class="btn-group" role="group">
+                    <button type="button" id="current-time-btn" class="btn btn-sm btn-outline-secondary">現在の時間を設定</button>
+                    <button type="button" id="rewind-5s-btn" class="btn btn-sm btn-outline-info" title="5秒戻る">◀◀ 5秒</button>
+                    <button type="button" id="forward-5s-btn" class="btn btn-sm btn-outline-info" title="5秒進む">5秒 ▶▶</button>
+                  </div>
+                  <small class="form-text text-muted">動画の現在位置: <span id="current-time-display">00:00</span></small>
+                </div>
+                
+                <div class="form-group">
+                  <%= form.label :show_answer, "解答表示" %>
+                  <div>
+                    <%= form.check_box :show_answer, checked: true %>
+                    <label for="question_show_answer" class="checkbox-label">回答後に正解を表示する</label>
+                  </div>
+                </div>
+                
+                <div class="form-actions">
+                  <%= form.submit "問題を追加", class: "btn btn-success" %>
+                </div>
+                
+                <hr class="my-4">
+                
+                <div class="form-group">
                   <%= form.label :content, "問題文" %>
                   <%= form.text_area :content, rows: 3, class: "form-control" %>
                 </div>
@@ -142,35 +174,7 @@
                   </div>
                 </div>
                 
-                <div class="form-group">
-                  <%= form.label :time_position, "出題時刻（先頭からの経過時間）" %>
-                  <div class="input-group mb-2">
-                    <input type="number" id="time-hours" class="form-control" placeholder="時" min="0" style="max-width: 80px;">
-                    <span class="input-group-text">:</span>
-                    <input type="number" id="time-minutes" class="form-control" placeholder="分" min="0" max="59" style="max-width: 80px;">
-                    <span class="input-group-text">:</span>
-                    <input type="number" id="time-seconds" class="form-control" placeholder="秒" min="0" max="59" style="max-width: 80px;">
-                  </div>
-                  <%= form.hidden_field :time_position, id: "time-position" %>
-                  <div class="btn-group" role="group">
-                    <button type="button" id="current-time-btn" class="btn btn-sm btn-outline-secondary">現在の時間を設定</button>
-                    <button type="button" id="rewind-5s-btn" class="btn btn-sm btn-outline-info" title="5秒戻る">◀◀ 5秒</button>
-                    <button type="button" id="forward-5s-btn" class="btn btn-sm btn-outline-info" title="5秒進む">5秒 ▶▶</button>
-                  </div>
-                  <small class="form-text text-muted">動画の現在位置: <span id="current-time-display">00:00</span></small>
-                </div>
-                
-                <div class="form-group">
-                  <%= form.label :show_answer, "解答表示" %>
-                  <div>
-                    <%= form.check_box :show_answer, checked: true %>
-                    <label for="question_show_answer" class="checkbox-label">回答後に正解を表示する</label>
-                  </div>
-                </div>
-                
-                <div class="form-actions">
-                  <%= form.submit "問題を追加", class: "btn btn-success" %>
-                </div>
+
               <% end %>
             </div>
             
