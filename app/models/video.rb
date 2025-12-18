@@ -21,6 +21,20 @@ class Video < ApplicationRecord
   validates :video_file, presence: true
   validates :password, presence: true, if: :is_private?
 
+  # 限定公開がfalseの場合、パスワードをクリア
+  before_save :clear_password_if_not_private
+
+  private
+
+  def clear_password_if_not_private
+    # 限定公開がfalseの場合、パスワードダイジェストをクリア
+    if !is_private? && password_digest.present?
+      self.password_digest = nil
+    end
+  end
+
+  public
+
   # Scopes
   scope :public_videos, -> { where(is_private: [ false, nil ]) }
   scope :private_videos, -> { where(is_private: true) }

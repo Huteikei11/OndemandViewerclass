@@ -60,10 +60,16 @@
               </div>
             </div>
 
+            <div class="form-group" id="video-id-field">
+              <%= form.label :id, "動画ID" %>
+              <input type="text" class="form-control" value="<%= @video.id %>" readonly style="background-color: #e9ecef;">
+              <small class="form-text text-muted">閲覧時に動画IDとパスワードの両方が必要です。</small>
+            </div>
+
             <div class="form-group" id="password-field">
               <%= form.label :password, "アクセスパスワード" %>
-              <%= form.password_field :password, class: "form-control", autocomplete: "new-password" %>
-              <small class="form-text text-muted">限定公開の場合、このパスワードが必要になります。</small>
+              <%= form.text_field :password, class: "form-control", autocomplete: "off", placeholder: "変更する場合のみ入力してください" %>
+              <small class="form-text text-muted">限定公開の場合、このパスワードが必要になります。空欄の場合は変更されません。</small>
             </div>
 
             <div class="form-actions">
@@ -1474,14 +1480,26 @@ function initializeVideoEditor() {
   
   // パスワードフィールドの表示制御
   const isPrivateCheckbox = document.getElementById('video_is_private');
+  const videoIdField = document.getElementById('video-id-field');
   const passwordField = document.getElementById('password-field');
+  const passwordInput = document.getElementById('video_password');
   
   function togglePasswordField() {
     if (isPrivateCheckbox && passwordField) {
       if (isPrivateCheckbox.checked) {
+        if (videoIdField) videoIdField.style.display = 'block';
         passwordField.style.display = 'block';
+        if (passwordInput) {
+          passwordInput.removeAttribute('disabled');
+        }
       } else {
+        if (videoIdField) videoIdField.style.display = 'none';
         passwordField.style.display = 'none';
+        if (passwordInput) {
+          // 限定公開がオフの場合、パスワードフィールドをクリア
+          passwordInput.value = '';
+          passwordInput.setAttribute('disabled', 'disabled');
+        }
       }
     }
   }
@@ -1492,6 +1510,18 @@ function initializeVideoEditor() {
   // チェックボックスの変更を監視
   if (isPrivateCheckbox) {
     isPrivateCheckbox.addEventListener('change', togglePasswordField);
+  }
+  
+  // フォーム送信前に無効化されたフィールドを一時的に有効化
+  // （無効化されたフィールドは送信されないため）
+  const videoForm = document.querySelector('.video-form');
+  if (videoForm) {
+    videoForm.addEventListener('submit', function(e) {
+      if (passwordInput && passwordInput.hasAttribute('disabled')) {
+        // 一時的に有効化して空文字を送信
+        passwordInput.removeAttribute('disabled');
+      }
+    });
   }
 }
 

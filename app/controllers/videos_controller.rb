@@ -38,7 +38,31 @@ class VideosController < ApplicationController
   end
 
   def update
-    if @video.update(video_params)
+    update_params = video_params.to_h
+
+    # is_privateの値を確認
+    is_private_param = update_params[:is_private]
+    is_becoming_private = (is_private_param == "1" || is_private_param == true)
+
+    # パスワードが空の場合の処理
+    if update_params[:password].blank?
+      # 限定公開に変更する場合で、既存のパスワードがない場合はエラー
+      if is_becoming_private && @video.password_digest.blank?
+        @video.errors.add(:password, "は限定公開の場合必須です")
+        @questions = @video.questions.order(:time_position)
+        render :edit, status: :unprocessable_entity
+        return
+      end
+      # パスワードが空の場合は更新しない
+      update_params.delete(:password)
+    end
+
+    # 限定公開がfalseの場合、パスワードをクリア
+    if !is_becoming_private
+      @video.password_digest = nil
+    end
+
+    if @video.update(update_params)
       redirect_to edit_video_path(@video), notice: "動画が正常に更新されました。"
     else
       @questions = @video.questions.order(:time_position)
