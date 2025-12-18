@@ -1096,12 +1096,19 @@ if (typeof window.videoPlayerInitState === 'undefined') {
   window.videoPlayerInitState = {
     isInitialized: false,
     retryCount: 0,
-    maxRetries: 50
+    maxRetries: 50,
+    shouldStop: false  // 初期化停止フラグ
   };
 }
 
 // 初期化関数をグローバルスコープで定義
 function initializeVideoPlayer() {
+  // 停止フラグがセットされている場合は中断
+  if (window.videoPlayerInitState.shouldStop) {
+    console.log('初期化が停止されました（ページ遷移中）');
+    return;
+  }
+  
   // すでに初期化済みの場合はスキップ
   if (window.videoPlayerInitState.isInitialized) {
     console.log('動画プレイヤーは既に初期化済みです');
@@ -1115,6 +1122,13 @@ function initializeVideoPlayer() {
   }
   
   window.videoPlayerInitState.retryCount++;
+  
+  // 現在のURLが動画プレイヤーページかチェック
+  const currentPath = window.location.pathname;
+  if (!currentPath.includes('/videos/') || !currentPath.includes('/player')) {
+    console.log('動画プレイヤーページではありません。初期化を中止します。');
+    return;
+  }
   
   // MediaPipeライブラリが読み込まれているか確認
   if (typeof FaceMesh === 'undefined') {
@@ -3442,6 +3456,12 @@ function initializeVideoPlayer() {
       console.log('pathParts:', pathParts);
       console.log('videoId:', videoId);
       
+      // videoIdが空または不正な場合は処理を中止
+      if (!videoId || videoId.trim() === '' || videoId === 'player') {
+        console.error('videoIdを取得できません。セッション保存を中止します。');
+        return;
+      }
+      
       const payload = JSON.stringify({ session_data: JSON.stringify(data) });
       console.log('送信ペイロード長:', payload.length);
       
@@ -4843,36 +4863,89 @@ document.addEventListener('turbo:before-cache', function() {
   window.videoPlayerInitState = {
     isInitialized: false,
     retryCount: 0,
-    maxRetries: 50
+    maxRetries: 50,
+    shouldStop: false
   };
+});
+
+// ページ遷移開始時に初期化を停止
+document.addEventListener('turbo:before-visit', function() {
+  console.log('turbo:before-visit - 初期化を停止');
+  if (window.videoPlayerInitState) {
+    window.videoPlayerInitState.shouldStop = true;
+  }
+});
+
+// ページから離れるときの処理
+window.addEventListener('pagehide', function() {
+  console.log('pagehide - 初期化を停止');
+  if (window.videoPlayerInitState) {
+    window.videoPlayerInitState.shouldStop = true;
+  }
+});
+
+// ページ遷移完了時に動画プレイヤーページかチェック
+document.addEventListener('turbo:load', function() {
+  const currentPath = window.location.pathname;
+  const isPlayerPage = currentPath.includes('/videos/') && currentPath.includes('/player');
+  
+  if (isPlayerPage) {
+    // 動画プレイヤーページの場合は初期化状態をリセット
+    console.log('turbo:load - 動画プレイヤーページ検出、初期化状態をリセット');
+    window.videoPlayerInitState = {
+      isInitialized: false,
+      retryCount: 0,
+      maxRetries: 50,
+      shouldStop: false
+    };
+  } else {
+    // 動画プレイヤーページでない場合は停止フラグを設定
+    console.log('turbo:load - 動画プレイヤーページではありません');
+    if (window.videoPlayerInitState) {
+      window.videoPlayerInitState.shouldStop = true;
+    }
+  }
 });
 
 // イベントリスナーの重複登録を防ぐ
 if (!window.videoPlayerListenersAdded) {
   window.videoPlayerListenersAdded = true;
   
-  // DOMContentLoadedとturbo:loadの両方で初期化
+  // DOMContentLoadedで初期化
   document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOMContentLoaded - 動画プレイヤー初期化開始');
-    setTimeout(initializeVideoPlayer, 50);
-  });
-
-  document.addEventListener('turbo:load', function() {
-    console.log('turbo:load - 動画プレイヤー初期化開始');
-    setTimeout(initializeVideoPlayer, 50);
+    const currentPath = window.location.pathname;
+    if (currentPath.includes('/videos/') && currentPath.includes('/player')) {
+      console.log('DOMContentLoaded - 動画プレイヤー初期化開始');
+      setTimeout(initializeVideoPlayer, 50);
+    }
   });
 
   document.addEventListener('turbo:render', function() {
-    console.log('turbo:render - 動画プレイヤー初期化開始');
-    setTimeout(initializeVideoPlayer, 50);
+    const currentPath = window.location.pathname;
+    if (currentPath.includes('/videos/') && currentPath.includes('/player')) {
+      console.log('turbo:render - 動画プレイヤー初期化開始');
+      setTimeout(initializeVideoPlayer, 50);
+    }
   });
 
   // ページがすでに読み込まれている場合は即座に実行
   if (document.readyState === 'loading') {
     console.log('DOM読み込み中 - イベントリスナー待機');
   } else {
-    console.log('DOM既に読み込み完了 - 即時初期化');
-    setTimeout(initializeVideoPlayer, 50);
+    const currentPath = window.location.pathname;
+    if (currentPath.includes('/videos/') && currentPath.includes('/player')) {
+      console.log('DOM既に読み込み完了 - 即時初期化');
+      setTimeout(initializeVideoPlayer, 50);
+    }
   }
 }
+
+// turbo:loadでの初期化（リセット後に実行）
+document.addEventListener('turbo:load', function() {
+  const currentPath = window.location.pathname;
+  if (currentPath.includes('/videos/') && currentPath.includes('/player')) {
+    console.log('turbo:load - 動画プレイヤー初期化開始');
+    setTimeout(initializeVideoPlayer, 50);
+  }
+});
 </script>
