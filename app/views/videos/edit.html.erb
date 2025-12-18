@@ -102,12 +102,16 @@
                     <input type="number" id="time-seconds" class="form-control" placeholder="秒" min="0" max="59" style="max-width: 80px;">
                   </div>
                   <%= form.hidden_field :time_position, id: "time-position" %>
-                  <div class="btn-group" role="group">
-                    <button type="button" id="current-time-btn" class="btn btn-sm btn-outline-secondary">現在の時間を設定</button>
-                    <button type="button" id="rewind-5s-btn" class="btn btn-sm btn-outline-info" title="5秒戻る">◀◀ 5秒</button>
-                    <button type="button" id="forward-5s-btn" class="btn btn-sm btn-outline-info" title="5秒進む">5秒 ▶▶</button>
+                  <div class="mb-3">
+                    <button type="button" id="current-time-btn" class="btn btn-primary btn-lg" style="width: 100%; font-weight: bold;">
+                      <i class="bi bi-clock-fill"></i> 現在の時間を設定
+                    </button>
                   </div>
-                  <small class="form-text text-muted">動画の現在位置: <span id="current-time-display">00:00</span></small>
+                  <div class="btn-group" role="group" style="width: 100%;">
+                    <button type="button" id="rewind-5s-btn" class="btn btn-outline-info" title="5秒戻る" style="flex: 1;">◀ 5秒戻る</button>
+                    <button type="button" id="forward-5s-btn" class="btn btn-outline-info" title="5秒進む" style="flex: 1;">5秒進む ▶</button>
+                  </div>
+                  <small class="form-text text-muted mt-2 d-block">動画の現在位置: <span id="current-time-display" style="font-weight: bold; color: #0d6efd;">00:00</span></small>
                 </div>
                 
                 <div class="form-group">
@@ -835,17 +839,26 @@ function initializeVideoEditor() {
       }
     });
     
-    // 現在時間ボタンのイベントリスナー
+    // 現在時間ボタンのイベントリスナー（イベントリスナーの重複を防ぐ）
     if (currentTimeBtn) {
-      currentTimeBtn.addEventListener('click', function(e) {
+      // 古いイベントリスナーを削除（クローンを作成して置き換える）
+      const newCurrentTimeBtn = currentTimeBtn.cloneNode(true);
+      currentTimeBtn.parentNode.replaceChild(newCurrentTimeBtn, currentTimeBtn);
+      
+      newCurrentTimeBtn.addEventListener('click', function(e) {
         e.preventDefault();
         if (videoPlayer.readyState >= 2) { // HAVE_CURRENT_DATA以上
           const totalSeconds = Math.floor(videoPlayer.currentTime);
           const hms = secondsToHMS(totalSeconds);
-          timeHoursInput.value = hms.hours || '';
-          timeMinutesInput.value = hms.minutes;
-          timeSecondsInput.value = hms.seconds;
-          timePositionInput.value = totalSeconds;
+          const timeHoursInputUpdated = document.getElementById('time-hours');
+          const timeMinutesInputUpdated = document.getElementById('time-minutes');
+          const timeSecondsInputUpdated = document.getElementById('time-seconds');
+          const timePositionInputUpdated = document.getElementById('time-position');
+          
+          if (timeHoursInputUpdated) timeHoursInputUpdated.value = hms.hours || '';
+          if (timeMinutesInputUpdated) timeMinutesInputUpdated.value = hms.minutes;
+          if (timeSecondsInputUpdated) timeSecondsInputUpdated.value = hms.seconds;
+          if (timePositionInputUpdated) timePositionInputUpdated.value = totalSeconds;
           console.log('現在の時間を設定:', totalSeconds, '秒');
         } else {
           alert('動画がまだ読み込まれていません。少し待ってから再試行してください。');
@@ -853,19 +866,33 @@ function initializeVideoEditor() {
       });
     }
     
-    // 5秒戻るボタン
+    // 5秒戻るボタン（イベントリスナーの重複を防ぐため、既存のリスナーを削除してから追加）
     if (rewind5sBtn) {
-      rewind5sBtn.addEventListener('click', function(e) {
+      // 古いイベントリスナーを削除（クローンを作成して置き換える）
+      const newRewind5sBtn = rewind5sBtn.cloneNode(true);
+      rewind5sBtn.parentNode.replaceChild(newRewind5sBtn, rewind5sBtn);
+      
+      newRewind5sBtn.addEventListener('click', function(e) {
         e.preventDefault();
-        videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - 5);
+        console.log('5秒戻るボタンがクリックされました。現在位置:', videoPlayer.currentTime);
+        const newTime = Math.max(0, videoPlayer.currentTime - 5);
+        videoPlayer.currentTime = newTime;
+        console.log('新しい位置:', newTime);
       });
     }
     
-    // 5秒進むボタン
+    // 5秒進むボタン（イベントリスナーの重複を防ぐため、既存のリスナーを削除してから追加）
     if (forward5sBtn) {
-      forward5sBtn.addEventListener('click', function(e) {
+      // 古いイベントリスナーを削除（クローンを作成して置き換える）
+      const newForward5sBtn = forward5sBtn.cloneNode(true);
+      forward5sBtn.parentNode.replaceChild(newForward5sBtn, forward5sBtn);
+      
+      newForward5sBtn.addEventListener('click', function(e) {
         e.preventDefault();
-        videoPlayer.currentTime = Math.min(videoPlayer.duration, videoPlayer.currentTime + 5);
+        console.log('5秒進むボタンがクリックされました。現在位置:', videoPlayer.currentTime);
+        const newTime = Math.min(videoPlayer.duration, videoPlayer.currentTime + 5);
+        videoPlayer.currentTime = newTime;
+        console.log('新しい位置:', newTime);
       });
     }
     
