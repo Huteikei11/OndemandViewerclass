@@ -26,9 +26,14 @@ module ApplicationHelper
   end
 
   def format_time_position(seconds)
-    minutes = seconds / 60
+    hours = seconds / 3600
+    minutes = (seconds % 3600) / 60
     secs = seconds % 60
-    sprintf("%02d:%02d", minutes, secs)
+    if hours > 0
+      sprintf("%d:%02d:%02d", hours, minutes, secs)
+    else
+      sprintf("%02d:%02d", minutes, secs)
+    end
   end
 
   # タイムライン用のヘルパーメソッド

@@ -26,6 +26,13 @@ module VideosHelper
   end
 
   def format_time_position(seconds)
-    Time.at(seconds).utc.strftime("%M:%S")
+    hours = seconds / 3600
+    minutes = (seconds % 3600) / 60
+    secs = seconds % 60
+    if hours > 0
+      sprintf("%d:%02d:%02d", hours, minutes, secs)
+    else
+      sprintf("%02d:%02d", minutes, secs)
+    end
   end
 end

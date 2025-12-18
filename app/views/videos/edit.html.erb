@@ -143,9 +143,21 @@
                 </div>
                 
                 <div class="form-group">
-                  <%= form.label :time_position, "表示時間 (秒)" %>
-                  <%= form.number_field :time_position, class: "form-control", id: "time-position" %>
-                  <button type="button" id="current-time-btn" class="btn btn-sm btn-outline-secondary mt-2">現在の時間を設定</button>
+                  <%= form.label :time_position, "出題時刻（先頭からの経過時間）" %>
+                  <div class="input-group mb-2">
+                    <input type="number" id="time-hours" class="form-control" placeholder="時" min="0" style="max-width: 80px;">
+                    <span class="input-group-text">:</span>
+                    <input type="number" id="time-minutes" class="form-control" placeholder="分" min="0" max="59" style="max-width: 80px;">
+                    <span class="input-group-text">:</span>
+                    <input type="number" id="time-seconds" class="form-control" placeholder="秒" min="0" max="59" style="max-width: 80px;">
+                  </div>
+                  <%= form.hidden_field :time_position, id: "time-position" %>
+                  <div class="btn-group" role="group">
+                    <button type="button" id="current-time-btn" class="btn btn-sm btn-outline-secondary">現在の時間を設定</button>
+                    <button type="button" id="rewind-5s-btn" class="btn btn-sm btn-outline-info" title="5秒戻る">◀◀ 5秒</button>
+                    <button type="button" id="forward-5s-btn" class="btn btn-sm btn-outline-info" title="5秒進む">5秒 ▶▶</button>
+                  </div>
+                  <small class="form-text text-muted">動画の現在位置: <span id="current-time-display">00:00</span></small>
                 </div>
                 
                 <div class="form-group">
@@ -736,6 +748,49 @@ document.addEventListener('DOMContentLoaded', function() {
   const timePositionInput = document.getElementById('time-position');
   const currentTimeBtn = document.getElementById('current-time-btn');
   
+  // 時:分:秒入力フィールド
+  const timeHoursInput = document.getElementById('time-hours');
+  const timeMinutesInput = document.getElementById('time-minutes');
+  const timeSecondsInput = document.getElementById('time-seconds');
+  const currentTimeDisplaySpan = document.getElementById('current-time-display');
+  const rewind5sBtn = document.getElementById('rewind-5s-btn');
+  const forward5sBtn = document.getElementById('forward-5s-btn');
+  
+  // 秒を時:分:秒に変換
+  function secondsToHMS(totalSeconds) {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    return { hours, minutes, seconds };
+  }
+  
+  // 時:分:秒を秒に変換
+  function hmsToSeconds() {
+    const hours = parseInt(timeHoursInput.value) || 0;
+    const minutes = parseInt(timeMinutesInput.value) || 0;
+    const seconds = parseInt(timeSecondsInput.value) || 0;
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+  
+  // 時:分:秒フィールドの変更を監視して秒フィールドを更新
+  function updateTimePosition() {
+    timePositionInput.value = hmsToSeconds();
+  }
+  
+  if (timeHoursInput && timeMinutesInput && timeSecondsInput) {
+    timeHoursInput.addEventListener('input', updateTimePosition);
+    timeMinutesInput.addEventListener('input', updateTimePosition);
+    timeSecondsInput.addEventListener('input', updateTimePosition);
+    
+    // 初期値を設定（既存の値がある場合）
+    if (timePositionInput.value) {
+      const hms = secondsToHMS(parseInt(timePositionInput.value));
+      timeHoursInput.value = hms.hours || '';
+      timeMinutesInput.value = hms.minutes || '';
+      timeSecondsInput.value = hms.seconds || '';
+    }
+  }
+  
   if (videoPlayer) {
     // 動画の読み込み完了を待つ
     videoPlayer.addEventListener('loadedmetadata', function() {
@@ -748,19 +803,53 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     videoPlayer.addEventListener('timeupdate', function() {
-      const minutes = Math.floor(videoPlayer.currentTime / 60);
-      const seconds = Math.floor(videoPlayer.currentTime % 60);
-      currentTimeDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      const totalSeconds = Math.floor(videoPlayer.currentTime);
+      const hms = secondsToHMS(totalSeconds);
+      
+      if (hms.hours > 0) {
+        currentTimeDisplay.textContent = `${hms.hours}:${hms.minutes.toString().padStart(2, '0')}:${hms.seconds.toString().padStart(2, '0')}`;
+        if (currentTimeDisplaySpan) {
+          currentTimeDisplaySpan.textContent = `${hms.hours}:${hms.minutes.toString().padStart(2, '0')}:${hms.seconds.toString().padStart(2, '0')}`;
+        }
+      } else {
+        currentTimeDisplay.textContent = `${hms.minutes.toString().padStart(2, '0')}:${hms.seconds.toString().padStart(2, '0')}`;
+        if (currentTimeDisplaySpan) {
+          currentTimeDisplaySpan.textContent = `${hms.minutes.toString().padStart(2, '0')}:${hms.seconds.toString().padStart(2, '0')}`;
+        }
+      }
     });
     
     // 現在時間ボタンのイベントリスナー
     if (currentTimeBtn) {
-      currentTimeBtn.addEventListener('click', function() {
+      currentTimeBtn.addEventListener('click', function(e) {
+        e.preventDefault();
         if (videoPlayer.readyState >= 2) { // HAVE_CURRENT_DATA以上
-          timePositionInput.value = Math.floor(videoPlayer.currentTime);
+          const totalSeconds = Math.floor(videoPlayer.currentTime);
+          const hms = secondsToHMS(totalSeconds);
+          timeHoursInput.value = hms.hours || '';
+          timeMinutesInput.value = hms.minutes;
+          timeSecondsInput.value = hms.seconds;
+          timePositionInput.value = totalSeconds;
+          console.log('現在の時間を設定:', totalSeconds, '秒');
         } else {
           alert('動画がまだ読み込まれていません。少し待ってから再試行してください。');
         }
+      });
+    }
+    
+    // 5秒戻るボタン
+    if (rewind5sBtn) {
+      rewind5sBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - 5);
+      });
+    }
+    
+    // 5秒進むボタン
+    if (forward5sBtn) {
+      forward5sBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        videoPlayer.currentTime = Math.min(videoPlayer.duration, videoPlayer.currentTime + 5);
       });
     }
     
@@ -768,6 +857,16 @@ document.addEventListener('DOMContentLoaded', function() {
     videoPlayer.addEventListener('error', function(e) {
       console.error('Video error:', e);
       alert('動画の読み込み中にエラーが発生しました。ページをリロードしてください。');
+    });
+    
+    // 問題追加後に動画位置を復元
+    videoPlayer.addEventListener('loadedmetadata', function() {
+      const savedPosition = sessionStorage.getItem('videoEditPosition');
+      if (savedPosition) {
+        videoPlayer.currentTime = parseFloat(savedPosition);
+        sessionStorage.removeItem('videoEditPosition');
+        console.log('動画位置を復元:', savedPosition);
+      }
     });
   }
   
@@ -853,6 +952,11 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Prepare form before submission
   function prepareFormSubmission() {
+    // 動画の現在位置を保存
+    if (videoPlayer) {
+      sessionStorage.setItem('videoEditPosition', videoPlayer.currentTime);
+    }
+    
     const selectedType = document.getElementById('question-type-select').value;
     const answerField = document.querySelector('input[name="question[answer]"]') || 
                         document.querySelector('select[name="question[answer]"]');
