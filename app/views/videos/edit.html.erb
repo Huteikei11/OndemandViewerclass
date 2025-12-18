@@ -159,12 +159,13 @@
                   <div class="form-group">
                     <label>選択肢</label>
                     <div id="options-container">
-                      <div class="option-item">
-                        <input type="text" name="options[][content]" class="form-control option-content" placeholder="選択肢1">
-                        <div class="option-correct">
+                      <div class="option-item" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
+                        <input type="text" name="options[][content]" class="form-control option-content" placeholder="選択肢1" style="flex: 1;">
+                        <div class="option-correct" style="white-space: nowrap;">
                           <input type="radio" name="option_correct" value="0" checked> 正解
                           <input type="hidden" name="options[][is_correct]" value="true" class="is-correct-field">
                         </div>
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-option-btn" style="display: none;" title="削除">×</button>
                       </div>
                     </div>
                     <button type="button" id="add-option-btn" class="btn btn-sm btn-outline-secondary mt-2">選択肢を追加</button>
@@ -951,46 +952,84 @@ function initializeVideoEditor() {
   const optionsContainer = document.getElementById('options-container');
   
   if (addOptionBtn && optionsContainer) {
-    let optionCount = 1;
+    let optionCount = optionsContainer.querySelectorAll('.option-item').length;
     
-    addOptionBtn.addEventListener('click', function() {
+    // 既存のイベントリスナーを削除（クローンで置き換え）
+    const newAddOptionBtn = addOptionBtn.cloneNode(true);
+    addOptionBtn.parentNode.replaceChild(newAddOptionBtn, addOptionBtn);
+    
+    newAddOptionBtn.addEventListener('click', function() {
       optionCount++;
       
       const optionItem = document.createElement('div');
       optionItem.className = 'option-item';
-      
-      const radioName = `option_${Date.now()}`;
+      optionItem.style.cssText = 'display: flex; gap: 10px; margin-bottom: 10px; align-items: center;';
       
       optionItem.innerHTML = `
-        <input type="text" name="options[][content]" class="form-control option-content" placeholder="選択肢${optionCount}">
-        <div class="option-correct">
+        <input type="text" name="options[][content]" class="form-control option-content" placeholder="選択肢${optionCount}" style="flex: 1;">
+        <div class="option-correct" style="white-space: nowrap;">
           <input type="radio" name="option_correct" value="${optionCount-1}"> 正解
           <input type="hidden" name="options[][is_correct]" value="false" class="is-correct-field">
         </div>
+        <button type="button" class="btn btn-sm btn-outline-danger remove-option-btn" title="削除">×</button>
       `;
       
       optionsContainer.appendChild(optionItem);
       
+      // 削除ボタンのイベントリスナー
+      const removeBtn = optionItem.querySelector('.remove-option-btn');
+      removeBtn.addEventListener('click', function() {
+        optionItem.remove();
+        updateCorrectAnswers();
+        updateRemoveButtons();
+      });
+      
       // Add event listener to the new radio button
       const newRadio = optionItem.querySelector('input[type="radio"]');
       newRadio.addEventListener('change', updateCorrectAnswers);
+      
+      // 削除ボタンの表示を更新
+      updateRemoveButtons();
     });
     
     // Update hidden is_correct fields based on selected radio button
     function updateCorrectAnswers() {
-      const radioButtons = document.querySelectorAll('input[name="option_correct"]');
-      const isCorrectFields = document.querySelectorAll('.is-correct-field');
+      const radioButtons = document.querySelectorAll('#options-container input[name="option_correct"]');
+      const isCorrectFields = document.querySelectorAll('#options-container .is-correct-field');
       
       for (let i = 0; i < isCorrectFields.length; i++) {
         isCorrectFields[i].value = (radioButtons[i].checked) ? "true" : "false";
       }
     }
     
+    // 削除ボタンの表示/非表示を更新（選択肢が2つ以上ある場合のみ表示）
+    function updateRemoveButtons() {
+      const allOptions = optionsContainer.querySelectorAll('.option-item');
+      const removeButtons = optionsContainer.querySelectorAll('.remove-option-btn');
+      
+      removeButtons.forEach(btn => {
+        btn.style.display = allOptions.length > 1 ? 'inline-block' : 'none';
+      });
+    }
+    
     // Add event listeners to existing radio buttons
-    const existingRadios = document.querySelectorAll('input[name="option_correct"]');
+    const existingRadios = document.querySelectorAll('#options-container input[name="option_correct"]');
     existingRadios.forEach(radio => {
       radio.addEventListener('change', updateCorrectAnswers);
     });
+    
+    // 既存の削除ボタンにイベントリスナーを追加
+    const existingRemoveButtons = optionsContainer.querySelectorAll('.remove-option-btn');
+    existingRemoveButtons.forEach(btn => {
+      btn.addEventListener('click', function() {
+        this.closest('.option-item').remove();
+        updateCorrectAnswers();
+        updateRemoveButtons();
+      });
+    });
+    
+    // 初期状態の削除ボタンを更新
+    updateRemoveButtons();
   }
   
   // Prepare form before submission
