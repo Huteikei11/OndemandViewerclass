@@ -440,26 +440,37 @@ class VideoManagementController < ApplicationController
                               .where.not(video_time: nil)
                               .order(:session_elapsed)
 
+      Rails.logger.info "[反応速度デバッグ] セッション #{session.id}: 反応速度イベント数 = #{response_events.count}"
+      
       quick_events = response_events.select { |e| e.event_type == "response_quick" }
       normal_events = response_events.select { |e| e.event_type == "response_normal" }
       slow_events = response_events.select { |e| e.event_type == "response_slow" }
+      
+      Rails.logger.info "[反応速度デバッグ] セッション #{session.id}: quick=#{quick_events.count}, normal=#{normal_events.count}, slow=#{slow_events.count}"
 
       # additional_dataをパースするヘルパー
       parse_response_time = lambda do |event|
         data = event.additional_data
+        Rails.logger.debug "[反応速度デバッグ] イベント #{event.id}: additional_data型=#{data.class}, 値=#{data.inspect}"
         data = JSON.parse(data) if data.is_a?(String)
-        data&.[]("responseTime")
-      rescue
+        response_time = data&.[]("responseTime")
+        Rails.logger.debug "[反応速度デバッグ] イベント #{event.id}: responseTime=#{response_time}"
+        response_time
+      rescue => e
+        Rails.logger.error "[反応速度デバッグ] パースエラー: #{e.message}"
         nil
       end
 
-      {
+      result = {
         session_id: session.id,
         label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')} ID:#{session.id})",
         quick: quick_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
         normal: normal_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
         slow: slow_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } }
       }
+      
+      Rails.logger.info "[反応速度デバッグ] セッション #{session.id}: マーカー生成完了 - quick: #{result[:quick].count}, normal: #{result[:normal].count}, slow: #{result[:slow].count}"
+      result
     end
 
     # 2. イベントタイプ別分布データ

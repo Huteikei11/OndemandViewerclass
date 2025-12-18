@@ -2680,9 +2680,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // 出題から回答までの時間を記録（スコアには反映しない）
+        // ※通常は onResponseStarted() で即座に記録されるため、ここには到達しない
         if (this.questionDisplayTime && this.responseStartTime && !this.responseProcessed) {
           const responseTime = (this.responseStartTime - this.questionDisplayTime) / 1000;
-          console.log(`[反応速度イベント] 回答時間: ${responseTime.toFixed(2)}秒`);
+          console.log(`[反応速度イベント] startTracking内で記録 - 回答時間: ${responseTime.toFixed(2)}秒`);
           console.log(`[反応速度イベント] 遅延判定閾値: ${this.scoreSettings.responseDelayThreshold}秒`);
           console.log(`[反応速度イベント] 素早い判定閾値: ${this.scoreSettings.quickResponseThreshold}秒`);
           
@@ -3134,6 +3135,36 @@ document.addEventListener('DOMContentLoaded', function() {
       this.addTimestamp('answer_start', '回答開始', {
         responseTime: responseTime
       });
+      
+      // 反応速度イベントを即座に記録
+      if (this.questionDisplayTime && this.responseStartTime && !this.responseProcessed) {
+        console.log(`[反応速度イベント] 回答開始時に記録 - 回答時間: ${responseTime.toFixed(2)}秒`);
+        console.log(`[反応速度イベント] 遅延判定閾値: ${this.scoreSettings.responseDelayThreshold}秒`);
+        console.log(`[反応速度イベント] 素早い判定閾値: ${this.scoreSettings.quickResponseThreshold}秒`);
+        
+        if (responseTime > this.scoreSettings.responseDelayThreshold) {
+          console.log(`[反応速度イベント] 回答遅延を記録: ${responseTime.toFixed(2)}秒`);
+          this.addTimestamp('response_slow', '回答遅延', {
+            responseTime: responseTime,
+            threshold: this.scoreSettings.responseDelayThreshold,
+            delay: responseTime - this.scoreSettings.responseDelayThreshold
+          });
+        } else if (responseTime < this.scoreSettings.quickResponseThreshold) {
+          console.log(`[反応速度イベント] 素早い回答を記録: ${responseTime.toFixed(2)}秒`);
+          this.addTimestamp('response_quick', '素早い回答', {
+            responseTime: responseTime,
+            threshold: this.scoreSettings.quickResponseThreshold
+          });
+        } else {
+          console.log(`[反応速度イベント] 通常の回答速度を記録: ${responseTime.toFixed(2)}秒`);
+          this.addTimestamp('response_normal', '回答速度普通', {
+            responseTime: responseTime,
+            quickThreshold: this.scoreSettings.quickResponseThreshold,
+            delayThreshold: this.scoreSettings.responseDelayThreshold
+          });
+        }
+        this.responseProcessed = true;
+      }
       
       // 回答開始をログに記録
       const timestamp = new Date().toLocaleTimeString();

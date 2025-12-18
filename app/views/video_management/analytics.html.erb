@@ -1106,6 +1106,18 @@ function initializeAnalyticsCharts() {
     const videoOperationsMarkers = <%= raw @video_operations_markers.to_json %>;
     const responseTimeMarkers = <%= raw @response_time_markers.to_json %>;
     
+    // デバッグ: 反応速度マーカーのデータを確認
+    console.log('[反応速度デバッグ] responseTimeMarkers:', responseTimeMarkers);
+    console.log('[反応速度デバッグ] マーカー数:', responseTimeMarkers.length);
+    responseTimeMarkers.forEach((marker, index) => {
+      console.log(`[反応速度デバッグ] セッション ${marker.session_id}:`, {
+        quick: marker.quick?.length || 0,
+        normal: marker.normal?.length || 0,
+        slow: marker.slow?.length || 0,
+        data: marker
+      });
+    });
+    
     // 線の色をグレーに統一
     const lineColor = 'rgba(128, 128, 128, 0.5)'; // グレー
     const operationColor = '#6f42c1'; // 紫色
@@ -1205,11 +1217,13 @@ function initializeAnalyticsCharts() {
       
       // 反応速度マーカーを追加
       const resp = responseTimeMarkers.find(r => r.session_id === session.session_id);
+      console.log(`[反応速度デバッグ] セッション ${session.session_id} のマーカー検索結果:`, resp);
       if (resp) {
         const allResponses = [];
         
         // 素早い回答マーカー（上向き三角▲、薄いピンク）
         if (resp.quick && resp.quick.length > 0) {
+          console.log(`[反応速度デバッグ] セッション ${session.session_id}: quick=${resp.quick.length}件追加`);
           resp.quick.forEach(point => {
             allResponses.push({ ...point, style: 'triangle', type: '素早い回答', color: responseQuickColor });
           });
@@ -1217,6 +1231,7 @@ function initializeAnalyticsCharts() {
         
         // 通常の回答速度マーカー（円形○、ピンク）
         if (resp.normal && resp.normal.length > 0) {
+          console.log(`[反応速度デバッグ] セッション ${session.session_id}: normal=${resp.normal.length}件追加`);
           resp.normal.forEach(point => {
             allResponses.push({ ...point, style: 'circle', type: '回答速度普通', color: responseNormalColor });
           });
@@ -1224,14 +1239,18 @@ function initializeAnalyticsCharts() {
         
         // 回答遅延マーカー（下向き三角▼、薄暗いピンク）
         if (resp.slow && resp.slow.length > 0) {
+          console.log(`[反応速度デバッグ] セッション ${session.session_id}: slow=${resp.slow.length}件追加`);
           resp.slow.forEach(point => {
             allResponses.push({ ...point, style: 'rectRot', type: '回答遅延', color: responseSlowColor });
           });
         }
         
+        console.log(`[反応速度デバッグ] セッション ${session.session_id}: 合計 ${allResponses.length}件の反応速度マーカー`)
+        
         if (allResponses.length > 0) {
+          console.log(`[反応速度デバッグ] セッション ${session.session_id}: データセット追加 (${allResponses.length}件)`, allResponses);
           sessionDatasetGroups[session.session_id].push(datasets.length);
-          datasets.push({
+          const responseDataset = {
             label: `${resp.label} - 反応速度`,
             data: allResponses,
             pointRadius: 9,
@@ -1251,8 +1270,14 @@ function initializeAnalyticsCharts() {
             showLine: false,
             order: 1,
             sessionId: session.session_id
-          });
+          };
+          datasets.push(responseDataset);
+          console.log(`[反応速度デバッグ] データセット追加完了:`, responseDataset);
+        } else {
+          console.log(`[反応速度デバッグ] セッション ${session.session_id}: マーカーが0件のためスキップ`);
         }
+      } else {
+        console.log(`[反応速度デバッグ] セッション ${session.session_id}: マーカーデータが見つかりません`);
       }
     });
 
