@@ -1065,6 +1065,21 @@ function createSessionToggles(chartType, datasets) {
 }
 
 function initializeAnalyticsCharts() {
+  // Chart.jsが読み込まれているか確認
+  if (typeof Chart === 'undefined') {
+    console.log('Chart.js is not loaded yet. Retrying...');
+    setTimeout(initializeAnalyticsCharts, 100);
+    return;
+  }
+  
+  // canvas要素が存在するか確認
+  const scoreTimelineCtx = document.getElementById('scoreTimelineChart');
+  if (!scoreTimelineCtx) {
+    console.log('Canvas elements not ready yet. Retrying...');
+    setTimeout(initializeAnalyticsCharts, 100);
+    return;
+  }
+  
   // 既存のチャートを破棄
   Object.keys(chartInstances).forEach(key => {
     if (chartInstances[key]) {
@@ -1086,7 +1101,6 @@ function initializeAnalyticsCharts() {
   };
 
   // 1. 集中スコア推移グラフ
-  const scoreTimelineCtx = document.getElementById('scoreTimelineChart');
   if (scoreTimelineCtx) {
     const scoreTimelineData = <%= raw @score_timeline_data.to_json %>;
     const videoOperationsMarkers = <%= raw @video_operations_markers.to_json %>;
@@ -1814,8 +1828,22 @@ function initializeAnalyticsCharts() {
 }
 
 // 初回読み込みとTurbo遷移の両方で実行
-document.addEventListener('DOMContentLoaded', initializeAnalyticsCharts);
-document.addEventListener('turbo:load', initializeAnalyticsCharts);
+// DOMContentLoadedは通常のページ読み込み用
+document.addEventListener('DOMContentLoaded', function() {
+  // ページが完全に読み込まれるまで少し待機
+  setTimeout(initializeAnalyticsCharts, 50);
+});
+
+// turbo:loadはTurbo遷移時用
+document.addEventListener('turbo:load', function() {
+  // Turbo遷移後も少し待機してからチャートを初期化
+  setTimeout(initializeAnalyticsCharts, 50);
+});
+
+// turbo:renderはTurbo遷移のレンダリング完了時用（より確実）
+document.addEventListener('turbo:render', function() {
+  setTimeout(initializeAnalyticsCharts, 50);
+});
 
 // Turbo遷移前にチャートをクリーンアップ
 document.addEventListener('turbo:before-render', function() {
