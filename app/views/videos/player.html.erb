@@ -1091,8 +1091,48 @@ if (!sessionStorage.getItem('videoPageLoaded')) {
   location.reload();
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+// 初期化管理用のグローバル変数
+if (typeof window.videoPlayerInitState === 'undefined') {
+  window.videoPlayerInitState = {
+    isInitialized: false,
+    retryCount: 0,
+    maxRetries: 50
+  };
+}
+
+// 初期化関数をグローバルスコープで定義
+function initializeVideoPlayer() {
+  // すでに初期化済みの場合はスキップ
+  if (window.videoPlayerInitState.isInitialized) {
+    console.log('動画プレイヤーは既に初期化済みです');
+    return;
+  }
+  
+  // リトライ上限チェック
+  if (window.videoPlayerInitState.retryCount > window.videoPlayerInitState.maxRetries) {
+    console.error('動画プレイヤーの初期化に失敗しました（タイムアウト）');
+    return;
+  }
+  
+  window.videoPlayerInitState.retryCount++;
+  
+  // MediaPipeライブラリが読み込まれているか確認
+  if (typeof FaceMesh === 'undefined') {
+    console.log('MediaPipe FaceMeshライブラリがまだ読み込まれていません。100ms後にリトライ... (試行: ' + window.videoPlayerInitState.retryCount + ')');
+    setTimeout(initializeVideoPlayer, 100);
+    return;
+  }
+  
   const videoPlayer = document.getElementById('video-player');
+  if (!videoPlayer) {
+    console.log('video要素がまだレンダリングされていません。100ms後にリトライ... (試行: ' + window.videoPlayerInitState.retryCount + ')');
+    setTimeout(initializeVideoPlayer, 100);
+    return;
+  }
+  
+  // 初期化完了フラグを設定
+  window.videoPlayerInitState.isInitialized = true;
+  console.log('動画プレイヤー初期化開始... (初期化条件クリア)');
   
   // グローバルエラーハンドリングを追加
   window.addEventListener('error', function(event) {
@@ -4795,5 +4835,44 @@ document.addEventListener('DOMContentLoaded', function() {
       sessionStorage.removeItem('videoPageLoaded');
     });
   }
+}
+
+// Turboナビゲーション前のクリーンアップ
+document.addEventListener('turbo:before-cache', function() {
+  console.log('turbo:before-cache - 初期化状態をリセット');
+  window.videoPlayerInitState = {
+    isInitialized: false,
+    retryCount: 0,
+    maxRetries: 50
+  };
 });
+
+// イベントリスナーの重複登録を防ぐ
+if (!window.videoPlayerListenersAdded) {
+  window.videoPlayerListenersAdded = true;
+  
+  // DOMContentLoadedとturbo:loadの両方で初期化
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded - 動画プレイヤー初期化開始');
+    setTimeout(initializeVideoPlayer, 50);
+  });
+
+  document.addEventListener('turbo:load', function() {
+    console.log('turbo:load - 動画プレイヤー初期化開始');
+    setTimeout(initializeVideoPlayer, 50);
+  });
+
+  document.addEventListener('turbo:render', function() {
+    console.log('turbo:render - 動画プレイヤー初期化開始');
+    setTimeout(initializeVideoPlayer, 50);
+  });
+
+  // ページがすでに読み込まれている場合は即座に実行
+  if (document.readyState === 'loading') {
+    console.log('DOM読み込み中 - イベントリスナー待機');
+  } else {
+    console.log('DOM既に読み込み完了 - 即時初期化');
+    setTimeout(initializeVideoPlayer, 50);
+  }
+}
 </script>
