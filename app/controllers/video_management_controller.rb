@@ -433,6 +433,35 @@ class VideoManagementController < ApplicationController
       }
     end
 
+    # 1-3. 反応速度マーカーデータ（セッション別）
+    @response_time_markers = @learning_sessions.where(video_id: @video.id).map do |session|
+      response_events = session.timestamp_events
+                              .where("event_type IN (?)", ["response_quick", "response_normal", "response_slow"])
+                              .where.not(video_time: nil)
+                              .order(:session_elapsed)
+
+      quick_events = response_events.select { |e| e.event_type == "response_quick" }
+      normal_events = response_events.select { |e| e.event_type == "response_normal" }
+      slow_events = response_events.select { |e| e.event_type == "response_slow" }
+
+      # additional_dataをパースするヘルパー
+      parse_response_time = lambda do |event|
+        data = event.additional_data
+        data = JSON.parse(data) if data.is_a?(String)
+        data&.[]("responseTime")
+      rescue
+        nil
+      end
+
+      {
+        session_id: session.id,
+        label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')} ID:#{session.id})",
+        quick: quick_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
+        normal: normal_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
+        slow: slow_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } }
+      }
+    end
+
     # 2. イベントタイプ別分布データ
     event_counts = all_events.group_by(&:event_category).transform_values(&:count)
     @event_distribution_data = {

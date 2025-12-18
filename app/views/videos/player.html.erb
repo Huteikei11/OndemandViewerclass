@@ -84,14 +84,14 @@
             </div>
             
             <div class="factor-category">
-              <h7 class="category-title">⚡ 反応速度</h7>
-              <div class="factor-item negative">
-                <div class="factor-header">回答遅延 (-1点/秒)</div>
-                <div class="factor-detail">問題表示から30秒以上経過して回答した場合に減点されます</div>
+              <h7 class="category-title">⚡ 反応速度（記録のみ）</h7>
+              <div class="factor-item neutral">
+                <div class="factor-header">回答遅延 (スコア反映なし)</div>
+                <div class="factor-detail">問題表示から30秒以上経過して回答した場合にタイムスタンプ記録されます（スコアには反映されません）</div>
               </div>
-              <div class="factor-item positive">
-                <div class="factor-header">素早い回答 (+3点)</div>
-                <div class="factor-detail">問題表示から5秒以内に回答した場合に加点されます</div>
+              <div class="factor-item neutral">
+                <div class="factor-header">素早い回答 (スコア反映なし)</div>
+                <div class="factor-detail">問題表示から5秒以内に回答した場合にタイムスタンプ記録されます（スコアには反映されません）</div>
               </div>
             </div>
             
@@ -2342,28 +2342,35 @@ document.addEventListener('DOMContentLoaded', function() {
           });
         }
         
-        // 出題から回答までの時間が長い場合は減点
+        // 出題から回答までの時間を記録（スコアには反映しない）
         if (this.questionDisplayTime && this.responseStartTime && !this.responseProcessed) {
           const responseTime = (this.responseStartTime - this.questionDisplayTime) / 1000;
+          console.log(`[反応速度イベント] 回答時間: ${responseTime.toFixed(2)}秒`);
+          console.log(`[反応速度イベント] 遅延判定閾値: ${this.scoreSettings.responseDelayThreshold}秒`);
+          console.log(`[反応速度イベント] 素早い判定閾値: ${this.scoreSettings.quickResponseThreshold}秒`);
+          
           if (responseTime > this.scoreSettings.responseDelayThreshold) {
-            const penalty = Math.min(15, (responseTime - this.scoreSettings.responseDelayThreshold) * this.scoreSettings.responseDelayPenalty);
-            newScore -= penalty;
-            reasons.push({ 
-              text: `回答遅延`, 
-              change: -penalty, 
-              type: 'negative',
-              category: '反応',
-              detail: `問題表示から回答まで${responseTime.toFixed(1)}秒かかりました`
+            // タイムスタンプとしてのみ記録（スコアに反映しない）
+            console.log(`[反応速度イベント] 回答遅延を記録: ${responseTime.toFixed(2)}秒`);
+            this.addTimestamp('response_slow', '回答遅延', {
+              responseTime: responseTime,
+              threshold: this.scoreSettings.responseDelayThreshold,
+              delay: responseTime - this.scoreSettings.responseDelayThreshold
             });
           } else if (responseTime < this.scoreSettings.quickResponseThreshold) {
-            const bonus = this.scoreSettings.quickResponseBonus;
-            newScore += bonus;
-            reasons.push({ 
-              text: `素早い回答`, 
-              change: bonus, 
-              type: 'positive',
-              category: '反応',
-              detail: `問題表示から${responseTime.toFixed(1)}秒で回答しました`
+            // タイムスタンプとしてのみ記録（スコアに反映しない）
+            console.log(`[反応速度イベント] 素早い回答を記録: ${responseTime.toFixed(2)}秒`);
+            this.addTimestamp('response_quick', '素早い回答', {
+              responseTime: responseTime,
+              threshold: this.scoreSettings.quickResponseThreshold
+            });
+          } else {
+            // 通常範囲の回答速度も記録
+            console.log(`[反応速度イベント] 通常の回答速度を記録: ${responseTime.toFixed(2)}秒`);
+            this.addTimestamp('response_normal', '回答速度普通', {
+              responseTime: responseTime,
+              quickThreshold: this.scoreSettings.quickResponseThreshold,
+              delayThreshold: this.scoreSettings.responseDelayThreshold
             });
           }
           // 一度処理したらフラグを立てる

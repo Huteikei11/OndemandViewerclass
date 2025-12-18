@@ -994,11 +994,24 @@ function toggleOperationMarkers(chartType, show) {
   const chart = chartInstances[chartType];
   if (!chart) return;
   
-  // 操作マーカーのデータセットのみを切り替え（ラベルに「スキップ」「一時停止」「その他」を含むもの）
+  // 操作マーカーのデータセットのみを切り替え（ラベルに「操作」を含むもの）
   chart.data.datasets.forEach((dataset, index) => {
-    if (dataset.label && (dataset.label.includes('スキップ') || 
-                          dataset.label.includes('一時停止') || 
-                          (dataset.label.includes('その他') && dataset.pointStyle))) {
+    if (dataset.label && dataset.label.includes('操作')) {
+      const meta = chart.getDatasetMeta(index);
+      meta.hidden = !show;
+    }
+  });
+  
+  chart.update();
+}
+
+function toggleResponseMarkers(chartType, show) {
+  const chart = chartInstances[chartType];
+  if (!chart) return;
+  
+  // 反応速度マーカーのデータセットのみを切り替え（ラベルに「反応速度」を含むもの）
+  chart.data.datasets.forEach((dataset, index) => {
+    if (dataset.label && dataset.label.includes('反応速度')) {
       const meta = chart.getDatasetMeta(index);
       meta.hidden = !show;
     }
@@ -1011,16 +1024,23 @@ function createSessionToggles(chartType, datasets) {
   const container = document.getElementById(chartType + 'SessionToggles');
   if (!container) return;
   
-  // 操作マーカーの表示/非表示トグルを先頭に配置
+  // 操作マーカーと反応速度マーカーの表示/非表示トグルを先頭に配置
   let html = `
     <div class="col-12 mb-3">
       <div class="card bg-light">
         <div class="card-body py-2">
-          <div class="form-check">
+          <div class="form-check mb-2">
             <input class="form-check-input" type="checkbox" id="${chartType}_operation_markers" 
                    checked onchange="toggleOperationMarkers('${chartType}', this.checked)">
             <label class="form-check-label" for="${chartType}_operation_markers">
               <span style="color: #6f42c1; font-size: 1.2em;">●</span> <strong>操作マーカー（紫）を表示</strong>
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="${chartType}_response_markers" 
+                   checked onchange="toggleResponseMarkers('${chartType}', this.checked)">
+            <label class="form-check-label" for="${chartType}_response_markers">
+              <span style="color: #ffc0cb;">▲</span><span style="color: #ff69b4;">○</span><span style="color: #c71585;">◆</span> <strong>反応速度マーカー（ピンク系）を表示</strong>
             </label>
           </div>
         </div>
@@ -1070,10 +1090,14 @@ function initializeAnalyticsCharts() {
   if (scoreTimelineCtx) {
     const scoreTimelineData = <%= raw @score_timeline_data.to_json %>;
     const videoOperationsMarkers = <%= raw @video_operations_markers.to_json %>;
+    const responseTimeMarkers = <%= raw @response_time_markers.to_json %>;
     
     // 線の色をグレーに統一
     const lineColor = 'rgba(128, 128, 128, 0.5)'; // グレー
     const operationColor = '#6f42c1'; // 紫色
+    const responseQuickColor = '#ff65B2'; // 薄いピンク色（素早い回答用）
+    const responseNormalColor = '#ff007F'; // ピンク色（普通の回答用）
+    const responseSlowColor = '#98004c'; // 薄暗いピンク色（遅延用）
 
     // 集中度スコアで色を決定する関数
     const getColorByScore = (score) => {
@@ -1164,6 +1188,58 @@ function initializeAnalyticsCharts() {
           });
         }
       }
+      
+      // 反応速度マーカーを追加
+      const resp = responseTimeMarkers.find(r => r.session_id === session.session_id);
+      if (resp) {
+        const allResponses = [];
+        
+        // 素早い回答マーカー（上向き三角▲、薄いピンク）
+        if (resp.quick && resp.quick.length > 0) {
+          resp.quick.forEach(point => {
+            allResponses.push({ ...point, style: 'triangle', type: '素早い回答', color: responseQuickColor });
+          });
+        }
+        
+        // 通常の回答速度マーカー（円形○、ピンク）
+        if (resp.normal && resp.normal.length > 0) {
+          resp.normal.forEach(point => {
+            allResponses.push({ ...point, style: 'circle', type: '回答速度普通', color: responseNormalColor });
+          });
+        }
+        
+        // 回答遅延マーカー（下向き三角▼、薄暗いピンク）
+        if (resp.slow && resp.slow.length > 0) {
+          resp.slow.forEach(point => {
+            allResponses.push({ ...point, style: 'rectRot', type: '回答遅延', color: responseSlowColor });
+          });
+        }
+        
+        if (allResponses.length > 0) {
+          sessionDatasetGroups[session.session_id].push(datasets.length);
+          datasets.push({
+            label: `${resp.label} - 反応速度`,
+            data: allResponses,
+            pointRadius: 9,
+            pointHoverRadius: 11,
+            pointStyle: function(context) {
+              const point = context.raw;
+              return point.style || 'circle';
+            },
+            pointBackgroundColor: function(context) {
+              const point = context.raw;
+              return point.color || responseNormalColor;
+            },
+            pointBorderColor: function(context) {
+              const point = context.raw;
+              return point.color || responseNormalColor;
+            },
+            showLine: false,
+            order: 1,
+            sessionId: session.session_id
+          });
+        }
+      }
     });
 
     chartInstances.scoreTimeline = new Chart(scoreTimelineCtx, {
@@ -1230,6 +1306,13 @@ function initializeAnalyticsCharts() {
                 if (context.dataset.label.includes('操作')) {
                   const operationType = point.type || '操作';
                   return `${operationType} | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}${point.description ? ' - ' + point.description : ''}`;
+                }
+                
+                // 反応速度マーカーの場合
+                if (context.dataset.label.includes('反応速度')) {
+                  const responseType = point.type || '反応';
+                  const responseTime = point.response_time ? ` (${point.response_time.toFixed(1)}秒)` : '';
+                  return `${responseType}${responseTime} | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}${point.description ? ' - ' + point.description : ''}`;
                 }
                 
                 // 集中スコアラインの場合
