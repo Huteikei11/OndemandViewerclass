@@ -745,7 +745,9 @@
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+function initializeVideoEditor() {
+  console.log('動画エディタ初期化開始');
+  
   // Video player time tracking
   const videoPlayer = document.getElementById('video-player');
   const currentTimeDisplay = document.getElementById('current-time');
@@ -759,6 +761,16 @@ document.addEventListener('DOMContentLoaded', function() {
   const currentTimeDisplaySpan = document.getElementById('current-time-display');
   const rewind5sBtn = document.getElementById('rewind-5s-btn');
   const forward5sBtn = document.getElementById('forward-5s-btn');
+  
+  console.log('要素取得結果:', {
+    videoPlayer: !!videoPlayer,
+    currentTimeBtn: !!currentTimeBtn,
+    timeHoursInput: !!timeHoursInput,
+    timeMinutesInput: !!timeMinutesInput,
+    timeSecondsInput: !!timeSecondsInput,
+    rewind5sBtn: !!rewind5sBtn,
+    forward5sBtn: !!forward5sBtn
+  });
   
   // 秒を時:分:秒に変換
   function secondsToHMS(totalSeconds) {
@@ -1221,5 +1233,19 @@ document.addEventListener('DOMContentLoaded', function() {
   if (isPrivateCheckbox) {
     isPrivateCheckbox.addEventListener('change', togglePasswordField);
   }
-});
+}
+
+// DOMContentLoadedとturbo:loadの両方で初期化
+document.addEventListener('DOMContentLoaded', initializeVideoEditor);
+document.addEventListener('turbo:load', initializeVideoEditor);
+
+// Turbo未使用の場合でも動作するように即時実行も試みる
+if (document.readyState === 'loading') {
+  // DOMがまだ読み込み中
+  console.log('DOM読み込み中 - イベントリスナー待機');
+} else {
+  // DOMは既に読み込み完了している
+  console.log('DOM既に読み込み完了 - 即時初期化');
+  initializeVideoEditor();
+}
 </script>
