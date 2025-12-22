@@ -53,13 +53,8 @@ class VideosController < ApplicationController
         render :edit, status: :unprocessable_entity
         return
       end
-      # パスワードが空の場合は更新しない
+      # パスワードが空の場合は更新しない（既存のパスワードを保持）
       update_params.delete(:password)
-    end
-
-    # 限定公開がfalseの場合、パスワードをクリア
-    if !is_becoming_private
-      @video.password_digest = nil
     end
 
     if @video.update(update_params)

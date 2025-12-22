@@ -19,7 +19,7 @@ class Video < ApplicationRecord
   # Validations
   validates :title, presence: true
   validates :video_file, presence: true
-  validates :password, presence: true, if: :is_private?
+  validates :password, presence: true, if: :password_required?
 
   # 限定公開がfalseの場合、パスワードをクリア
   before_save :clear_password_if_not_private
@@ -31,6 +31,11 @@ class Video < ApplicationRecord
     if !is_private? && password_digest.present?
       self.password_digest = nil
     end
+  end
+
+  def password_required?
+    # 限定公開の場合で、かつ既存のパスワードダイジェストがない場合のみパスワードを必須とする
+    is_private? && password_digest.blank?
   end
 
   public
