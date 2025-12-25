@@ -12,10 +12,10 @@
         
         <!-- タブナビゲーション -->
         <div class="debug-tabs">
-          <button class="debug-tab-btn active" onclick="showDebugTab('info')">基本情報</button>
-          <button class="debug-tab-btn" onclick="showDebugTab('factors')">スコア要因</button>
-          <button class="debug-tab-btn" onclick="showDebugTab('settings')">スコア設定</button>
-          <button class="debug-tab-btn" onclick="showDebugTab('timestamp')">タイムスタンプ</button>
+          <button class="debug-tab-btn active" data-tab="info">基本情報</button>
+          <button class="debug-tab-btn" data-tab="factors">スコア要因</button>
+          <button class="debug-tab-btn" data-tab="settings">スコア設定</button>
+          <button class="debug-tab-btn" data-tab="timestamp">タイムスタンプ</button>
         </div>
         
         <!-- 基本情報タブ -->
@@ -1273,7 +1273,12 @@ function initializeVideoPlayer() {
       
       this.initializeCamera();
       this.initializeGauge();
-      this.initializeDebugPanel();
+      
+      // DOM要素が確実に存在するまで待機してからデバッグパネルを初期化
+      setTimeout(() => {
+        this.initializeDebugPanel();
+      }, 100);
+      
       this.initializeVideoTracking();
       this.startTracking();
       
@@ -1291,9 +1296,6 @@ function initializeVideoPlayer() {
           this.saveSessionToServer();
         }, 3000);
       }, 1000);
-      
-      // グローバル関数としてタブ切り替えを登録
-      window.showDebugTab = this.showDebugTab.bind(this);
       
       // デバッグ用のグローバル関数
       window.debugSaveSession = () => {
@@ -1361,6 +1363,28 @@ function initializeVideoPlayer() {
           throw new Error('MediaPipe FaceMeshライブラリが読み込まれていません');
         }
         
+        // 既存のFaceMeshインスタンスがある場合はクリーンアップ
+        if (this.faceMesh) {
+          console.log('既存のFaceMeshインスタンスをクリーンアップ');
+          try {
+            await this.faceMesh.close();
+          } catch (e) {
+            console.warn('FaceMeshのクローズ処理でエラー:', e);
+          }
+          this.faceMesh = null;
+        }
+        
+        // グローバルなFaceMesh初期化フラグをチェック
+        if (window.faceMeshInitializing) {
+          console.log('FaceMeshは既に初期化中です。待機します...');
+          return;
+        }
+        
+        window.faceMeshInitializing = true;
+        
+        // 少し待機してからFaceMeshを初期化（WASMの準備時間を確保）
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // FaceMeshモデルの初期化
         this.faceMesh = new FaceMesh({
           locateFile: (file) => {
@@ -1397,10 +1421,12 @@ function initializeVideoPlayer() {
         }
         
         this.mediaPipeInitialized = true;
+        window.faceMeshInitializing = false;
         console.log('MediaPipe初期化完了');
         
       } catch (error) {
         console.error('MediaPipe初期化エラー:', error);
+        window.faceMeshInitializing = false;
         this.useMediaPipe = false;
         console.log('フォールバックモードに切り替え');
       }
@@ -1416,12 +1442,48 @@ function initializeVideoPlayer() {
       };
     }
     
-    initializeDebugPanel() {
+    initializeDebugPanel(retryCount = 0) {
       const toggleButton = document.getElementById('toggle-debug-info');
       const debugPanel = document.getElementById('debug-panel');
       
-      toggleButton.addEventListener('click', () => {
-        debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
+      // 要素が見つからない場合は最大3回リトライ
+      if ((!toggleButton || !debugPanel) && retryCount < 3) {
+        console.log(`デバッグパネル要素が見つかりません。リトライ中... (${retryCount + 1}/3)`);
+        setTimeout(() => {
+          this.initializeDebugPanel(retryCount + 1);
+        }, 200);
+        return;
+      }
+      
+      if (toggleButton && debugPanel) {
+        console.log('デバッグパネルの初期化を開始');
+        toggleButton.addEventListener('click', () => {
+          const isVisible = debugPanel.style.display !== 'none';
+          debugPanel.style.display = isVisible ? 'none' : 'block';
+          console.log('デバッグパネル表示切り替え:', isVisible ? 'none' : 'block');
+        });
+      } else {
+        console.error('デバッグボタンまたはパネルが見つかりません', { 
+          toggleButton: !!toggleButton, 
+          debugPanel: !!debugPanel,
+          retryCount 
+        });
+        return;
+      }
+      
+      // デバッグタブボタンのイベントリスナーを追加
+      const tabButtons = document.querySelectorAll('.debug-tab-btn');
+      console.log('Found debug tab buttons:', tabButtons.length);
+      
+      tabButtons.forEach((button, index) => {
+        console.log(`タブボタン ${index + 1}:`, button.getAttribute('data-tab'));
+        button.addEventListener('click', (e) => {
+          const tabName = e.target.getAttribute('data-tab');
+          console.log('Tab button clicked:', tabName);
+          if (tabName) {
+            this.showDebugTab(tabName, e.target);
+          }
+        });
       });
       
       // カメラプレビュー機能
@@ -2896,7 +2958,7 @@ function initializeVideoPlayer() {
       }).join('');
     }
     
-    showDebugTab(tabName) {
+    showDebugTab(tabName, clickedButton) {
       console.log('showDebugTab called with:', tabName);
       
       // すべてのタブを非表示
@@ -2918,9 +2980,9 @@ function initializeVideoPlayer() {
         console.log(`Tab not found: debug-tab-${tabName}`);
       }
       
-      // 対応するボタンをactiveに
-      if (event && event.target) {
-        event.target.classList.add('active');
+      // クリックされたボタンをactiveに
+      if (clickedButton && clickedButton.classList) {
+        clickedButton.classList.add('active');
       }
       
       // タイムスタンプタブが選択された場合は強制的に更新
@@ -4859,7 +4921,13 @@ function initializeVideoPlayer() {
 
 // Turboナビゲーション前のクリーンアップ
 document.addEventListener('turbo:before-cache', function() {
-  console.log('turbo:before-cache - 初期化状態をリセット');
+  console.log('turbo:before-cache - 初期化状態とFaceMeshをクリーンアップ');
+  
+  // FaceMeshのクリーンアップ
+  if (window.faceMeshInitializing) {
+    window.faceMeshInitializing = false;
+  }
+  
   window.videoPlayerInitState = {
     isInitialized: false,
     retryCount: 0,
@@ -4874,6 +4942,9 @@ document.addEventListener('turbo:before-visit', function() {
   if (window.videoPlayerInitState) {
     window.videoPlayerInitState.shouldStop = true;
   }
+  if (window.faceMeshInitializing) {
+    window.faceMeshInitializing = false;
+  }
 });
 
 // ページから離れるときの処理
@@ -4881,6 +4952,9 @@ window.addEventListener('pagehide', function() {
   console.log('pagehide - 初期化を停止');
   if (window.videoPlayerInitState) {
     window.videoPlayerInitState.shouldStop = true;
+  }
+  if (window.faceMeshInitializing) {
+    window.faceMeshInitializing = false;
   }
 });
 
