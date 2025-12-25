@@ -1271,6 +1271,9 @@ function initializeVideoPlayer() {
       this.useMediaPipe = true; // MediaPipeを使用するかのフラグ
       this.mediaPipeInitialized = false;
       
+      // デバッグパネル初期化フラグ
+      this.debugPanelInitialized = false;
+      
       this.initializeCamera();
       this.initializeGauge();
       
@@ -1443,6 +1446,12 @@ function initializeVideoPlayer() {
     }
     
     initializeDebugPanel(retryCount = 0) {
+      // 既に初期化済みの場合はスキップ
+      if (this.debugPanelInitialized) {
+        console.log('デバッグパネルは既に初期化済みです');
+        return;
+      }
+      
       const toggleButton = document.getElementById('toggle-debug-info');
       const debugPanel = document.getElementById('debug-panel');
       
@@ -1456,12 +1465,25 @@ function initializeVideoPlayer() {
       }
       
       if (toggleButton && debugPanel) {
+        // データ属性でリスナー登録済みかチェック
+        if (toggleButton.dataset.listenerAdded === 'true') {
+          console.log('デバッグボタンのリスナーは既に登録済みです');
+          this.debugPanelInitialized = true;
+          return;
+        }
+        
         console.log('デバッグパネルの初期化を開始');
-        toggleButton.addEventListener('click', () => {
-          const isVisible = debugPanel.style.display !== 'none';
-          debugPanel.style.display = isVisible ? 'none' : 'block';
-          console.log('デバッグパネル表示切り替え:', isVisible ? 'none' : 'block');
+        
+        toggleButton.addEventListener('click', (e) => {
+          const isHidden = debugPanel.style.display === 'none' || !debugPanel.style.display;
+          debugPanel.style.display = isHidden ? 'block' : 'none';
+          console.log('デバッグパネル:', isHidden ? '表示' : '非表示');
         });
+        
+        // リスナー登録済みマークを付ける
+        toggleButton.dataset.listenerAdded = 'true';
+        this.debugPanelInitialized = true;
+        console.log('デバッグパネルの初期化完了');
       } else {
         console.error('デバッグボタンまたはパネルが見つかりません', { 
           toggleButton: !!toggleButton, 
