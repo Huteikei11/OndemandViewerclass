@@ -163,10 +163,15 @@ class VideoManagementController < ApplicationController
 
       # セッション終了時刻と最終スコアを更新
       if session_info["endTime"]
+        # session_dataに動画位置情報を含める
+        updated_session_data = learning_session.session_data || {}
+        updated_session_data['last_video_position'] = session_info['last_video_position'] if session_info['last_video_position']
+        
         learning_session.update!(
           session_end_time: Time.at(session_info["endTime"] / 1000),
           final_score: session_data["finalScore"],
-          total_events: timestamp_log.length
+          total_events: timestamp_log.length,
+          session_data: updated_session_data
         )
       end
 

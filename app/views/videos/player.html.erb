@@ -4305,9 +4305,13 @@ function initializeVideoPlayer() {
   }
   
   // Initialize questions with a 'shown' property to track which ones have been displayed
+  // ページが再読み込みされるたびに問題のフラグはリセットされる
+  const videoId = '<%= @video.id %>';
   const questions = (rawQuestionData || []).map(q => ({...q, shown: false}));
+  
   console.log('質問データ:', questions);
   console.log('質問数:', questions.length);
+  console.log('ページ読み込み時に全ての問題フラグをリセットしました');
   
   // 質問データの詳細ログ
   questions.forEach((q, index) => {
@@ -4315,9 +4319,20 @@ function initializeVideoPlayer() {
       id: q.id,
       content: q.content,
       time_position: q.time_position,
-      question_type: q.question_type
+      question_type: q.question_type,
+      shown: q.shown
     });
   });
+  
+  // デバッグ用：現在の問題の状態を確認する関数
+  window.checkShownQuestions = function() {
+    console.log('問題の状態:', questions.map(q => ({ 
+      id: q.id, 
+      content: q.content.substring(0, 20) + '...', 
+      time: q.time_position + '秒',
+      shown: q.shown 
+    })));
+  };
   
   const waitingMessage = document.getElementById('waiting-message');
   const questionDisplay = document.getElementById('question-display');
@@ -4402,16 +4417,11 @@ function initializeVideoPlayer() {
     
     // Reset questions when video is seeked
     videoPlayer.addEventListener('seeked', function() {
-      // Only reset questions if seeking backwards
       const currentTime = videoPlayer.currentTime;
       console.log('シーク位置変更:', currentTime);
       
-      for (const question of questions) {
-        if (question.shown && question.time_position > currentTime) {
-          console.log(`質問リセット: ${question.content}`);
-          question.shown = false;
-        }
-      }
+      // 一度出題した問題は巻き戻しても再度出現しないように、
+      // shown フラグのリセットは行わない
       
       // Hide the indicator until the next check
       questionIndicator.style.display = 'none';
@@ -4420,11 +4430,11 @@ function initializeVideoPlayer() {
       }
     });
     
-    // Reset all questions when video is restarted
+    // 動画が終了しても問題のshownフラグはリセットしない
+    // これにより、同じセッション内で動画を最初から再生しても、
+    // 既に出題した問題は再度表示されない
     videoPlayer.addEventListener('ended', function() {
-      for (const question of questions) {
-        question.shown = false;
-      }
+      console.log('動画終了（問題は再表示されません）');
     });
     
     // 初回の問題チェックを動画と質問データの両方が揃ったタイミングで実行
@@ -4492,8 +4502,11 @@ function initializeVideoPlayer() {
             console.log('問題検出:', question);
             console.log('現在の時間:', currentTime, '問題時間:', question.time_position);
             console.log('時間差:', currentTime - question.time_position);
+            
             // Mark this question as shown so it doesn't appear again
             question.shown = true;
+            console.log('問題ID', question.id, 'を表示済みとしてマークしました');
+            
             // Hide the indicator
             questionIndicator.style.display = 'none';
             if (questionIndicatorTimeout) {
