@@ -4680,51 +4680,86 @@ function initializeVideoPlayer() {
       return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
     
-    // Handle true/false submission
-    tfSubmit.addEventListener('click', function() {
-      const selectedAnswer = document.querySelector('input[name="tf-answer"]:checked');
-      
-      if (selectedAnswer && activeQuestion) {
-        // 集中度トラッカーに回答開始を通知
-        concentrationTracker.onResponseStarted();
-        submitAnswer(selectedAnswer.value, null);
-      } else {
-        alert('回答を選択してください');
-      }
-    });
+    // Handle true/false submission - 重複登録を防止
+    if (tfSubmit && !tfSubmit.dataset.listenerAdded) {
+      tfSubmit.addEventListener('click', function() {
+        console.log('○×問題の送信ボタンがクリックされました。activeQuestion:', activeQuestion);
+        if (!activeQuestion) {
+          alert('問題が表示されていません');
+          return;
+        }
+        
+        const selectedAnswer = document.querySelector('input[name="tf-answer"]:checked');
+        
+        if (selectedAnswer) {
+          // 集中度トラッカーに回答開始を通知
+          concentrationTracker.onResponseStarted();
+          submitAnswer(selectedAnswer.value, null);
+        } else {
+          alert('回答を選択してください');
+        }
+      });
+      tfSubmit.dataset.listenerAdded = 'true';
+      console.log('○×問題の送信ボタンのイベントリスナーを登録しました');
+    }
     
-    // Handle multiple choice submission
-    mcSubmit.addEventListener('click', function() {
-      const selectedOption = document.querySelector('input[name="mc-answer"]:checked');
-      
-      if (selectedOption && activeQuestion) {
-        // 集中度トラッカーに回答開始を通知
-        concentrationTracker.onResponseStarted();
-        const optionId = selectedOption.value;
-        submitAnswer(null, optionId);
-      } else {
-        alert('回答を選択してください');
-      }
-    });
+    // Handle multiple choice submission - 重複登録を防止
+    if (mcSubmit && !mcSubmit.dataset.listenerAdded) {
+      mcSubmit.addEventListener('click', function() {
+        console.log('選択問題の送信ボタンがクリックされました。activeQuestion:', activeQuestion);
+        if (!activeQuestion) {
+          alert('問題が表示されていません');
+          return;
+        }
+        
+        const selectedOption = document.querySelector('input[name="mc-answer"]:checked');
+        
+        if (selectedOption) {
+          // 集中度トラッカーに回答開始を通知
+          concentrationTracker.onResponseStarted();
+          const optionId = selectedOption.value;
+          submitAnswer(null, optionId);
+        } else {
+          alert('回答を選択してください');
+        }
+      });
+      mcSubmit.dataset.listenerAdded = 'true';
+      console.log('選択問題の送信ボタンのイベントリスナーを登録しました');
+    }
     
-    // Handle free response submission
-    frSubmit.addEventListener('click', function() {
-      const answer = document.getElementById('free-response-answer').value.trim();
-      
-      // 記述問題では空欄も有効な回答として受け付ける
-      if (activeQuestion) {
+    // Handle free response submission - 重複登録を防止
+    if (frSubmit && !frSubmit.dataset.listenerAdded) {
+      frSubmit.addEventListener('click', function() {
+        console.log('記述問題の送信ボタンがクリックされました。activeQuestion:', activeQuestion);
+        if (!activeQuestion) {
+          alert('問題が表示されていません');
+          return;
+        }
+        
+        const answer = document.getElementById('free-response-answer').value.trim();
+        
         // 集中度トラッカーに回答開始を通知
         concentrationTracker.onResponseStarted();
-        // 空欄でも送信可能に変更
+        // 記述問題では空欄も有効な回答として受け付ける
         submitAnswer(answer, null);
-      } else {
-        alert('問題が表示されていません');
-      }
-    });
+      });
+      frSubmit.dataset.listenerAdded = 'true';
+      console.log('記述問題の送信ボタンのイベントリスナーを登録しました');
+    }
     
     function submitAnswer(userAnswer, optionId) {
+      console.log('submitAnswer開始:', { userAnswer, optionId, activeQuestion });
+      
+      // activeQuestionのチェック
+      if (!activeQuestion) {
+        console.error('activeQuestionがnullです。問題が表示されていません。');
+        alert('問題が表示されていません');
+        return;
+      }
+      
       // 回答時間を計算（ミリ秒）
       const responseTime = questionStartTime ? Date.now() - questionStartTime : 0;
+      console.log('回答時間:', responseTime, 'ms');
       
       // タイムスタンプ記録
       if (window.concentrationTracker) {
