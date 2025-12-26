@@ -453,6 +453,14 @@ class VideoManagementController < ApplicationController
 
       Rails.logger.info "[反応速度デバッグ] セッション #{session.id}: quick=#{quick_events.count}, normal=#{normal_events.count}, slow=#{slow_events.count}"
 
+      # 速い問題確認イベントを取得
+      quick_check_events = session.timestamp_events
+                                  .where(event_type: "quick_question_check")
+                                  .where.not(video_time: nil)
+                                  .order(:session_elapsed)
+
+      Rails.logger.info "[速い問題確認デバッグ] セッション #{session.id}: quick_check=#{quick_check_events.count}"
+
       # additional_dataをパースするヘルパー
       parse_response_time = lambda do |event|
         data = event.additional_data
@@ -471,10 +479,11 @@ class VideoManagementController < ApplicationController
         label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')} ID:#{session.id})",
         quick: quick_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
         normal: normal_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
-        slow: slow_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } }
+        slow: slow_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
+        quick_check: quick_check_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description } }
       }
 
-      Rails.logger.info "[反応速度デバッグ] セッション #{session.id}: マーカー生成完了 - quick: #{result[:quick].count}, normal: #{result[:normal].count}, slow: #{result[:slow].count}"
+      Rails.logger.info "[反応速度デバッグ] セッション #{session.id}: マーカー生成完了 - quick: #{result[:quick].count}, normal: #{result[:normal].count}, slow: #{result[:slow].count}, quick_check: #{result[:quick_check].count}"
       result
     end
 

@@ -1124,6 +1124,7 @@ function initializeAnalyticsCharts() {
     const responseQuickColor = '#ff65B2'; // 薄いピンク色（素早い回答用）
     const responseNormalColor = '#ff007F'; // ピンク色（普通の回答用）
     const responseSlowColor = '#98004c'; // 薄暗いピンク色（遅延用）
+    const quickCheckColor = '#17a2b8'; // 水色（速い問題確認用）
 
     // 集中度スコアで色を決定する関数
     const getColorByScore = (score) => {
@@ -1242,6 +1243,14 @@ function initializeAnalyticsCharts() {
           console.log(`[反応速度デバッグ] セッション ${session.session_id}: slow=${resp.slow.length}件追加`);
           resp.slow.forEach(point => {
             allResponses.push({ ...point, style: 'rectRot', type: '回答遅延', color: responseSlowColor });
+          });
+        }
+        
+        // 速い問題確認マーカー（星型★、水色）
+        if (resp.quick_check && resp.quick_check.length > 0) {
+          console.log(`[速い問題確認デバッグ] セッション ${session.session_id}: quick_check=${resp.quick_check.length}件追加`);
+          resp.quick_check.forEach(point => {
+            allResponses.push({ ...point, style: 'star', type: '速い問題確認', color: quickCheckColor });
           });
         }
         

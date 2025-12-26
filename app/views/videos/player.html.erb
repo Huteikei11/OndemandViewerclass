@@ -1573,6 +1573,14 @@ function initializeVideoPlayer() {
     
     onFaceMeshResults(results) {
       try {
+        // デバッグ: 問題表示中はMediaPipe動作を確認
+        if (this.questionDisplayTime) {
+          const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
+          if (timeFromQuestion < this.scoreSettings.questionConfirmWindow) {
+            console.log(`🔍 [onFaceMeshResults呼び出し] 経過:${timeFromQuestion.toFixed(2)}秒, 顔検出:${results.multiFaceLandmarks?.length > 0}`);
+          }
+        }
+        
         if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
           this.faceDetected = true;
           const landmarks = results.multiFaceLandmarks[0];
@@ -1589,6 +1597,9 @@ function initializeVideoPlayer() {
         
         // 正面向き割合の更新
         this.updateFrontFacingRatio();
+        
+        // 速い問題確認の判定を実行
+        this.checkQuickQuestionConfirmation();
         
       } catch (error) {
         console.error('FaceMesh結果処理エラー:', error);
@@ -2732,6 +2743,46 @@ function initializeVideoPlayer() {
       return avgBrightness > 50; // 明度が50以上なら顔があると判定
     }
     
+    // 速い問題確認の判定（問題表示後の視線の動きを検出）
+    checkQuickQuestionConfirmation() {
+      // デバッグ: MediaPipeが動作していることを確認
+      if (this.questionDisplayTime) {
+        const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
+        if (timeFromQuestion < this.scoreSettings.questionConfirmWindow && Math.floor(timeFromQuestion * 10) % 10 === 0) {
+          console.log(`[MediaPipe動作確認] 経過:${timeFromQuestion.toFixed(2)}秒, questionDisplayTime:${!!this.questionDisplayTime}, responseStartTime:${!!this.responseStartTime}, questionConfirmed:${this.questionConfirmed}`);
+        }
+      }
+      
+      if (this.questionDisplayTime && !this.responseStartTime && !this.questionConfirmed) {
+        const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
+        
+        // デバッグ: 定期的に状態をログ出力（0.1秒ごと）
+        if (Math.floor(timeFromQuestion * 10) % 10 === 0) { // 0.1秒ごとにチェック
+          console.log(`[速い問題確認チェック] 経過時間:${timeFromQuestion.toFixed(2)}秒, 視線速度X:${Math.abs(this.gazeVelocity.x).toFixed(2)}px/s, 閾値:${this.scoreSettings.gazeVelocityThreshold}px/s, 判定窓:${this.scoreSettings.questionConfirmWindow}秒`);
+        }
+        
+        if (timeFromQuestion < this.scoreSettings.questionConfirmWindow) {
+          // 視線速度の絶対値をチェック
+          const absVelocityX = Math.abs(this.gazeVelocity.x);
+          
+          if (absVelocityX > this.scoreSettings.gazeVelocityThreshold) {
+            this.questionConfirmed = true; // フラグを立てて一度だけ実行
+            
+            // タイムスタンプとして記録（スコアには反映しない）
+            this.addTimestamp('quick_question_check', '速い問題確認', {
+              timeFromQuestion: timeFromQuestion.toFixed(2),
+              gazeVelocityX: absVelocityX.toFixed(2),
+              gazeVelocityY: Math.abs(this.gazeVelocity.y).toFixed(2),
+              threshold: this.scoreSettings.gazeVelocityThreshold,
+              videoTime: videoPlayer.currentTime
+            });
+            
+            console.log(`✅ [速い問題確認] 検出成功！ 問題表示後${timeFromQuestion.toFixed(1)}秒で視線速度${absVelocityX.toFixed(1)}px/sを検出しました`);
+          }
+        }
+      }
+    }
+    
     // 旧システム（削除予定 - 新しい集中度システムを使用）
     calculateConcentrationOld() {
       const oldScore = this.score;
@@ -2783,22 +2834,38 @@ function initializeVideoPlayer() {
         }
         // 目線をそらすこと自体は減点対象から除外
         
-        // 問題表示後の目線の動き（右向きの視線速度を評価）
+        // 問題表示後の目線の動き（速い問題確認の検出）
+        // デバッグ: MediaPipeが動作していることを確認
+        if (this.questionDisplayTime) {
+          const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
+          if (timeFromQuestion < this.scoreSettings.questionConfirmWindow && Math.floor(timeFromQuestion * 10) % 10 === 0) {
+            console.log(`[MediaPipe動作確認] 経過:${timeFromQuestion.toFixed(2)}秒, questionDisplayTime:${!!this.questionDisplayTime}, responseStartTime:${!!this.responseStartTime}, questionConfirmed:${this.questionConfirmed}`);
+          }
+        }
+        
         if (this.questionDisplayTime && !this.responseStartTime && !this.questionConfirmed) {
           const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
+          
+          // デバッグ: 定期的に状態をログ出力（0.1秒ごと）
+          if (Math.floor(timeFromQuestion * 10) % 10 === 0) { // 0.1秒ごとにチェック
+            console.log(`[速い問題確認チェック] 経過時間:${timeFromQuestion.toFixed(2)}秒, 視線速度X:${Math.abs(this.gazeVelocity.x).toFixed(2)}px/s, 閾値:${this.scoreSettings.gazeVelocityThreshold}px/s, 判定窓:${this.scoreSettings.questionConfirmWindow}秒`);
+          }
+          
           if (timeFromQuestion < this.scoreSettings.questionConfirmWindow) {
             // 視線速度の絶対値をチェック
-            if (Math.abs(this.gazeVelocity.x) > this.scoreSettings.gazeVelocityThreshold) {
-              const gazeBonus = this.scoreSettings.questionConfirmBonus;
-              newScore += gazeBonus;
+            const absVelocityX = Math.abs(this.gazeVelocity.x);
+            
+            if (absVelocityX > this.scoreSettings.gazeVelocityThreshold) {
               this.questionConfirmed = true; // フラグを立てて一度だけ実行
-              reasons.push({ 
-                text: '問題確認', 
-                change: gazeBonus, 
-                type: 'positive',
-                category: '目線',
-                detail: `問題表示後${timeFromQuestion.toFixed(1)}秒で視線速度${Math.abs(this.gazeVelocity.x).toFixed(1)}px/sを検出しました`
+              
+              // タイムスタンプとして記録（スコアには反映しない）
+              this.addTimestamp('quick_question_check', '速い問題確認', {
+                timeFromQuestion: timeFromQuestion,
+                gazeVelocityX: absVelocityX.toFixed(1),
+                threshold: this.scoreSettings.gazeVelocityThreshold
               });
+              
+              console.log(`✅ [速い問題確認] 検出成功！ 問題表示後${timeFromQuestion.toFixed(1)}秒で視線速度${absVelocityX.toFixed(1)}px/sを検出しました`);
             }
           }
         }
@@ -3041,6 +3108,11 @@ function initializeVideoPlayer() {
     }
     
     updateDebugInfo() {
+      // debugElementsが初期化されていない場合は何もしない
+      if (!this.debugElements) {
+        return;
+      }
+      
       // 検出方式の表示
       if (this.debugElements.detectionMethod) {
         const method = this.useMediaPipe && this.mediaPipeInitialized ? 'MediaPipe (実際の眼球追跡)' : 'フォールバック (顔の向き)';
@@ -3234,12 +3306,19 @@ function initializeVideoPlayer() {
       this.responseProcessed = false; // 新しい問題でフラグをリセット
       this.questionConfirmed = false; // 問題確認フラグもリセット
       
+      console.log(`🎯 [問題表示] 問題が表示されました。速い問題確認の判定を開始します（時間窓: ${this.scoreSettings.questionConfirmWindow}秒）`);
+      console.log(`   視線速度閾値: ${this.scoreSettings.gazeVelocityThreshold}px/s`);
+      console.log(`   現在の視線速度X: ${this.gazeVelocity.x.toFixed(2)}px/s`);
+      
       // タイムスタンプ記録
       this.addTimestamp('question_display', '問題表示', {
         questionDisplayed: true
       });
       
       // 問題表示をログに記録
+      if (!this.logs) {
+        this.logs = [];
+      }
       const timestamp = new Date().toLocaleTimeString();
       this.logs.unshift({
         text: `[${timestamp}] 問題表示`,
@@ -4484,19 +4563,12 @@ function initializeVideoPlayer() {
       
       // 再生中またはチェックする必要がある場合
       if (!videoPlayer.paused || activeQuestion !== null) {
-        console.log('現在の再生位置:', currentTime);
-        
         // Check for upcoming questions
         const upcomingQuestionWindow = 5; // Show indicator 5 seconds before question
         
         let hasUpcomingQuestion = false;
         for (let i = 0; i < questions.length; i++) {
           const question = questions[i];
-          
-          // デバッグ用：すべての質問の状態を定期的にチェック
-          if (Math.floor(currentTime) % 5 === 0) {
-            console.log(`質問${i+1}:`, question.content, '位置:', question.time_position, '表示済み:', question.shown);
-          }
           
           // Check if there's a question coming up soon but not yet shown
           if (currentTime < question.time_position && 
