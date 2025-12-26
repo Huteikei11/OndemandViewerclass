@@ -1,7 +1,7 @@
 class VideoManagementController < ApplicationController
   before_action :authenticate_user!
-  before_action :set_video
-  before_action :check_management_permission, except: [ :save_session_data ]
+  before_action :set_video, except: [ :delete_sessions ]
+  before_action :check_management_permission, except: [ :save_session_data, :delete_sessions ]
 
   def analytics
     @questions = @video.questions.includes(:user_responses, :options).order(:time_position)
@@ -827,11 +827,122 @@ class VideoManagementController < ApplicationController
       redirect_to video_management_analytics_path(video_id: @video), alert: "セッションの削除に失敗しました。"
     end
   end
+  
+  def delete_sessions
+    # リクエストボディからセッションIDを取得
+    session_ids = params[:session_ids]
+    
+    if session_ids.blank?
+      render json: { success: false, error: 'セッションIDが指定されていません' }, status: :bad_request
+      return
+    end
+    
+    # セッションを取得（すべてのセッションに対して権限チェック）
+    sessions = LearningSession.where(id: session_ids)
+    
+    # 権限チェック：すべてのセッションが管理可能な動画に属しているか
+    unauthorized_sessions = sessions.reject do |session|
+      video = session.video
+      current_user.can_manage_video?(video)
+    end
+    
+    if unauthorized_sessions.any?
+      render json: { success: false, error: '一部のセッションに対する管理権限がありません' }, status: :forbidden
+      return
+    end
+    
+    # トランザクションで削除実行
+    deleted_count = 0
+    deleted_responses_count = 0
+    
+    ActiveRecord::Base.transaction do
+      sessions.each do |session|
+        # 関連する回答を削除
+        responses = session.associated_user_responses
+        deleted_responses_count += responses.destroy_all.count
+      end
+      
+      # セッション自体を削除（timestamp_eventsも自動削除される）
+      deleted_count = sessions.destroy_all.count
+    end
+    
+    render json: { 
+      success: true, 
+      deleted_count: deleted_count,
+      deleted_responses_count: deleted_responses_count
+    }
+  rescue => e
+    Rails.logger.error "セッション削除エラー: #{e.message}"
+    render json: { success: false, error: e.message }, status: :internal_server_error
+  end
+  
+  def delete_response
+    response_id = params[:response_id]
+    
+    if response_id.blank?
+      render json: { success: false, error: '回答IDが指定されていません' }, status: :bad_request
+      return
+    end
+    
+    # 回答を取得
+    user_response = UserResponse.find_by(id: response_id)
+    
+    unless user_response
+      render json: { success: false, error: '回答が見つかりません' }, status: :not_found
+      return
+    end
+    
+    # 権限チェック：この回答が属する問題の動画を管理できるか
+    video = user_response.question.video
+    unless current_user.can_manage_video?(video)
+      render json: { success: false, error: '管理権限がありません' }, status: :forbidden
+      return
+    end
+    
+    # 削除実行
+    user_response.destroy
+    
+    render json: { success: true }
+  rescue => e
+    Rails.logger.error "回答削除エラー: #{e.message}"
+    render json: { success: false, error: e.message }, status: :internal_server_error
+  end
+  
+  def delete_responses
+    response_ids = params[:response_ids]
+    
+    if response_ids.blank?
+      render json: { success: false, error: '回答IDが指定されていません' }, status: :bad_request
+      return
+    end
+    
+    # 回答を取得
+    user_responses = UserResponse.where(id: response_ids)
+    
+    # 権限チェック：すべての回答が管理可能な動画に属しているか
+    unauthorized_responses = user_responses.reject do |response|
+      video = response.question.video
+      current_user.can_manage_video?(video)
+    end
+    
+    if unauthorized_responses.any?
+      render json: { success: false, error: '一部の回答に対する管理権限がありません' }, status: :forbidden
+      return
+    end
+    
+    # 削除実行
+    deleted_count = user_responses.destroy_all.count
+    
+    render json: { success: true, deleted_count: deleted_count }
+  rescue => e
+    Rails.logger.error "回答一括削除エラー: #{e.message}"
+    render json: { success: false, error: e.message }, status: :internal_server_error
+  end
 
   private
 
   def set_video
-    @video = Video.find(params[:video_id])
+    @video = Video.find(params[:video_id]) if params[:video_id]
   end
 
   def check_management_permission

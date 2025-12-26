@@ -2,6 +2,20 @@ class LearningSession < ApplicationRecord
   belongs_to :user
   belongs_to :video
   has_many :timestamp_events, dependent: :destroy
+  
+  # セッションに関連する回答を取得するための関連付け
+  # user_responsesはlearning_session_idを持たないため、明示的にスコープで定義
+  def associated_user_responses
+    return UserResponse.none unless user_id && video_id && session_start_time
+    
+    # このセッションの時間範囲内に、このユーザーが、この動画の問題に対して行った回答
+    end_time = session_end_time || Time.current
+    UserResponse.joins(:question)
+                .where(user_id: user_id)
+                .where(questions: { video_id: video_id })
+                .where('user_responses.created_at >= ? AND user_responses.created_at <= ?', 
+                       session_start_time, end_time)
+  end
 
   # セッションデータをJSONとして扱う
   serialize :session_data, coder: JSON

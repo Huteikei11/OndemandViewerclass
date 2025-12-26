@@ -49,4 +49,9 @@ Rails.application.routes.draw do
     get "management/export_session_detail/:session_id", to: "video_management#export_session_detail", as: "management_export_session_detail"
     get "management/export_session_events/:session_id", to: "video_management#export_session_events", as: "management_export_session_events"
   end
+  
+  # Batch delete sessions (outside videos scope)
+  post "video_management/delete_sessions", to: "video_management#delete_sessions"
+  post "video_management/delete_response", to: "video_management#delete_response"
+  post "video_management/delete_responses", to: "video_management#delete_responses"
 end

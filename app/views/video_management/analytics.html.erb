@@ -468,8 +468,11 @@
 
       <!-- 詳細な回答履歴 -->
       <div class="card">
-        <div class="card-header">
-          <h3>回答履歴</h3>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h3 class="mb-0">回答履歴</h3>
+          <button class="btn btn-danger btn-sm" onclick="deleteSelectedResponses()">
+            <i class="bi bi-trash"></i> 選択した回答を削除
+          </button>
         </div>
         <div class="card-body">
           <% if @user_responses.any? %>
@@ -477,6 +480,9 @@
               <table class="table table-striped table-sm">
                 <thead>
                   <tr>
+                    <th>
+                      <input type="checkbox" id="selectAllResponses" onchange="toggleAllResponses(this.checked)">
+                    </th>
                     <th>受講者</th>
                     <th>問題</th>
                     <th>回答</th>
@@ -487,7 +493,10 @@
                 </thead>
                 <tbody>
                   <% @user_responses.each do |response| %>
-                    <tr>
+                    <tr id="response-<%= response.id %>">
+                      <td>
+                        <input type="checkbox" class="response-checkbox" value="<%= response.id %>">
+                      </td>
                       <td>
                         <% if response.user %>
                           <%= response.user.name %>
@@ -941,6 +950,95 @@
     const secs = Math.floor(seconds % 60);
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   }
+  
+  // 個別の回答を削除する関数
+  window.deleteResponse = function(responseId) {
+    if (!confirm('この回答を削除してもよろしいですか？\nこの操作は取り消せません。')) {
+      return;
+    }
+    
+    const token = document.querySelector('meta[name="csrf-token"]').content;
+    
+    fetch('/video_management/delete_response', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': token
+      },
+      body: JSON.stringify({ response_id: responseId })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // テーブル行を削除
+        const row = document.getElementById('response-' + responseId);
+        if (row) {
+          row.remove();
+        }
+        alert('回答を削除しました。');
+      } else {
+        alert('回答の削除に失敗しました: ' + (data.error || '不明なエラー'));
+      }
+    })
+    .catch(error => {
+      console.error('削除エラー:', error);
+      alert('回答の削除中にエラーが発生しました。');
+    });
+  };
+  
+  // 全選択/全解除
+  window.toggleAllResponses = function(checked) {
+    document.querySelectorAll('.response-checkbox').forEach(checkbox => {
+      checkbox.checked = checked;
+    });
+  };
+  
+  // 選択した回答をまとめて削除
+  window.deleteSelectedResponses = function() {
+    const checkboxes = document.querySelectorAll('.response-checkbox:checked');
+    const responseIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+    
+    if (responseIds.length === 0) {
+      alert('削除する回答を選択してください。');
+      return;
+    }
+    
+    if (!confirm(`選択した${responseIds.length}件の回答を削除してもよろしいですか？\nこの操作は取り消せません。`)) {
+      return;
+    }
+    
+    const token = document.querySelector('meta[name="csrf-token"]').content;
+    
+    fetch('/video_management/delete_responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': token
+      },
+      body: JSON.stringify({ response_ids: responseIds })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // 削除された回答の行を削除
+        responseIds.forEach(id => {
+          const row = document.getElementById('response-' + id);
+          if (row) {
+            row.remove();
+          }
+        });
+        // 全選択チェックボックスをリセット
+        document.getElementById('selectAllResponses').checked = false;
+        alert(`${data.deleted_count}件の回答を削除しました。`);
+      } else {
+        alert('回答の削除に失敗しました: ' + (data.error || '不明なエラー'));
+      }
+    })
+    .catch(error => {
+      console.error('削除エラー:', error);
+      alert('回答の削除中にエラーが発生しました。');
+    });
+  };
 })();
 
 // タイムライン分析グラフの初期化
@@ -990,6 +1088,55 @@ function toggleSession(chartType, sessionId) {
   chart.update();
 }
 
+function deleteSelectedSessions(chartType) {
+  // チェックされているセッションIDを取得
+  const checkboxes = document.querySelectorAll(`input[id^="${chartType}_session_"]:checked`);
+  const sessionIds = Array.from(checkboxes).map(cb => {
+    const match = cb.id.match(/session_(\d+)$/);
+    return match ? parseInt(match[1]) : null;
+  }).filter(id => id !== null);
+  
+  if (sessionIds.length === 0) {
+    alert('削除するセッションを選択してください。');
+    return;
+  }
+  
+  if (!confirm(`選択した${sessionIds.length}件のセッションを削除してもよろしいですか？\nこの操作は取り消せません。`)) {
+    return;
+  }
+  
+  // CSRFトークンを取得
+  const token = document.querySelector('meta[name="csrf-token"]').content;
+  
+  // バックエンドに削除リクエストを送信
+  fetch('/video_management/delete_sessions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': token
+    },
+    body: JSON.stringify({ session_ids: sessionIds })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      let message = `${data.deleted_count}件のセッションを削除しました。`;
+      if (data.deleted_responses_count > 0) {
+        message += `\n関連する${data.deleted_responses_count}件の回答履歴も削除されました。`;
+      }
+      alert(message);
+      // ページをリロードして更新
+      window.location.reload();
+    } else {
+      alert('セッションの削除に失敗しました: ' + (data.error || '不明なエラー'));
+    }
+  })
+  .catch(error => {
+    console.error('削除エラー:', error);
+    alert('セッションの削除中にエラーが発生しました。');
+  });
+}
+
 function toggleOperationMarkers(chartType, show) {
   const chart = chartInstances[chartType];
   if (!chart) return;
@@ -1029,19 +1176,26 @@ function createSessionToggles(chartType, datasets) {
     <div class="col-12 mb-3">
       <div class="card bg-light">
         <div class="card-body py-2">
-          <div class="form-check mb-2">
-            <input class="form-check-input" type="checkbox" id="${chartType}_operation_markers" 
-                   checked onchange="toggleOperationMarkers('${chartType}', this.checked)">
-            <label class="form-check-label" for="${chartType}_operation_markers">
-              <span style="color: #6f42c1; font-size: 1.2em;">●</span> <strong>操作マーカー（紫）を表示</strong>
-            </label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="${chartType}_response_markers" 
-                   checked onchange="toggleResponseMarkers('${chartType}', this.checked)">
-            <label class="form-check-label" for="${chartType}_response_markers">
-              <span style="color: #ffc0cb;">▲</span><span style="color: #ff69b4;">○</span><span style="color: #c71585;">◆</span> <strong>反応速度マーカー（ピンク系）を表示</strong>
-            </label>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="${chartType}_operation_markers" 
+                       checked onchange="toggleOperationMarkers('${chartType}', this.checked)">
+                <label class="form-check-label" for="${chartType}_operation_markers">
+                  <span style="color: #6f42c1; font-size: 1.2em;">●</span> <strong>操作マーカー（紫）を表示</strong>
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="${chartType}_response_markers" 
+                       checked onchange="toggleResponseMarkers('${chartType}', this.checked)">
+                <label class="form-check-label" for="${chartType}_response_markers">
+                  <span style="color: #ffc0cb;">▲</span><span style="color: #ff69b4;">○</span><span style="color: #c71585;">◆</span> <strong>反応速度マーカー（ピンク系）を表示</strong>
+                </label>
+              </div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="deleteSelectedSessions('${chartType}')">
+              <i class="bi bi-trash"></i> 選択したセッションを削除
+            </button>
           </div>
         </div>
       </div>
