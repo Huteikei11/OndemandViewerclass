@@ -473,7 +473,7 @@ class VideoManagementController < ApplicationController
         Rails.logger.error "[反応速度デバッグ] パースエラー: #{e.message}"
         nil
       end
-      
+
       # additional_dataを完全にパースするヘルパー（速い問題確認用）
       parse_additional_data = lambda do |event|
         data = event.additional_data
@@ -490,14 +490,14 @@ class VideoManagementController < ApplicationController
         quick: quick_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
         normal: normal_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
         slow: slow_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
-        quick_check: quick_check_events.map { |e| 
+        quick_check: quick_check_events.map { |e|
           details = parse_additional_data.call(e)
-          { 
-            x: e.session_elapsed.round(1), 
-            y: e.video_time, 
+          {
+            x: e.session_elapsed.round(1),
+            y: e.video_time,
             description: e.description,
             details: details  # 視線速度などの詳細情報を追加
-          } 
+          }
         }
       }
 
