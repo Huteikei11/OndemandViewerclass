@@ -473,6 +473,16 @@ class VideoManagementController < ApplicationController
         Rails.logger.error "[反応速度デバッグ] パースエラー: #{e.message}"
         nil
       end
+      
+      # additional_dataを完全にパースするヘルパー（速い問題確認用）
+      parse_additional_data = lambda do |event|
+        data = event.additional_data
+        data = JSON.parse(data) if data.is_a?(String)
+        data
+      rescue => e
+        Rails.logger.error "[パースエラー] イベント #{event.id}: #{e.message}"
+        {}
+      end
 
       result = {
         session_id: session.id,
@@ -480,7 +490,15 @@ class VideoManagementController < ApplicationController
         quick: quick_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
         normal: normal_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
         slow: slow_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description, response_time: parse_response_time.call(e) } },
-        quick_check: quick_check_events.map { |e| { x: e.session_elapsed.round(1), y: e.video_time, description: e.description } }
+        quick_check: quick_check_events.map { |e| 
+          details = parse_additional_data.call(e)
+          { 
+            x: e.session_elapsed.round(1), 
+            y: e.video_time, 
+            description: e.description,
+            details: details  # 視線速度などの詳細情報を追加
+          } 
+        }
       }
 
       Rails.logger.info "[反応速度デバッグ] セッション #{session.id}: マーカー生成完了 - quick: #{result[:quick].count}, normal: #{result[:normal].count}, slow: #{result[:slow].count}, quick_check: #{result[:quick_check].count}"

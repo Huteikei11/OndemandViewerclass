@@ -1513,6 +1513,22 @@ function initializeAnalyticsCharts() {
                 // 反応速度マーカーの場合
                 if (context.dataset.label.includes('反応速度')) {
                   const responseType = point.type || '反応';
+                  
+                  // 速い問題確認の場合は視線速度データを表示
+                  if (point.type === '速い問題確認' && point.details) {
+                    const gazeVelocityX = point.details.gazeVelocityX || 'N/A';
+                    const gazeVelocityY = point.details.gazeVelocityY || 'N/A';
+                    const threshold = point.details.threshold || 5;
+                    const timeFromQuestion = point.details.timeFromQuestion || 'N/A';
+                    return [
+                      `${responseType} | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}`,
+                      `視線速度X: ${gazeVelocityX} px/s (閾値: ${threshold} px/s)`,
+                      `視線速度Y: ${gazeVelocityY} px/s`,
+                      `問題表示から: ${timeFromQuestion} 秒`
+                    ];
+                  }
+                  
+                  // その他の反応速度マーカー
                   const responseTime = point.response_time ? ` (${point.response_time.toFixed(1)}秒)` : '';
                   return `${responseType}${responseTime} | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}${point.description ? ' - ' + point.description : ''}`;
                 }

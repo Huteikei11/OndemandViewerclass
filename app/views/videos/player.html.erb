@@ -782,6 +782,47 @@
     font-size: 9px;
   }
 
+  .timestamp-details {
+    margin-top: 6px;
+    padding: 6px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+    border-left: 2px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .detail-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+    font-size: 9px;
+  }
+
+  .detail-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .detail-item.highlight {
+    background-color: rgba(76, 175, 80, 0.2);
+    padding: 3px 6px;
+    border-radius: 2px;
+    margin: -3px -3px 3px -3px;
+  }
+
+  .detail-label {
+    color: #999;
+    margin-right: 8px;
+  }
+
+  .detail-value {
+    color: #fff;
+    font-weight: 500;
+  }
+
+  .detail-item.highlight .detail-value {
+    color: #4fc3f7;
+    font-weight: bold;
+  }
+
   .camera-preview video,
   .camera-preview canvas {
     border: 1px solid #555;
@@ -3677,6 +3718,46 @@ function initializeVideoPlayer() {
         else if (entry.eventType.includes('video')) className += ' video-event';
         else if (entry.eventType.includes('interaction')) className += ' interaction-event';
         
+        // 詳細情報の構築
+        let detailsHtml = '';
+        if (entry.details && Object.keys(entry.details).length > 0) {
+          // quick_question_checkの場合は視線速度を強調表示
+          if (entry.eventType === 'quick_question_check') {
+            detailsHtml = `
+              <div class="timestamp-details">
+                <div class="detail-item highlight">
+                  <span class="detail-label">視線速度X:</span>
+                  <span class="detail-value">${entry.details.gazeVelocityX} px/s</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">視線速度Y:</span>
+                  <span class="detail-value">${entry.details.gazeVelocityY} px/s</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">閾値:</span>
+                  <span class="detail-value">${entry.details.threshold} px/s</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">問題表示から:</span>
+                  <span class="detail-value">${entry.details.timeFromQuestion} 秒</span>
+                </div>
+              </div>
+            `;
+          } else {
+            // その他のイベントの詳細情報
+            const detailItems = Object.entries(entry.details)
+              .map(([key, value]) => `
+                <div class="detail-item">
+                  <span class="detail-label">${key}:</span>
+                  <span class="detail-value">${value}</span>
+                </div>
+              `).join('');
+            if (detailItems) {
+              detailsHtml = `<div class="timestamp-details">${detailItems}</div>`;
+            }
+          }
+        }
+        
         return `
           <div class="${className}">
             <div class="timestamp-header">
@@ -3691,6 +3772,7 @@ function initializeVideoPlayer() {
                 <span>動画: ${videoStr}</span>
                 ${entry.playbackRate !== 1.0 ? `<span>速度: ${entry.playbackRate}x</span>` : ''}
               </div>
+              ${detailsHtml}
             </div>
           </div>
         `;
