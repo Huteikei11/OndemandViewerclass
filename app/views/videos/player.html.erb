@@ -1333,9 +1333,14 @@ function initializeVideoPlayer() {
     }
     
     async initializeCamera() {
-      // 既に初期化中または初期化済みの場合はスキップ
+      // 既に初期化中または初期化済みの場合
       if (this.cameraInitializing || this.mediaPipeInitialized) {
-        console.log('カメラは既に初期化中または初期化済みです');
+        console.log('カメラは既に初期化中または初期化済みです - トラッキングを確認');
+        // トラッキングが開始されていない場合は開始する
+        if (!this.trackingInterval) {
+          console.log('トラッキングが停止しています - 再開します');
+          this.startTracking();
+        }
         return;
       }
       
@@ -4561,6 +4566,7 @@ function initializeVideoPlayer() {
   });
   
   let activeQuestion = null;
+  let questionCloseTimer = null; // 問題を閉じるタイマーID
   let videoCheckInterval;
   let questionIndicatorTimeout;
   let questionStartTime = null; // 質問表示開始時間を記録
@@ -4728,6 +4734,12 @@ function initializeVideoPlayer() {
     
     function showQuestion(question) {
       console.log('showQuestion関数開始:', question);
+      
+      // 既存の問題を閉じるタイマーがあればキャンセル
+      if (questionCloseTimer) {
+        clearTimeout(questionCloseTimer);
+        questionCloseTimer = null;
+      }
       
       // 問題表示開始時間を記録
       questionStartTime = Date.now();
@@ -5082,7 +5094,8 @@ function initializeVideoPlayer() {
         }
         
         // Reset active question after 3 seconds and resume video
-        setTimeout(() => {
+        questionCloseTimer = setTimeout(() => {
+          questionCloseTimer = null;
           activeQuestion = null;
           
           // ConcentrationTrackerのタイミング変数もリセット
@@ -5130,7 +5143,8 @@ function initializeVideoPlayer() {
         if (frSubmit) frSubmit.disabled = false;
         
         // In case of error, still reset the question and continue playing
-        setTimeout(() => {
+        questionCloseTimer = setTimeout(() => {
+          questionCloseTimer = null;
           activeQuestion = null;
           
           // ConcentrationTrackerのタイミング変数もリセット
