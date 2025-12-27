@@ -1270,11 +1270,15 @@ function initializeVideoPlayer() {
       this.camera = null;
       this.useMediaPipe = true; // MediaPipeを使用するかのフラグ
       this.mediaPipeInitialized = false;
+      this.cameraInitializing = false;
+      
+      // トラッキング関連
+      this.trackingInterval = null;
       
       // デバッグパネル初期化フラグ
       this.debugPanelInitialized = false;
       
-      this.initializeCamera();
+      // 先にゲージとビデオトラッキングを初期化
       this.initializeGauge();
       
       // DOM要素が確実に存在するまで待機してからデバッグパネルを初期化
@@ -1283,7 +1287,15 @@ function initializeVideoPlayer() {
       }, 100);
       
       this.initializeVideoTracking();
-      this.startTracking();
+      
+      // カメラとMediaPipeの初期化を待ってからトラッキングを開始
+      this.initializeCamera().then(() => {
+        console.log('MediaPipe初期化完了後、トラッキングを開始します');
+        this.startTracking();
+      }).catch(error => {
+        console.error('カメラ初期化に失敗しましたが、トラッキングは開始します:', error);
+        this.startTracking();
+      });
       
       // 未保存データのチェックと復旧
       this.checkPendingSessionData();
@@ -1321,6 +1333,14 @@ function initializeVideoPlayer() {
     }
     
     async initializeCamera() {
+      // 既に初期化中または初期化済みの場合はスキップ
+      if (this.cameraInitializing || this.mediaPipeInitialized) {
+        console.log('カメラは既に初期化中または初期化済みです');
+        return;
+      }
+      
+      this.cameraInitializing = true;
+      
       try {
         console.log('カメラ初期化開始...');
         
@@ -1349,11 +1369,15 @@ function initializeVideoPlayer() {
         // MediaPipeの初期化
         await this.initializeMediaPipe();
         
-        console.log('カメラ初期化完了');
+        this.cameraInitializing = false;
+        console.log('✅ カメラ初期化完了 (MediaPipe有効)');
       } catch (error) {
-        console.error('カメラアクセスエラー:', error);
+        this.cameraInitializing = false;
+        console.error('❌ カメラ/MediaPipe初期化エラー:', error);
+        console.error('エラー詳細:', error.message, error.stack);
         console.log('MediaPipeを無効にしてフォールバックモードで続行');
         this.useMediaPipe = false;
+        this.mediaPipeInitialized = false;
       }
     }
     
@@ -1380,7 +1404,21 @@ function initializeVideoPlayer() {
         // グローバルなFaceMesh初期化フラグをチェック
         if (window.faceMeshInitializing) {
           console.log('FaceMeshは既に初期化中です。待機します...');
-          return;
+          // 既に初期化中なら最大10秒待機
+          for (let i = 0; i < 100; i++) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            if (!window.faceMeshInitializing) {
+              console.log('FaceMesh初期化完了を確認しました');
+              // 他のインスタンスが初期化したので、このインスタンスもtrueにする
+              this.mediaPipeInitialized = true;
+              return;
+            }
+          }
+          console.warn('FaceMesh初期化待機タイムアウト');
+          // タイムアウトした場合は無限ループを防ぐためにフラグをリセット
+          window.faceMeshInitializing = false;
+          // このインスタンスでは初期化失敗として扱う
+          throw new Error('FaceMesh初期化待機タイムアウト');
         }
         
         window.faceMeshInitializing = true;
@@ -1407,12 +1445,19 @@ function initializeVideoPlayer() {
         // 結果処理のコールバック設定
         this.faceMesh.onResults(this.onFaceMeshResults.bind(this));
         
+        // mediaPipeInitializedをtrueに設定してからカメラ起動
+        this.mediaPipeInitialized = true;
+        
         // カメラからの映像送信開始
         if (typeof Camera !== 'undefined') {
           this.camera = new Camera(this.cameraVideo, {
             onFrame: async () => {
-              if (this.faceMesh && this.mediaPipeInitialized) {
-                await this.faceMesh.send({ image: this.cameraVideo });
+              if (this.faceMesh) {
+                try {
+                  await this.faceMesh.send({ image: this.cameraVideo });
+                } catch (error) {
+                  console.error('FaceMesh送信エラー:', error);
+                }
               }
             },
             width: 1280,  // 解像度向上: 640 → 1280
@@ -1421,17 +1466,20 @@ function initializeVideoPlayer() {
           });
           
           await this.camera.start();
+          console.log('✅ MediaPipeカメラ起動完了');
         }
         
-        this.mediaPipeInitialized = true;
         window.faceMeshInitializing = false;
-        console.log('MediaPipe初期化完了');
+        console.log('✅ MediaPipe初期化完了');
         
       } catch (error) {
-        console.error('MediaPipe初期化エラー:', error);
+        console.error('❌ MediaPipe初期化エラー:', error);
+        console.error('エラー詳細:', error.message, error.stack);
         window.faceMeshInitializing = false;
         this.useMediaPipe = false;
+        this.mediaPipeInitialized = false;
         console.log('フォールバックモードに切り替え');
+        throw error; // エラーを上位に伝播させる
       }
     }
     
@@ -1573,6 +1621,12 @@ function initializeVideoPlayer() {
     
     onFaceMeshResults(results) {
       try {
+        // デバッグ: onFaceMeshResultsの呼び出しを確認
+        if (!this.lastOnFaceMeshLog || Date.now() - this.lastOnFaceMeshLog > 2000) {
+          console.log(`📸 [onFaceMeshResults] 呼び出し確認 - 顔検出: ${results.multiFaceLandmarks?.length > 0}, landmarks数: ${results.multiFaceLandmarks?.length || 0}`);
+          this.lastOnFaceMeshLog = Date.now();
+        }
+        
         // デバッグ: 問題表示中はMediaPipe動作を確認
         if (this.questionDisplayTime) {
           const timeFromQuestion = (Date.now() - this.questionDisplayTime) / 1000;
@@ -1583,6 +1637,7 @@ function initializeVideoPlayer() {
         
         if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
           this.faceDetected = true;
+          this.lastFaceDetectedTime = Date.now(); // 顔検出時刻を記録
           const landmarks = results.multiFaceLandmarks[0];
           
           // 視線方向を計算
@@ -1597,6 +1652,9 @@ function initializeVideoPlayer() {
         
         // 正面向き割合の更新
         this.updateFrontFacingRatio();
+        
+        // 最新の顔検出状態を記録（30fpsで更新されるが、addGazeData()はstartTracking()から呼ばれる）
+        this.lastFaceMeshUpdate = Date.now();
         
         // 速い問題確認の判定を実行
         this.checkQuickQuestionConfirmation();
@@ -2062,13 +2120,16 @@ function initializeVideoPlayer() {
     addGazeData() {
       const now = Date.now();
       
+      // 直近300ms以内に顔が検出されていればtrueとする（30fpsでは約33msごとなので、300msで約9フレーム分）
+      const faceDetectedRecently = this.lastFaceDetectedTime && (now - this.lastFaceDetectedTime < 300);
+      
       // 現在の状態を記録（頭の角度も含める）
       this.recentGazeData.push({
         timestamp: now,
         gazeX: this.gazeX,
         gazeY: this.gazeY,
         headPoseY: this.headPoseY || 0,
-        faceDetected: this.faceDetected
+        faceDetected: faceDetectedRecently // 直近300msの検出状態を使用
       });
       
       // 5秒より古いデータを削除
@@ -2091,6 +2152,14 @@ function initializeVideoPlayer() {
       // 顔検出率を計算
       const faceDetectedCount = this.recentGazeData.filter(d => d.faceDetected).length;
       const faceDetectionRate = faceDetectedCount / this.recentGazeData.length;
+      
+      // デバッグ: スコアが0になる場合をログ出力（5秒に1回程度）
+      if (faceDetectionRate < this.concentrationSettings.faceDetectionMinRate) {
+        if (!this.lastZeroScoreLog || Date.now() - this.lastZeroScoreLog > 5000) {
+          console.log(`⚠️ [集中度0] 顔検出率低下: ${(faceDetectionRate * 100).toFixed(0)}% (${faceDetectedCount}/${this.recentGazeData.length}) 閾値:${(this.concentrationSettings.faceDetectionMinRate * 100).toFixed(0)}%`);
+          this.lastZeroScoreLog = Date.now();
+        }
+      }
       
       // レベル1: 離席判定（顔検出率が低い）
       if (faceDetectionRate < this.concentrationSettings.faceDetectionMinRate) {
@@ -2322,7 +2391,14 @@ function initializeVideoPlayer() {
     }
     
     startTracking() {
-      setInterval(() => {
+      // 既にトラッキングが開始されている場合は重複起動を防ぐ
+      if (this.trackingInterval) {
+        console.log('[startTracking] 既にトラッキングが開始されています');
+        return;
+      }
+      
+      console.log('[startTracking] トラッキングを開始します');
+      this.trackingInterval = setInterval(() => {
         this.updateFaceTracking();
         
         // 新しい集中度システム: 5秒窓にデータ追加
@@ -2358,17 +2434,25 @@ function initializeVideoPlayer() {
         
         this.updateGauge();
         this.updateDebugInfo();
-      }, 1000); // 1秒ごとに更新
+      }, 200); // 200msごとに更新（5秒窓に25サンプル）
     }
     
     updateFaceTracking() {
-      // MediaPipeが使用可能で初期化済みの場合は、MediaPipeに処理を委ねる
-      if (this.useMediaPipe && this.mediaPipeInitialized) {
-        // MediaPipeのonFaceMeshResultsメソッドで処理されるため、ここでは何もしない
+      // MediaPipeが使用設定されている場合は、初期化完了を待つ
+      if (this.useMediaPipe) {
+        if (!this.mediaPipeInitialized) {
+          // MediaPipe初期化中は何もしない（フォールバック処理も実行しない）
+          if (!this.lastMediaPipeWarning || Date.now() - this.lastMediaPipeWarning > 3000) {
+            console.log('[updateFaceTracking] MediaPipe初期化中...');
+            this.lastMediaPipeWarning = Date.now();
+          }
+          return;
+        }
+        // MediaPipe初期化済みの場合は、onFaceMeshResultsで処理されるため何もしない
         return;
       }
       
-      // フォールバック: 従来のシミュレーション方式
+      // MediaPipeを使用しない場合のみ、フォールバック処理を実行
       if (!this.cameraVideo || !this.canvas) return;
       
       try {
@@ -2961,6 +3045,11 @@ function initializeVideoPlayer() {
     }
     
     addLog(reasons, oldScore, newScore) {
+      // logs配列が未初期化の場合は初期化
+      if (!this.logs) {
+        this.logs = [];
+      }
+      
       const timestamp = new Date().toLocaleTimeString();
       const change = newScore - oldScore;
       
@@ -4392,8 +4481,15 @@ function initializeVideoPlayer() {
     }
   }
   
-  // 集中度トラッカーを初期化
-  const concentrationTracker = new ConcentrationTracker();
+  // 集中度トラッカーをシングルトンとして初期化
+  // 既存のインスタンスがあれば再利用、なければ新規作成
+  if (!window.concentrationTracker) {
+    console.log('ConcentrationTrackerの新規インスタンスを作成します');
+    window.concentrationTracker = new ConcentrationTracker();
+  } else {
+    console.log('既存のConcentrationTrackerインスタンスを再利用します');
+  }
+  const concentrationTracker = window.concentrationTracker;
   
   // JSONデータの確認
   let rawQuestionData;
