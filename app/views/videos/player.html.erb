@@ -4507,13 +4507,64 @@ function initializeVideoPlayer() {
   }
   
   // Initialize questions with a 'shown' property to track which ones have been displayed
-  // ページが再読み込みされるたびに問題のフラグはリセットされる
+  // セッションストレージで管理：タブを閉じるまで問題表示状態を維持
   const videoId = '<%= @video.id %>';
-  const questions = (rawQuestionData || []).map(q => ({...q, shown: false}));
+  const sessionKey = `video_${videoId}_shown_questions`;
+  const tabIdKey = `video_${videoId}_tab_id`;
+  
+  // タブIDを生成または取得（タブ複製を検出するため）
+  let currentTabId = sessionStorage.getItem(tabIdKey);
+  const newTabId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  
+  if (!currentTabId) {
+    // 新しいタブ：タブIDを生成して保存
+    currentTabId = newTabId;
+    sessionStorage.setItem(tabIdKey, currentTabId);
+    console.log('新しいタブを検出、タブIDを生成:', currentTabId);
+  } else {
+    // タブIDが既に存在する場合、タブが複製された可能性がある
+    // 複製を検出するため、ページ読み込みごとにタブIDを更新し、古いデータをクリア
+    console.log('既存のタブID:', currentTabId);
+    console.log('タブ複製の可能性があるため、shownフラグをクリアします');
+    sessionStorage.removeItem(sessionKey);
+    currentTabId = newTabId;
+    sessionStorage.setItem(tabIdKey, currentTabId);
+    console.log('新しいタブID:', currentTabId);
+  }
+  
+  // セッションストレージからshownフラグを取得
+  let shownQuestions = {};
+  try {
+    const stored = sessionStorage.getItem(sessionKey);
+    if (stored) {
+      shownQuestions = JSON.parse(stored);
+      console.log('セッションストレージからshownフラグを読み込みました:', shownQuestions);
+    } else {
+      console.log('新しいセッション：shownフラグは空です');
+    }
+  } catch (e) {
+    console.warn('shownフラグの読み込みに失敗:', e);
+  }
+  
+  const questions = (rawQuestionData || []).map(q => ({
+    ...q,
+    shown: shownQuestions[q.id] || false
+  }));
+  
+  // shownフラグをセッションストレージに保存する関数
+  function saveShownFlag(questionId) {
+    shownQuestions[questionId] = true;
+    try {
+      sessionStorage.setItem(sessionKey, JSON.stringify(shownQuestions));
+      console.log(`問題ID ${questionId} のshownフラグをセッションストレージに保存しました`);
+    } catch (e) {
+      console.warn('shownフラグの保存に失敗:', e);
+    }
+  }
   
   console.log('質問データ:', questions);
   console.log('質問数:', questions.length);
-  console.log('ページ読み込み時に全ての問題フラグをリセットしました');
+  console.log('セッション中のshownフラグを維持します');
   
   // 質問データの詳細ログ
   questions.forEach((q, index) => {
@@ -4691,16 +4742,20 @@ function initializeVideoPlayer() {
           
           // If the current time is past or equal to the question time and within a larger window (2s)
           // and no question is currently active
+          // セッションストレージから直接shown状態をチェック
+          const isShown = shownQuestions[question.id] || question.shown;
+          
           if (currentTime >= question.time_position && 
               currentTime <= question.time_position + 2.0 && 
               activeQuestion === null && 
-              !question.shown) {
+              !isShown) {
             console.log('問題検出:', question);
             console.log('現在の時間:', currentTime, '問題時間:', question.time_position);
             console.log('時間差:', currentTime - question.time_position);
             
             // Mark this question as shown so it doesn't appear again
             question.shown = true;
+            saveShownFlag(question.id);
             console.log('問題ID', question.id, 'を表示済みとしてマークしました');
             
             // Hide the indicator
@@ -4735,8 +4790,15 @@ function initializeVideoPlayer() {
     function showQuestion(question) {
       console.log('showQuestion関数開始:', question);
       
+      // 既にactiveQuestionがある場合は警告
+      if (activeQuestion) {
+        console.warn('⚠️ 既にactiveQuestionが存在します:', activeQuestion);
+        console.warn('新しい問題:', question);
+      }
+      
       // 既存の問題を閉じるタイマーがあればキャンセル
       if (questionCloseTimer) {
+        console.log('既存のquestionCloseTimerをキャンセルします');
         clearTimeout(questionCloseTimer);
         questionCloseTimer = null;
       }
@@ -4759,7 +4821,9 @@ function initializeVideoPlayer() {
       
       console.log('問題データ検証完了');
       
+      console.log('activeQuestionを設定します:', question.id);
       activeQuestion = question;
+      console.log('activeQuestion設定完了');
       
       try {
         // UI要素の存在確認
@@ -5095,8 +5159,11 @@ function initializeVideoPlayer() {
         
         // Reset active question after 3 seconds and resume video
         questionCloseTimer = setTimeout(() => {
+          console.log('✅ questionCloseTimer実行: 問題を閉じます');
           questionCloseTimer = null;
+          console.log('activeQuestionをnullに設定します。現在:', activeQuestion);
           activeQuestion = null;
+          console.log('activeQuestion = null 設定完了');
           
           // ConcentrationTrackerのタイミング変数もリセット
           if (window.concentrationTracker) {
@@ -5105,6 +5172,8 @@ function initializeVideoPlayer() {
             window.concentrationTracker.responseProcessed = false;
           }
           
+          // 問題表示と結果メッセージを非表示にする
+          resultMessage.style.display = 'none';
           waitingMessage.style.display = 'block';
           questionDisplay.style.display = 'none';
           videoPlayer.play();
@@ -5144,8 +5213,11 @@ function initializeVideoPlayer() {
         
         // In case of error, still reset the question and continue playing
         questionCloseTimer = setTimeout(() => {
+          console.log('⚠️ エラー後のquestionCloseTimer実行: 問題を閉じます');
           questionCloseTimer = null;
+          console.log('activeQuestionをnullに設定します。現在:', activeQuestion);
           activeQuestion = null;
+          console.log('activeQuestion = null 設定完了');
           
           // ConcentrationTrackerのタイミング変数もリセット
           if (window.concentrationTracker) {
@@ -5154,6 +5226,8 @@ function initializeVideoPlayer() {
             window.concentrationTracker.responseProcessed = false;
           }
           
+          // 問題表示と結果メッセージを非表示にする
+          resultMessage.style.display = 'none';
           waitingMessage.style.display = 'block';
           questionDisplay.style.display = 'none';
           videoPlayer.play();
