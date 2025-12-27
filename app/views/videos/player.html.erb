@@ -4935,7 +4935,7 @@ function initializeVideoPlayer() {
       tfSubmit.addEventListener('click', function() {
         console.log('○×問題の送信ボタンがクリックされました。activeQuestion:', activeQuestion);
         if (!activeQuestion) {
-          alert('問題が表示されていません');
+          alert('すでに回答済みです');
           return;
         }
         
@@ -4958,7 +4958,7 @@ function initializeVideoPlayer() {
       mcSubmit.addEventListener('click', function() {
         console.log('選択問題の送信ボタンがクリックされました。activeQuestion:', activeQuestion);
         if (!activeQuestion) {
-          alert('問題が表示されていません');
+          alert('すでに回答済みです');
           return;
         }
         
@@ -4982,7 +4982,7 @@ function initializeVideoPlayer() {
       frSubmit.addEventListener('click', function() {
         console.log('記述問題の送信ボタンがクリックされました。activeQuestion:', activeQuestion);
         if (!activeQuestion) {
-          alert('問題が表示されていません');
+          alert('すでに回答済みです');
           return;
         }
         
@@ -5002,8 +5002,8 @@ function initializeVideoPlayer() {
       
       // activeQuestionのチェック
       if (!activeQuestion) {
-        console.error('activeQuestionがnullです。問題が表示されていません。');
-        alert('問題が表示されていません');
+        console.error('activeQuestionがnullです。すでに回答済みです。');
+        alert('すでに回答済みです');
         return;
       }
       
