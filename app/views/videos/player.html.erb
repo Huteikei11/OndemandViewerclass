@@ -2128,6 +2128,20 @@ function initializeVideoPlayer() {
       // 直近300ms以内に顔が検出されていればtrueとする（30fpsでは約33msごとなので、300msで約9フレーム分）
       const faceDetectedRecently = this.lastFaceDetectedTime && (now - this.lastFaceDetectedTime < 300);
       
+      // デバッグ: データ追加をログ出力（10秒に1回）
+      if (!this.lastAddGazeLog || now - this.lastAddGazeLog > 10000) {
+        console.log(`[addGazeData] データ追加中`, {
+          recentDataLength: this.recentGazeData.length,
+          faceDetectedRecently: faceDetectedRecently,
+          lastFaceDetectedTime: this.lastFaceDetectedTime,
+          timeSinceLastFace: this.lastFaceDetectedTime ? now - this.lastFaceDetectedTime : 'never',
+          gazeX: this.gazeX.toFixed(1),
+          gazeY: this.gazeY.toFixed(1),
+          mediaPipeInit: this.mediaPipeInitialized
+        });
+        this.lastAddGazeLog = now;
+      }
+      
       // 現在の状態を記録（頭の角度も含める）
       this.recentGazeData.push({
         timestamp: now,
@@ -2146,6 +2160,18 @@ function initializeVideoPlayer() {
     determineConcentrationLevel() {
       // データが不足している場合は中立
       if (this.recentGazeData.length === 0) {
+        // デバッグ: なぜデータがないかをログ出力（5秒に1回）
+        if (!this.lastNoDataLog || Date.now() - this.lastNoDataLog > 5000) {
+          console.log(`⚠️ [スコア50固定] recentGazeData.length = 0`, {
+            mediaPipeInit: this.mediaPipeInitialized,
+            useMediaPipe: this.useMediaPipe,
+            lastFaceDetectedTime: this.lastFaceDetectedTime,
+            timeSinceLastFace: this.lastFaceDetectedTime ? Date.now() - this.lastFaceDetectedTime : 'never',
+            gazeX: this.gazeX,
+            gazeY: this.gazeY
+          });
+          this.lastNoDataLog = Date.now();
+        }
         return {
           level: 2,
           label: '計測中',
@@ -3567,10 +3593,11 @@ function initializeVideoPlayer() {
         videoTime: videoTime,
         eventType: eventType,
         description: description,
-        concentrationScore: this.displayScore, // 新しい集中度システムのスコアを使用
         videoState: this.videoState,
         playbackRate: this.videoElement ? this.videoElement.playbackRate : 1.0,
-        ...additionalData
+        ...additionalData,
+        // concentrationScoreはadditionalDataで渡されていなければデフォルト値を使用
+        concentrationScore: additionalData.score !== undefined ? additionalData.score : (additionalData.concentrationScore !== undefined ? additionalData.concentrationScore : this.displayScore)
       };
       
       this.timestampLog.push(timestampEntry);
