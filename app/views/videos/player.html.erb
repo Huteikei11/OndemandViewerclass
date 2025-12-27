@@ -4740,6 +4740,12 @@ function initializeVideoPlayer() {
           freeResponseForm.style.display = 'block';
           document.getElementById('free-response-answer').value = '';
         }
+        
+        // 送信ボタンを有効化（新しい問題なので送信可能にする）
+        if (tfSubmit) tfSubmit.disabled = false;
+        if (mcSubmit) mcSubmit.disabled = false;
+        if (frSubmit) frSubmit.disabled = false;
+        
       } catch (error) {
         console.error('問題表示中にエラーが発生しました:', error);
       }
@@ -4828,6 +4834,20 @@ function initializeVideoPlayer() {
         alert('問題が表示されていません');
         return;
       }
+      
+      // 既に送信済みまたは送信中の場合は処理しない
+      if (activeQuestion.submitted || activeQuestion.submitting) {
+        console.log('この問題は既に送信済みまたは送信中です');
+        return;
+      }
+      
+      // 送信中フラグを立てる
+      activeQuestion.submitting = true;
+      
+      // すべての送信ボタンを無効化
+      if (tfSubmit) tfSubmit.disabled = true;
+      if (mcSubmit) mcSubmit.disabled = true;
+      if (frSubmit) frSubmit.disabled = true;
       
       // 回答時間を計算（ミリ秒）
       const responseTime = questionStartTime ? Date.now() - questionStartTime : 0;
@@ -4959,6 +4979,12 @@ function initializeVideoPlayer() {
         
         resultMessage.textContent = resultText;
         
+        // 送信済みフラグを立てる
+        if (currentQuestion) {
+          currentQuestion.submitted = true;
+          currentQuestion.submitting = false;
+        }
+        
         // Reset active question after 3 seconds and resume video
         setTimeout(() => {
           activeQuestion = null;
@@ -4996,6 +5022,16 @@ function initializeVideoPlayer() {
         }
         
         alert(errorMessage);
+        
+        // エラー時は送信中フラグをリセット（再試行可能にする）
+        if (currentQuestion) {
+          currentQuestion.submitting = false;
+        }
+        
+        // ボタンを再度有効化
+        if (tfSubmit) tfSubmit.disabled = false;
+        if (mcSubmit) mcSubmit.disabled = false;
+        if (frSubmit) frSubmit.disabled = false;
         
         // In case of error, still reset the question and continue playing
         setTimeout(() => {
