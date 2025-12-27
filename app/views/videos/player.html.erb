@@ -1144,6 +1144,15 @@ function initializeVideoPlayer() {
     return;
   }
   
+  // イベントリスナー重複登録チェック（この関数が2回目以降の呼び出しならスキップ）
+  if (videoPlayer.dataset.listenersAttached === 'true') {
+    console.log('動画プレイヤーイベントリスナーは既に登録済みです');
+    return;
+  }
+  
+  // イベントリスナー登録完了をマーク
+  videoPlayer.dataset.listenersAttached = 'true';
+  
   // 初期化完了フラグを設定
   window.videoPlayerInitState.isInitialized = true;
   console.log('動画プレイヤー初期化開始... (初期化条件クリア)');
@@ -4648,6 +4657,10 @@ function initializeVideoPlayer() {
   let videoCheckInterval;
   let questionIndicatorTimeout;
   let questionStartTime = null; // 質問表示開始時間を記録
+  let lastShownQuestionId = null; // 最後に表示した問題ID（連続表示防止用）
+  let lastQuestionCloseTime = 0; // 最後に問題を閉じた時刻
+  let isCheckingQuestions = false; // checkVideoTime()の再入防止フラグ
+  let upcomingQuestionNotified = {}; // 「間もなく問題」を通知済みかを管理
 
   if (videoPlayer) {
     // 動画の読み込み状態をデバッグログで確認
@@ -4685,7 +4698,7 @@ function initializeVideoPlayer() {
     // 再生開始時の追加チェック
     videoPlayer.addEventListener('play', function() {
       console.log('動画再生開始');
-      checkVideoTime(); // 即座にチェック
+      checkVideoTime(); // 即座にチェック（再入防止フラグで保護されている）
     });
     
     // 安全策として、DOMContentLoadedの後に少し遅延させて問題チェックを開始
@@ -4733,18 +4746,27 @@ function initializeVideoPlayer() {
     videoPlayer.addEventListener('canplay', tryInitialQuestionCheck);
     
     function checkVideoTime() {
+      // 既に実行中の場合はスキップ（再入防止）
+      if (isCheckingQuestions) {
+        console.log('⏭️  checkVideoTime: 既に実行中のためスキップ');
+        return;
+      }
+      
       // 動画が読み込まれていない場合は何もしない
       if (videoPlayer.readyState < 2) {
         console.log('動画がまだ十分に読み込まれていません:', videoPlayer.readyState);
         return;
       }
       
-      const currentTime = videoPlayer.currentTime;
+      isCheckingQuestions = true; // 実行開始フラグ
       
-      // 再生中またはチェックする必要がある場合
-      if (!videoPlayer.paused || activeQuestion !== null) {
-        // Check for upcoming questions
-        const upcomingQuestionWindow = 5; // Show indicator 5 seconds before question
+      try {
+        const currentTime = videoPlayer.currentTime;
+        
+        // 再生中またはチェックする必要がある場合
+        if (!videoPlayer.paused || activeQuestion !== null) {
+          // Check for upcoming questions
+          const upcomingQuestionWindow = 5; // Show indicator 5 seconds before question
         
         let hasUpcomingQuestion = false;
         for (let i = 0; i < questions.length; i++) {
@@ -4755,7 +4777,13 @@ function initializeVideoPlayer() {
               currentTime >= question.time_position - upcomingQuestionWindow && 
               !question.shown) {
             hasUpcomingQuestion = true;
-            console.log('間もなく問題:', question.content);
+            
+            // 「間もなく問題」を1回だけ通知
+            if (!upcomingQuestionNotified[question.id]) {
+              console.log('間もなく問題:', question.content);
+              upcomingQuestionNotified[question.id] = true;
+            }
+            
             // Show indicator if not already showing
             if (questionIndicator.style.display !== 'block') {
               questionIndicator.style.display = 'block';
@@ -4770,19 +4798,43 @@ function initializeVideoPlayer() {
           // If the current time is past or equal to the question time and within a larger window (2s)
           // and no question is currently active
           // セッションストレージから直接shown状態をチェック
-          const isShown = shownQuestions[question.id] || question.shown;
+          // 連続表示防止：最後に表示した問題と同じ場合、かつ問題を閉じてから1秒以内の場合はスキップ
+          const timeSinceLastClose = Date.now() - lastQuestionCloseTime;
+          const isSameAsLastQuestion = lastShownQuestionId === question.id && timeSinceLastClose < 1000;
+          
+          // 重複表示を防ぐための複数チェック
+          if (isSameAsLastQuestion) {
+            console.log('🔒 連続表示防止:', question.id, `前回から${timeSinceLastClose}ms`);
+            continue; // この問題をスキップして次の問題へ
+          }
+          
+          // 既に表示済みかを確認（sessionStorageを含む3つの場所をチェック）
+          const isShownInStorage = sessionStorage.getItem(`video_${videoId}_shown_${question.id}`) === 'true';
+          const isShown = shownQuestions[question.id] === true || question.shown === true || isShownInStorage;
+          
+          // デバッグ：チェック状態を詳細ログ
+          if (currentTime >= question.time_position && currentTime <= question.time_position + 2.0) {
+            console.log(`[問題チェック] ID:${question.id}, isShown:${isShown}, storage:${isShownInStorage}, obj:${shownQuestions[question.id]}, prop:${question.shown}, activeQ:${activeQuestion}`);
+          }
+          
+          // 既に表示済みの問題はスキップ
+          if (isShown) {
+            continue;
+          }
           
           if (currentTime >= question.time_position && 
               currentTime <= question.time_position + 2.0 && 
-              activeQuestion === null && 
-              !isShown) {
+              activeQuestion === null) {
+            
+            // 🚨 最優先：フラグを即座に設定（他の処理より前に実行）
+            question.shown = true;
+            shownQuestions[question.id] = true;
+            lastShownQuestionId = question.id;
+            saveShownFlag(question.id);
+            
             console.log('問題検出:', question);
             console.log('現在の時間:', currentTime, '問題時間:', question.time_position);
             console.log('時間差:', currentTime - question.time_position);
-            
-            // Mark this question as shown so it doesn't appear again
-            question.shown = true;
-            saveShownFlag(question.id);
             console.log('問題ID', question.id, 'を表示済みとしてマークしました');
             
             // Hide the indicator
@@ -4811,6 +4863,10 @@ function initializeVideoPlayer() {
             questionIndicator.style.display = 'none';
           }, 500);
         }
+      }
+      } finally {
+        // 処理完了後、必ず実行中フラグを解除
+        isCheckingQuestions = false;
       }
     }
     
@@ -5190,7 +5246,7 @@ function initializeVideoPlayer() {
           questionCloseTimer = null;
           console.log('activeQuestionをnullに設定します。現在:', activeQuestion);
           activeQuestion = null;
-          console.log('activeQuestion = null 設定完了');
+          lastQuestionCloseTime = Date.now(); // 問題を閉じた時刻を記録
           
           // ConcentrationTrackerのタイミング変数もリセット
           if (window.concentrationTracker) {
@@ -5244,6 +5300,7 @@ function initializeVideoPlayer() {
           questionCloseTimer = null;
           console.log('activeQuestionをnullに設定します。現在:', activeQuestion);
           activeQuestion = null;
+          lastQuestionCloseTime = Date.now(); // 問題を閉じた時刻を記録
           console.log('activeQuestion = null 設定完了');
           
           // ConcentrationTrackerのタイミング変数もリセット
@@ -5403,11 +5460,16 @@ if (!window.videoPlayerListenersAdded) {
   }
 }
 
-// turbo:loadでの初期化（リセット後に実行）
+// turbo:loadでのリセット処理（状態変数のみクリア、イベントリスナーは保持）
 document.addEventListener('turbo:load', function() {
   const currentPath = window.location.pathname;
   if (currentPath.includes('/videos/') && currentPath.includes('/player')) {
-    console.log('turbo:load - 動画プレイヤー初期化開始');
+    console.log('turbo:load - 動画プレイヤーページ検出、状態のみリセット');
+    
+    // 初期化済みフラグをリセット（新しいページロード時は再初期化を許可）
+    videoPlayerInitialized = false;
+    
+    // 初期化を実行（フラグによって重複は防止される）
     setTimeout(initializeVideoPlayer, 50);
   }
 });
