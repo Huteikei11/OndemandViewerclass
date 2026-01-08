@@ -1243,10 +1243,10 @@ function toggleVideoTime0Filter() {
   chart.data.datasets.forEach((dataset, index) => {
     if (originalScoreTimelineDatasets[index]) {
       if (checkbox.checked) {
-        // video_time === 0 のポイントを除外
+        // video_time が 0.5秒以下のポイントを除外
         dataset.data = originalScoreTimelineDatasets[index].data.filter(point => {
-          // yプロパティが0でないもののみ（video_timeが0の場合、yも0になる）
-          return point.y !== 0;
+          // yプロパティ（video_time）が0.5秒より大きいもののみ表示
+          return point.y > 0.5;
         });
       } else {
         // 元のデータを復元
