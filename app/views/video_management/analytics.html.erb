@@ -185,6 +185,17 @@
                   <div class="collapse show" id="scoreTimelineTogglesCollapse">
                     <div id="scoreTimelineSessionToggles" class="row"></div>
                   </div>
+                  
+                  <!-- 動画時刻0のデータフィルター -->
+                  <div class="mt-3 mb-3">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="hideVideoTime0" onchange="toggleVideoTime0Filter()">
+                      <label class="form-check-label" for="hideVideoTime0">
+                        動画時刻0秒のデータを非表示にする
+                      </label>
+                      <small class="text-muted d-block ms-4">動画が再生される前のデータポイントを除外します</small>
+                    </div>
+                  </div>
                 </div>
                 <div class="chart-container" style="position: relative; height: 800px;">
                   <canvas id="scoreTimelineChart"></canvas>
@@ -1218,6 +1229,35 @@ function createSessionToggles(chartType, datasets) {
   container.innerHTML = html;
 }
 
+// 元のデータを保存する変数（フィルタリング用）
+let originalScoreTimelineDatasets = null;
+
+// video_time=0のデータポイントを非表示にするトグル関数
+function toggleVideoTime0Filter() {
+  const checkbox = document.getElementById('hideVideoTime0');
+  const chart = chartInstances.scoreTimeline;
+  
+  if (!chart || !originalScoreTimelineDatasets) return;
+  
+  // 各データセットをフィルタリング
+  chart.data.datasets.forEach((dataset, index) => {
+    if (originalScoreTimelineDatasets[index]) {
+      if (checkbox.checked) {
+        // video_time === 0 のポイントを除外
+        dataset.data = originalScoreTimelineDatasets[index].data.filter(point => {
+          // yプロパティが0でないもののみ（video_timeが0の場合、yも0になる）
+          return point.y !== 0;
+        });
+      } else {
+        // 元のデータを復元
+        dataset.data = [...originalScoreTimelineDatasets[index].data];
+      }
+    }
+  });
+  
+  chart.update();
+}
+
 function initializeAnalyticsCharts() {
   // Chart.jsが読み込まれているか確認
   if (typeof Chart === 'undefined') {
@@ -1444,6 +1484,9 @@ function initializeAnalyticsCharts() {
       }
     });
 
+    // オリジナルデータを深いコピーで保存（フィルタリング前の状態）
+    originalScoreTimelineDatasets = JSON.parse(JSON.stringify(datasets));
+    
     chartInstances.scoreTimeline = new Chart(scoreTimelineCtx, {
       type: 'scatter',
       data: { datasets },
