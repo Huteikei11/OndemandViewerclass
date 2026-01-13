@@ -27,5 +27,8 @@ module OndemandViewerclass
 
     # Set default locale to Japanese
     config.i18n.default_locale = :ja
+
+    # Active Storage URL expiration time (default: 5 minutes, changed to 2 hours)
+    config.active_storage.service_urls_expire_in = 2.hours
   end
 end

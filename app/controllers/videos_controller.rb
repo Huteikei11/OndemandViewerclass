@@ -16,6 +16,15 @@ class VideosController < ApplicationController
   def player
     @questions = @video.questions.order(:time_position)
     @user_responses = current_user&.user_responses&.joins(:question)&.where(questions: { video_id: @video.id }) || []
+
+    # Render環境でのファイル存在チェック
+    if Rails.env.production? && @video.video_file.attached?
+      file_path = ActiveStorage::Blob.service.path_for(@video.video_file.key)
+      unless File.exist?(file_path)
+        Rails.logger.error "⚠️ 動画ファイルが見つかりません: #{file_path}"
+        Rails.logger.error "Video ID: #{@video.id}, Blob key: #{@video.video_file.key}"
+      end
+    end
   end
 
   def new

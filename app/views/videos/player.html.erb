@@ -1350,6 +1350,9 @@ function initializeVideoPlayer() {
       // 未保存データのチェックと復旧
       this.checkPendingSessionData();
       
+      // 定期的なメモリクリーンアップ（10分ごと）
+      this.setupMemoryCleanup();
+      
       // 初期化完了後に少し待ってからテスト用タイムスタンプを追加
       setTimeout(() => {
         this.addTimestamp('test_init', 'システム初期化完了');
@@ -1515,8 +1518,8 @@ function initializeVideoPlayer() {
                 }
               }
             },
-            width: 1280,  // 解像度向上: 640 → 1280
-            height: 720,  // 解像度向上: 480 → 720
+            width: 1280,  // 解像度: 1280x720
+            height: 720,
             fps: 30       // フレームレート指定
           });
           
@@ -2204,6 +2207,12 @@ function initializeVideoPlayer() {
       // 5秒より古いデータを削除
       const cutoff = now - (this.concentrationSettings.stabilityWindow * 1000);
       this.recentGazeData = this.recentGazeData.filter(d => d.timestamp > cutoff);
+      
+      // メモリリーク防止: 配列が異常に大きくなった場合は強制クリア
+      if (this.recentGazeData.length > 300) {
+        console.warn('⚠️ recentGazeDataが異常に蓄積されました。クリアします。', this.recentGazeData.length);
+        this.recentGazeData = this.recentGazeData.slice(-150);
+      }
     }
     
     // 新しい集中度システム: 画面正面を見ているかを評価
@@ -2367,6 +2376,12 @@ function initializeVideoPlayer() {
       // 61秒以上前のデータを削除
       const cutoff = now - (this.concentrationSettings.windowSize + 1) * 1000;
       this.stateHistory = this.stateHistory.filter(s => s.timestamp > cutoff);
+      
+      // メモリリーク防止: 配列が異常に大きくなった場合は強制クリア
+      if (this.stateHistory.length > 500) {
+        console.warn('⚠️ stateHistoryが異常に蓄積されました。クリアします。', this.stateHistory.length);
+        this.stateHistory = this.stateHistory.slice(-250);
+      }
     }
     
     // 新しい集中度システム: 現在窓のスコアを計算
@@ -4112,6 +4127,66 @@ function initializeVideoPlayer() {
       );
     }
     
+    setupMemoryCleanup() {
+      // 10分ごとにメモリクリーンアップを実行
+      setInterval(() => {
+        const now = Date.now();
+        
+        console.log('🧹 メモリクリーンアップを実行中...');
+        
+        // 各配列のサイズを記録
+        const before = {
+          recentGazeData: this.recentGazeData.length,
+          stateHistory: this.stateHistory.length,
+          gazeHistory: this.gazeHistory.length,
+          gazeRawHistory: this.gazeRawHistory.length,
+          eyeMovementHistory: this.eyeMovementHistory.length
+        };
+        
+        // 古いデータを強制的にクリーンアップ
+        const cutoff5sec = now - 6000; // 6秒以上前
+        const cutoff60sec = now - 65000; // 65秒以上前
+        
+        this.recentGazeData = this.recentGazeData.filter(d => d.timestamp > cutoff5sec);
+        this.stateHistory = this.stateHistory.filter(s => s.timestamp > cutoff60sec);
+        
+        // 履歴配列も念のためサイズ制限
+        if (this.gazeHistory.length > 10) {
+          this.gazeHistory = this.gazeHistory.slice(-3);
+        }
+        if (this.gazeRawHistory.length > 20) {
+          this.gazeRawHistory = this.gazeRawHistory.slice(-8);
+        }
+        if (this.eyeMovementHistory.length > 10) {
+          this.eyeMovementHistory = this.eyeMovementHistory.slice(-5);
+        }
+        
+        const after = {
+          recentGazeData: this.recentGazeData.length,
+          stateHistory: this.stateHistory.length,
+          gazeHistory: this.gazeHistory.length,
+          gazeRawHistory: this.gazeRawHistory.length,
+          eyeMovementHistory: this.eyeMovementHistory.length
+        };
+        
+        console.log('🧹 クリーンアップ完了:', {
+          before,
+          after,
+          freed: {
+            recentGazeData: before.recentGazeData - after.recentGazeData,
+            stateHistory: before.stateHistory - after.stateHistory
+          }
+        });
+        
+        // ガベージコレクションのヒント（あくまでヒント）
+        if (window.gc) {
+          console.log('🗑️ ガベージコレクションを実行');
+          window.gc();
+        }
+        
+      }, 10 * 60 * 1000); // 10分ごと
+    }
+    
     setupExitHandlers() {
       let isExiting = false;
       
@@ -4743,6 +4818,9 @@ function initializeVideoPlayer() {
   let lastQuestionCloseTime = 0; // 最後に問題を閉じた時刻
   let isCheckingQuestions = false; // checkVideoTime()の再入防止フラグ
   let upcomingQuestionNotified = {}; // 「間もなく問題」を通知済みかを管理
+  let savedPlaybackPosition = 0; // エラー時の再生位置保存用
+  let videoErrorCount = 0; // エラー発生回数
+  let lastErrorTime = 0; // 最後のエラー発生時刻
 
   if (videoPlayer) {
     // 動画の読み込み状態をデバッグログで確認
@@ -4752,6 +4830,124 @@ function initializeVideoPlayer() {
       duration: videoPlayer.duration,
       currentSrc: videoPlayer.currentSrc
     });
+    
+    // 動画エラーハンドリング
+    videoPlayer.addEventListener('error', function(e) {
+      const now = Date.now();
+      const error = videoPlayer.error;
+      
+      console.error('動画エラー発生:', {
+        code: error?.code,
+        message: error?.message,
+        currentTime: videoPlayer.currentTime,
+        src: videoPlayer.currentSrc
+      });
+      
+      // 現在の再生位置を保存
+      if (videoPlayer.currentTime > 0) {
+        savedPlaybackPosition = videoPlayer.currentTime;
+        console.log('再生位置を保存しました:', savedPlaybackPosition);
+      }
+      
+      // 短時間に連続してエラーが発生する場合の対策
+      if (now - lastErrorTime < 5000) {
+        videoErrorCount++;
+      } else {
+        videoErrorCount = 1;
+      }
+      lastErrorTime = now;
+      
+      // エラーの種類に応じた処理
+      if (error) {
+        let errorMessage = '';
+        switch (error.code) {
+          case 1: // MEDIA_ERR_ABORTED
+            errorMessage = '動画の読み込みが中断されました';
+            break;
+          case 2: // MEDIA_ERR_NETWORK
+            errorMessage = 'ネットワークエラーが発生しました';
+            break;
+          case 3: // MEDIA_ERR_DECODE
+            errorMessage = '動画のデコードに失敗しました';
+            break;
+          case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+            errorMessage = '動画ファイルがサポートされていないか、URLの有効期限が切れています';
+            break;
+          default:
+            errorMessage = '動画の読み込み中にエラーが発生しました';
+        }
+        
+        // エラーが頻発する場合はページリロードを提案
+        if (videoErrorCount >= 3) {
+          errorMessage += '\n\nエラーが繰り返し発生しています。ページを再読み込みしてください。';
+          alert(errorMessage);
+        } else {
+          console.warn(errorMessage);
+          
+          // Active StorageのURLエラーの場合、ページリロードを提案
+          if (error.code === 4 || error.code === 2) {
+            const shouldReload = confirm(
+              errorMessage + '\n\n動画を再読み込みしますか？\n（再生位置: ' + 
+              Math.floor(savedPlaybackPosition) + '秒）'
+            );
+            
+            if (shouldReload) {
+              // 再生位置をセッションストレージに保存してリロード
+              sessionStorage.setItem('resumeVideoAt', savedPlaybackPosition.toString());
+              sessionStorage.setItem('resumeVideoId', '<%= @video.id %>');
+              location.reload();
+            }
+          }
+        }
+      }
+    });
+    
+    // stalled イベント（データ取得が停止）のハンドリング
+    videoPlayer.addEventListener('stalled', function() {
+      console.warn('動画データの取得が停止しました（stalled）');
+      savedPlaybackPosition = videoPlayer.currentTime;
+    });
+    
+    // suspend イベント（ブラウザが意図的にデータ取得を停止）
+    videoPlayer.addEventListener('suspend', function() {
+      console.log('動画データの取得が一時停止されました（suspend）');
+    });
+    
+    // waiting イベント（次のフレームのバッファリング待ち）
+    let waitingStartTime = 0;
+    videoPlayer.addEventListener('waiting', function() {
+      waitingStartTime = Date.now();
+      console.log('動画バッファリング中（waiting）');
+    });
+    
+    // playing イベント（バッファリングから復帰）
+    videoPlayer.addEventListener('playing', function() {
+      if (waitingStartTime > 0) {
+        const waitDuration = Date.now() - waitingStartTime;
+        console.log('バッファリング完了（待機時間: ' + waitDuration + 'ms）');
+        waitingStartTime = 0;
+      }
+    });
+    
+    // ページ読み込み時に保存された再生位置を復元
+    const resumeTime = sessionStorage.getItem('resumeVideoAt');
+    const resumeVideoId = sessionStorage.getItem('resumeVideoId');
+    
+    if (resumeTime && resumeVideoId === '<%= @video.id %>') {
+      const resumePosition = parseFloat(resumeTime);
+      console.log('保存された再生位置を復元します:', resumePosition);
+      
+      videoPlayer.addEventListener('loadedmetadata', function restorePosition() {
+        videoPlayer.currentTime = resumePosition;
+        videoPlayer.removeEventListener('loadedmetadata', restorePosition);
+        
+        // セッションストレージをクリア
+        sessionStorage.removeItem('resumeVideoAt');
+        sessionStorage.removeItem('resumeVideoId');
+        
+        alert('前回の再生位置（' + Math.floor(resumePosition) + '秒）から再開します');
+      });
+    }
     
     // 動画の読み込み完了を待つ
     videoPlayer.addEventListener('loadedmetadata', function() {
@@ -4773,13 +4969,33 @@ function initializeVideoPlayer() {
     });
     
     // 動画の時間更新イベントで問題をチェック（より頻繁なチェック）
+    let lastLoggedTime = 0;
     videoPlayer.addEventListener('timeupdate', function() {
+      const currentTime = videoPlayer.currentTime;
+      
+      // 再生位置を定期的に保存（1秒ごと）
+      if (currentTime > 0 && Math.floor(currentTime) !== Math.floor(lastLoggedTime)) {
+        savedPlaybackPosition = currentTime;
+        lastLoggedTime = currentTime;
+      }
+      
+      // 再生位置が大きく後退した場合に警告（5秒以上）
+      if (savedPlaybackPosition - currentTime > 5) {
+        console.error('⚠️ 警告: 再生位置が大幅に後退しました!', {
+          from: savedPlaybackPosition,
+          to: currentTime,
+          difference: savedPlaybackPosition - currentTime,
+          readyState: videoPlayer.readyState,
+          networkState: videoPlayer.networkState
+        });
+      }
+      
       checkVideoTime();
     });
     
     // 再生開始時の追加チェック
     videoPlayer.addEventListener('play', function() {
-      console.log('動画再生開始');
+      console.log('動画再生開始 - currentTime:', videoPlayer.currentTime);
       checkVideoTime(); // 即座にチェック（再入防止フラグで保護されている）
     });
     
@@ -4791,10 +5007,30 @@ function initializeVideoPlayer() {
       }
     }, 1000);
     
+    // 再生位置の変更を監視（seeking開始）
+    videoPlayer.addEventListener('seeking', function() {
+      console.log('🔍 シーク開始:', {
+        from: savedPlaybackPosition,
+        to: videoPlayer.currentTime,
+        stackTrace: new Error().stack
+      });
+    });
+    
     // Reset questions when video is seeked
     videoPlayer.addEventListener('seeked', function() {
       const currentTime = videoPlayer.currentTime;
-      console.log('シーク位置変更:', currentTime);
+      console.log('✅ シーク完了:', currentTime);
+      
+      // 0秒に戻った場合は警告
+      if (currentTime < 1 && savedPlaybackPosition > 5) {
+        console.error('⚠️ 警告: 動画が意図せず0秒に戻りました!', {
+          previousPosition: savedPlaybackPosition,
+          currentPosition: currentTime,
+          readyState: videoPlayer.readyState,
+          networkState: videoPlayer.networkState,
+          error: videoPlayer.error
+        });
+      }
       
       // 一度出題した問題は巻き戻しても再度出現しないように、
       // shown フラグのリセットは行わない
