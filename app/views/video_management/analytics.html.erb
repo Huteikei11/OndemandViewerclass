@@ -1246,7 +1246,7 @@ function toggleVideoTime0Filter() {
         // video_time が 2秒以下のポイントを除外
         dataset.data = originalScoreTimelineDatasets[index].data.filter(point => {
           // yプロパティ（video_time）が2秒より大きいもののみ表示
-          return point.y > 2;
+          return point && point.y > 2;
         });
       } else {
         // 元のデータを復元
@@ -1255,7 +1255,8 @@ function toggleVideoTime0Filter() {
     }
   });
   
-  chart.update();
+  // アニメーションなしで更新（パフォーマンス改善）
+  chart.update('none');
 }
 
 function initializeAnalyticsCharts() {
@@ -1401,6 +1402,7 @@ function initializeAnalyticsCharts() {
             pointHoverRadius: 5,
             pointStyle: function(context) {
               const point = context.raw;
+              if (!point) return 'circle';
               return point.style || 'circle';
             },
             showLine: false,
@@ -1460,14 +1462,19 @@ function initializeAnalyticsCharts() {
             pointHoverRadius: 11,
             pointStyle: function(context) {
               const point = context.raw;
+              if (!point) return 'circle';
               return point.style || 'circle';
             },
             pointBackgroundColor: function(context) {
               const point = context.raw;
+              if (!point) return responseNormalColor;
               return point.color || responseNormalColor;
             },
             pointBorderColor: function(context) {
               const point = context.raw;
+              if (!point) return responseNormalColor;
+              return point.color || responseNormalColor;
+            },
               return point.color || responseNormalColor;
             },
             showLine: false,
