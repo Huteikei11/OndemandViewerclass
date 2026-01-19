@@ -1269,6 +1269,7 @@ function updateOperationsMapBins() {
   chartInstances.videoOperations.data.labels = newData.map(d => d.label);
   chartInstances.videoOperations.data.datasets[0].data = newData.map(d => d.pause);
   chartInstances.videoOperations.data.datasets[1].data = newData.map(d => d.seek);
+  chartInstances.videoOperations.data.datasets[2].data = newData.map(d => d.response);
   chartInstances.videoOperations.update('none');
 }
 
@@ -1286,6 +1287,11 @@ function rebinOperationsData(originalData, bins) {
     // スキップ操作
     for (let i = 0; i < item.seek; i++) {
       allOperations.push({ type: 'seek', time: item.time });
+    }
+    // 問題回答
+    const responseCount = item.response || 0;
+    for (let i = 0; i < responseCount; i++) {
+      allOperations.push({ type: 'response', time: item.time });
     }
   });
   
@@ -1310,12 +1316,16 @@ function rebinOperationsData(originalData, bins) {
     const seek = allOperations.filter(op => 
       op.type === 'seek' && op.time >= startTime && op.time < endTime
     ).length;
+    const response = allOperations.filter(op => 
+      op.type === 'response' && op.time >= startTime && op.time < endTime
+    ).length;
     
     newData.push({
       label: `${startMin}:${startSec.toString().padStart(2, '0')}-${endMin}:${endSec.toString().padStart(2, '0')}`,
       time: startTime,
       pause: pause,
-      seek: seek
+      seek: seek,
+      response: response
     });
   }
   
@@ -1998,6 +2008,13 @@ function initializeAnalyticsCharts() {
             data: operationsData.map(d => d.seek),
             backgroundColor: 'rgba(220, 53, 69, 0.8)',
             borderColor: 'rgba(220, 53, 69, 1)',
+            borderWidth: 1
+          },
+          {
+            label: '問題回答',
+            data: operationsData.map(d => d.response || 0),
+            backgroundColor: 'rgba(13, 110, 253, 0.8)',
+            borderColor: 'rgba(13, 110, 253, 1)',
             borderWidth: 1
           }
         ]
