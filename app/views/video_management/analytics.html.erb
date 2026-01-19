@@ -251,6 +251,14 @@
 
               <!-- 6. 動画操作マップ（全体） -->
               <div class="tab-pane fade" id="video-operations" role="tabpanel">
+                <div class="mb-3">
+                  <label for="operationsMapBins" class="form-label">横軸の分割数: <span id="operationsMapBinsValue">20</span></label>
+                  <div class="d-flex align-items-center gap-2">
+                    <input type="range" class="form-range" id="operationsMapBins" min="5" max="100" value="20" step="5">
+                    <button class="btn btn-sm btn-outline-primary" onclick="updateOperationsMapBins()">更新</button>
+                  </div>
+                  <small class="text-muted">分割数を調整して、動画を何等分にして集計するかを変更できます。</small>
+                </div>
                 <div class="chart-container" style="position: relative; height: 400px;">
                   <canvas id="videoOperationsChart"></canvas>
                 </div>
@@ -1231,6 +1239,88 @@ function createSessionToggles(chartType, datasets) {
 
 // 元のデータを保存する変数（フィルタリング用）
 let originalScoreTimelineDatasets = null;
+let originalOperationsMapData = null; // 動画操作マップの元データ
+
+// スライダーの値を表示更新
+document.addEventListener('DOMContentLoaded', function() {
+  const slider = document.getElementById('operationsMapBins');
+  const valueDisplay = document.getElementById('operationsMapBinsValue');
+  
+  if (slider && valueDisplay) {
+    slider.addEventListener('input', function() {
+      valueDisplay.textContent = this.value;
+    });
+  }
+});
+
+// 動画操作マップの分割数を更新
+function updateOperationsMapBins() {
+  const bins = parseInt(document.getElementById('operationsMapBins').value);
+  
+  if (!originalOperationsMapData || !chartInstances.videoOperations) {
+    console.error('動画操作マップのデータがありません');
+    return;
+  }
+  
+  // 新しい分割数でデータを再集計
+  const newData = rebinOperationsData(originalOperationsMapData, bins);
+  
+  // チャートを更新
+  chartInstances.videoOperations.data.labels = newData.map(d => d.label);
+  chartInstances.videoOperations.data.datasets[0].data = newData.map(d => d.pause);
+  chartInstances.videoOperations.data.datasets[1].data = newData.map(d => d.seek);
+  chartInstances.videoOperations.update('none');
+}
+
+// 操作データを指定された分割数で再集計
+function rebinOperationsData(originalData, bins) {
+  if (!originalData || originalData.length === 0) return [];
+  
+  // 全操作データを展開
+  const allOperations = [];
+  originalData.forEach(item => {
+    // 一時停止操作
+    for (let i = 0; i < item.pause; i++) {
+      allOperations.push({ type: 'pause', time: item.time });
+    }
+    // スキップ操作
+    for (let i = 0; i < item.seek; i++) {
+      allOperations.push({ type: 'seek', time: item.time });
+    }
+  });
+  
+  // 最大時間を取得
+  const maxTime = Math.max(...originalData.map(d => d.time));
+  const binSize = maxTime / bins;
+  
+  // 新しいビンを作成
+  const newData = [];
+  for (let i = 0; i < bins; i++) {
+    const startTime = i * binSize;
+    const endTime = (i + 1) * binSize;
+    const startMin = Math.floor(startTime / 60);
+    const startSec = Math.floor(startTime % 60);
+    const endMin = Math.floor(endTime / 60);
+    const endSec = Math.floor(endTime % 60);
+    
+    // この範囲の操作をカウント
+    const pause = allOperations.filter(op => 
+      op.type === 'pause' && op.time >= startTime && op.time < endTime
+    ).length;
+    const seek = allOperations.filter(op => 
+      op.type === 'seek' && op.time >= startTime && op.time < endTime
+    ).length;
+    
+    newData.push({
+      label: `${startMin}:${startSec.toString().padStart(2, '0')}-${endMin}:${endSec.toString().padStart(2, '0')}`,
+      time: startTime,
+      pause: pause,
+      seek: seek
+    });
+  }
+  
+  return newData;
+}
 
 // video_time=0のデータポイントを非表示にするトグル関数
 function toggleVideoTime0Filter() {
@@ -1887,6 +1977,9 @@ function initializeAnalyticsCharts() {
   const videoOperationsCtx = document.getElementById('videoOperationsChart');
   if (videoOperationsCtx) {
     const operationsData = <%= raw @video_operations_map_data.to_json %>;
+    
+    // 元データを保存（分割数変更用）
+    originalOperationsMapData = JSON.parse(JSON.stringify(operationsData));
     
     chartInstances.videoOperations = new Chart(videoOperationsCtx, {
       type: 'bar',
