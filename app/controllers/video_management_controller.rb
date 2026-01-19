@@ -563,16 +563,16 @@ class VideoManagementController < ApplicationController
 
     # 全体の動画操作マップ
     operation_buckets = video_operations.group_by { |e| (e.video_time / 10).floor * 10 } # 10秒単位
-    
+
     # 回答イベントも追加で集計
     response_events = all_events.select { |e|
-      e.event_type && 
+      e.event_type &&
       e.video_time &&
       e.video_time > 0 &&
       (e.event_type == "response_quick" || e.event_type == "response_normal" || e.event_type == "response_slow")
     }
     response_buckets = response_events.group_by { |e| (e.video_time / 10).floor * 10 }
-    
+
     @video_operations_map_data = operation_buckets.map do |time, events|
       pause_count = events.count { |e| e.event_type&.include?("pause") }
       seek_count = events.count { |e| e.event_type&.include?("seek") || e.event_type&.include?("skip") }
@@ -588,7 +588,7 @@ class VideoManagementController < ApplicationController
         total: events.count + response_count
       }
     end
-    
+
     # 操作がない時間帯でも回答がある場合は追加
     response_buckets.each do |time, events|
       unless @video_operations_map_data.any? { |d| d[:time] == time }
@@ -604,7 +604,7 @@ class VideoManagementController < ApplicationController
         }
       end
     end
-    
+
     @video_operations_map_data.sort_by! { |d| d[:time] }
 
     # ユーザー別の動画操作マップ
