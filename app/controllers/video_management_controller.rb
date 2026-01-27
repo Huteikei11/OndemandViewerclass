@@ -397,6 +397,29 @@ class VideoManagementController < ApplicationController
           type: e.event_type,
           description: e.description
         }
+      },
+      response_markers: {
+        quick: events.where(event_type: "response_quick").map { |e|
+          {
+            time: e.session_elapsed,
+            video_time: e.video_time,
+            description: e.description
+          }
+        },
+        normal: events.where(event_type: "response_normal").map { |e|
+          {
+            time: e.session_elapsed,
+            video_time: e.video_time,
+            description: e.description
+          }
+        },
+        slow: events.where(event_type: "response_slow").map { |e|
+          {
+            time: e.session_elapsed,
+            video_time: e.video_time,
+            description: e.description
+          }
+        }
       }
     }
   end

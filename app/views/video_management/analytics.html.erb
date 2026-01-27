@@ -775,6 +775,25 @@
         type: i.type
       }));
       
+      // 反応速度マーカー（ピンク系の色）
+      const quickResponseData = (data.response_markers?.quick || []).map(r => ({
+        x: r.time,
+        y: r.video_time || 0,
+        description: r.description
+      }));
+      
+      const normalResponseData = (data.response_markers?.normal || []).map(r => ({
+        x: r.time,
+        y: r.video_time || 0,
+        description: r.description
+      }));
+      
+      const slowResponseData = (data.response_markers?.slow || []).map(r => ({
+        x: r.time,
+        y: r.video_time || 0,
+        description: r.description
+      }));
+      
       const datasets = [
         // 凡例用のダミーデータセット（最初に配置して凡例の順序を制御）
         { label: '集中度: 0-25 (低)', data: [], borderColor: '#dc3545', backgroundColor: '#dc3545', pointRadius: 5 },
@@ -791,7 +810,8 @@
           pointRadius: 4,
           pointHoverRadius: 7,
           pointBackgroundColor: timelineData.map(d => d.color),
-          pointBorderColor: timelineData.map(d => d.color)
+          pointBorderColor: timelineData.map(d => d.color),
+          order: 3
         },
         {
           label: 'スキップ/シーク',
@@ -801,7 +821,8 @@
           pointRadius: 10,
           pointHoverRadius: 13,
           pointStyle: 'triangle',
-          showLine: false
+          showLine: false,
+          order: 2
         },
         {
           label: '一時停止',
@@ -811,7 +832,8 @@
           pointRadius: 10,
           pointHoverRadius: 13,
           pointStyle: 'rect',
-          showLine: false
+          showLine: false,
+          order: 2
         },
         {
           label: 'その他の操作',
@@ -821,7 +843,8 @@
           pointRadius: 9,
           pointHoverRadius: 12,
           pointStyle: 'circle',
-          showLine: false
+          showLine: false,
+          order: 2
         },
         {
           label: 'ユーザー操作',
@@ -831,7 +854,41 @@
           pointRadius: 9,
           pointHoverRadius: 12,
           pointStyle: 'star',
-          showLine: false
+          showLine: false,
+          order: 1
+        },
+        {
+          label: '素早い回答',
+          data: quickResponseData,
+          borderColor: '#ff65B2',
+          backgroundColor: '#ff65B2',
+          pointRadius: 11,
+          pointHoverRadius: 14,
+          pointStyle: 'triangle',
+          showLine: false,
+          order: 0
+        },
+        {
+          label: '通常の回答',
+          data: normalResponseData,
+          borderColor: '#ff007F',
+          backgroundColor: '#ff007F',
+          pointRadius: 11,
+          pointHoverRadius: 14,
+          pointStyle: 'circle',
+          showLine: false,
+          order: 0
+        },
+        {
+          label: '遅い回答',
+          data: slowResponseData,
+          borderColor: '#98004c',
+          backgroundColor: '#98004c',
+          pointRadius: 11,
+          pointHoverRadius: 14,
+          pointStyle: 'rectRot',
+          showLine: false,
+          order: 0
         }
       ];
       
@@ -868,8 +925,7 @@
                 const seconds = Math.floor(value % 60);
                 return `${minutes}:${seconds.toString().padStart(2, '0')}`;
               }
-            },
-            beginAtZero: true
+            }
           }
         },
         plugins: {
@@ -890,27 +946,33 @@
             pan: {
               enabled: true,
               mode: 'xy',
-            },
-            limits: {
-              y: {min: 0, max: 100}
             }
           },
           tooltip: {
             callbacks: {
               label: function(context) {
                 const rawData = context.raw;
-                
-                // イベントマーカーの場合（datasetIndexが5以上）
-                if (context.datasetIndex >= 5) {
-                  const videoMinutes = Math.floor(context.parsed.y / 60);
-                  const videoSeconds = Math.floor(context.parsed.y % 60);
-                  return `${rawData.description} | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}`;
-                }
-                
-                // 通常のタイムラインポイント
                 const videoMinutes = Math.floor(context.parsed.y / 60);
                 const videoSeconds = Math.floor(context.parsed.y % 60);
-                return `集中度: ${rawData.score.toFixed(1)}点 | 動画: ${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}`;
+                const videoTimeStr = `${videoMinutes}:${videoSeconds.toString().padStart(2, '0')}`;
+                
+                // 反応速度マーカーの場合
+                if (context.dataset.label.includes('回答')) {
+                  return `${context.dataset.label} | 動画: ${videoTimeStr}${rawData.description ? ' - ' + rawData.description : ''}`;
+                }
+                
+                // 動画操作マーカーの場合
+                if (context.datasetIndex >= 5 && context.datasetIndex <= 7) {
+                  return `${rawData.description || context.dataset.label} | 動画: ${videoTimeStr}`;
+                }
+                
+                // ユーザー操作の場合
+                if (context.dataset.label === 'ユーザー操作') {
+                  return `${rawData.description || rawData.type} | 動画: ${videoTimeStr}`;
+                }
+                
+                // 通常のタイムラインポイント（集中度）
+                return `集中度: ${rawData.score.toFixed(1)}点 | 動画: ${videoTimeStr}`;
               },
               title: function(context) {
                 const minutes = Math.floor(context[0].parsed.x / 60);
@@ -924,6 +986,12 @@
     });
     
     console.log('グラフ作成完了:', sessionDetailChart);
+    
+    // タイムラインのホバー時の視覚的フィードバック
+    sessionDetailChart.options.onHover = function(event, activeElements) {
+      // カーソルスタイルを変更
+      event.native.target.style.cursor = activeElements.length > 0 ? 'pointer' : 'default';
+    };
     
     // ダブルクリックでズームリセット
     ctx.ondblclick = function() {
