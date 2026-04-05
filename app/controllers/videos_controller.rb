@@ -17,6 +17,36 @@ class VideosController < ApplicationController
     @questions = @video.questions.order(:time_position)
     @user_responses = current_user&.user_responses&.joins(:question)&.where(questions: { video_id: @video.id }) || []
 
+    # 1. 最後に実際に動画を見たセッション（last_video_time > 0）を優先的に取得
+    resumable_sessions = current_user.learning_sessions
+      .where(video_id: @video.id)
+      .where("last_video_time > 0")  # 実際に視聴したセッション
+      .order(session_start_time: :desc)
+
+    @resume_session = resumable_sessions.first
+
+    # 2. もし resumable session がなければ、最新のセッションを取得
+    @resume_session ||= current_user.learning_sessions
+      .where(video_id: @video.id)
+      .order(session_start_time: :desc)
+      .first
+
+    # JavaScript側で復元するために、最新セッション情報をJSON化して渡す
+    @latest_session_json = if @resume_session
+      @resume_session.to_json(only: [ :id, :last_video_time, :last_session_elapsed ], methods: [ :formatted_resume_time, :can_resume? ])
+    else
+      {}.to_json
+    end
+
+    Rails.logger.info "[再開機能] コントローラー実行 - ユーザー: #{current_user.id}, 動画: #{@video.id}"
+    Rails.logger.info "[再開機能] Resumable Sessions Count: #{resumable_sessions.count}"
+    Rails.logger.info "[再開機能] @resume_session: #{@resume_session.present?}"
+    if @resume_session
+      Rails.logger.info "[再開機能] セッションID: #{@resume_session.id}"
+      Rails.logger.info "[再開機能] last_video_time: #{@resume_session.last_video_time}"
+      Rails.logger.info "[再開機能] can_resume?: #{@resume_session.can_resume?}"
+    end
+
     # Render環境でのファイル存在チェック
     if Rails.env.production? && @video.video_file.attached?
       file_path = ActiveStorage::Blob.service.path_for(@video.video_file.key)

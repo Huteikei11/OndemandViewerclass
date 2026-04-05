@@ -152,13 +152,20 @@ class VideoManagementController < ApplicationController
       session_info = session_data["sessionInfo"]
       timestamp_log = session_data["timestampLog"]
 
-      learning_session = LearningSession.find_or_create_by(
-        user: current_user,
-        video: @video,
-        session_start_time: Time.at(session_info["startTime"] / 1000)
-      ) do |ls|
-        ls.session_data = session_info
-        ls.total_events = 0
+      # セッションIDが提供されている場合は、既存セッションを使用
+      if params[:session_id].present?
+        learning_session = LearningSession.find(params[:session_id])
+        Rails.logger.info "既存セッションを使用: #{learning_session.id}"
+      else
+        # セッションIDが提供されていない場合は、find_or_create_byで新規作成
+        learning_session = LearningSession.find_or_create_by(
+          user: current_user,
+          video: @video,
+          session_start_time: Time.at(session_info["startTime"] / 1000)
+        ) do |ls|
+          ls.session_data = session_info
+          ls.total_events = 0
+        end
       end
 
       # セッション終了時刻と最終スコアを更新
@@ -167,12 +174,34 @@ class VideoManagementController < ApplicationController
         updated_session_data = learning_session.session_data || {}
         updated_session_data["last_video_position"] = session_info["last_video_position"] if session_info["last_video_position"]
 
+        # 最後のイベントから動画時刻を取得
+        last_video_time = 0.0
+        last_session_elapsed = 0.0
+        if timestamp_log.any?
+          last_event = timestamp_log.last
+          last_video_time = last_event["videoTime"].to_f
+          last_session_elapsed = last_event["sessionElapsed"].to_f
+        end
+
         learning_session.update!(
           session_end_time: Time.at(session_info["endTime"] / 1000),
           final_score: session_data["finalScore"],
           total_events: timestamp_log.length,
-          session_data: updated_session_data
+          session_data: updated_session_data,
+          last_video_time: last_video_time,          # 再開機能のため、完了後も保存
+          last_session_elapsed: last_session_elapsed
         )
+      else
+        # セッションがまだ進行中の場合、最後の動画時刻と経過時間を更新
+        if timestamp_log.any?
+          last_event = timestamp_log.last
+          learning_session.update!(
+            last_video_time: last_event["videoTime"].to_f,
+            last_session_elapsed: last_event["sessionElapsed"].to_f,
+            is_active: true,
+            total_events: timestamp_log.length
+          )
+        end
       end
 
       # 効率的なバッチ処理で重複チェック

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_12_25_163141) do
+ActiveRecord::Schema[8.0].define(version: 2026_04_01_000000) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.string "name", null: false
     t.string "record_type", null: false
@@ -49,6 +49,12 @@ ActiveRecord::Schema[8.0].define(version: 2025_12_25_163141) do
     t.text "session_data"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "is_active", default: false, null: false
+    t.float "last_video_time", default: 0.0, null: false
+    t.float "last_session_elapsed", default: 0.0, null: false
+    t.datetime "paused_at"
+    t.index ["user_id", "is_active"], name: "index_learning_sessions_on_user_id_and_is_active"
+    t.index ["user_id", "video_id", "is_active"], name: "index_learning_sessions_on_user_id_and_video_id_and_is_active"
     t.index ["user_id"], name: "index_learning_sessions_on_user_id"
     t.index ["video_id"], name: "index_learning_sessions_on_video_id"
   end

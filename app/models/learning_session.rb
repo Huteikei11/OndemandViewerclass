@@ -3,6 +3,22 @@ class LearningSession < ApplicationRecord
   belongs_to :video
   has_many :timestamp_events, dependent: :destroy
 
+  # スコープ
+  scope :active, -> { where(is_active: true) }
+  scope :inactive, -> { where(is_active: false) }
+
+  # ユーザーが特定の動画で進行中のセッションを取得
+  scope :active_for, ->(user_id, video_id) do
+    where(user_id: user_id, video_id: video_id, is_active: true)
+  end
+
+  # ユーザーが特定の動画で最後に視聴したセッション（進行中でなくても）を取得
+  scope :last_session_for, ->(user_id, video_id) do
+    where(user_id: user_id, video_id: video_id)
+      .order(session_start_time: :desc)
+      .limit(1)
+  end
+
   # セッションに関連する回答を取得するための関連付け
   # user_responsesはlearning_session_idを持たないため、明示的にスコープで定義
   def associated_user_responses
@@ -86,5 +102,50 @@ class LearningSession < ApplicationRecord
 
     return nil if scores.empty?
     scores.sum / scores.length
+  end
+
+  # ====== 再開機能関連メソッド ======
+
+  # セッションをアクティブ化（再生開始）
+  def activate!
+    update(is_active: true, paused_at: nil)
+  end
+
+  # セッションを非アクティブ化（一時停止）
+  def deactivate!(video_time = nil, session_elapsed = nil)
+    update(
+      is_active: false,
+      last_video_time: video_time || last_video_time,
+      last_session_elapsed: session_elapsed || last_session_elapsed,
+      paused_at: Time.current
+    )
+  end
+
+  # セッションが再開可能か判定（再生位置があるか）
+  def can_resume?
+    last_video_time > 0
+  end
+
+  # 再開時刻をフォーマット（MM:SS形式）
+  def formatted_resume_time
+    minutes = (last_video_time / 60).floor
+    seconds = (last_video_time % 60).floor
+    "#{minutes.to_s.rjust(2, '0')}:#{seconds.to_s.rjust(2, '0')}"
+  end
+
+  # セッション開始からの経過時間をフォーマット（秒）
+  def formatted_resume_session_elapsed
+    (last_session_elapsed).floor
+  end
+
+  # 再開情報を取得
+  def resume_info
+    {
+      video_time: last_video_time,
+      session_elapsed: last_session_elapsed,
+      formatted_time: formatted_resume_time,
+      paused_at: paused_at,
+      is_active: is_active
+    }
   end
 end

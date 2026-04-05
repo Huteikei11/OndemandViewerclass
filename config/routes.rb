@@ -21,6 +21,22 @@ Rails.application.routes.draw do
   get "viewing_history/export_detail/:id", to: "viewing_history#export_session_detail", as: "viewing_history_export_detail"
   get "viewing_history/export_events/:id", to: "viewing_history#export_session_events", as: "viewing_history_export_events"
 
+  # API routes for session management
+  namespace :api do
+    resources :sessions, only: [] do
+      member do
+        post :activate
+        post :deactivate
+      end
+    end
+
+    resources :videos, only: [] do
+      member do
+        post :new_session
+      end
+    end
+  end
+
   # Video resources
   resources :videos do
     # Nested resources for questions

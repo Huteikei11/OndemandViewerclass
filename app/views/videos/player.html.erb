@@ -279,10 +279,44 @@
         </div>
       </div>
       
-      <video id="video-player" controls>
+      <video id="video-player" controls
+             data-session-id="<%= @resume_session&.id %>"
+             data-resume-time="<%= @resume_session&.last_video_time || 0 %>"
+             data-can-resume="<%= @resume_session&.can_resume? || false %>"
+             data-latest-session="<%= @latest_session_json %>">
         <source src="<%= url_for(@video.video_file) %>" type="<%= @video.video_file.content_type %>">
         Your browser does not support the video tag.
       </video>
+      
+      <!-- デバッグ情報（開発環境用） -->
+      <% if Rails.env.development? %>
+        <script>
+          console.log('[ビュー] @resume_session 状態:', {
+            present: <%= @resume_session.present?.to_s %>,
+            id: <%= @resume_session&.id || 'null' %>,
+            last_video_time: <%= @resume_session&.last_video_time || 0 %>,
+            can_resume: <%= @resume_session&.can_resume?.to_s %>
+          });
+        </script>
+      <% end %>
+      
+      <!-- 再開情報パネル -->
+      <% if @resume_session && @resume_session.last_video_time > 0 %>
+        <div class="resume-panel" id="resume-panel"
+             data-session-id="<%= @resume_session.id %>"
+             data-resume-time="<%= @resume_session.last_video_time %>"
+             data-formatted-time="<%= @resume_session.formatted_resume_time %>">
+          <div class="resume-content">
+            <div class="resume-icon">▶</div>
+            <div class="resume-text">
+              <div class="resume-label">前回から再開できます</div>
+              <div class="resume-time"><%= @resume_session.formatted_resume_time %>から再開</div>
+            </div>
+            <button class="btn btn-sm btn-primary" id="resume-button">再開する</button>
+            <button class="btn btn-sm btn-outline-secondary" id="new-start-button">最初から見る</button>
+          </div>
+        </div>
+      <% end %>
     <% else %>
       <div class="no-video">
         <p>動画が利用できません</p>
@@ -1117,6 +1151,83 @@
   .mt-2 {
     margin-top: .5rem;
   }
+
+  /* 再開情報パネル */
+  .resume-panel {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 16px;
+    margin: 8px 0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    animation: slideIn 0.3s ease-out;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .resume-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .resume-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+
+  .resume-text {
+    flex-grow: 1;
+  }
+
+  .resume-label {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+
+  .resume-time {
+    font-size: 12px;
+    opacity: 0.9;
+  }
+
+  .resume-panel .btn-primary {
+    background-color: white;
+    color: #667eea;
+    border: none;
+    font-weight: 600;
+    padding: 6px 14px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .resume-panel .btn-primary:hover {
+    background-color: #f0f0f0;
+  }
+
+  .resume-panel .btn-outline-secondary {
+    border: 1px solid white;
+    color: white;
+    background: transparent;
+    padding: 5px 12px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .resume-panel .btn-outline-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+
 </style>
 
 <!-- MediaPipe Face Mesh ライブラリ -->
@@ -3852,7 +3963,14 @@ function initializeVideoPlayer() {
         return;
       }
       
-      const payload = JSON.stringify({ session_data: JSON.stringify(data) });
+      // 再開セッションのIDを取得（あれば）
+      const videoPlayer = document.getElementById('video-player');
+      const resumeSessionId = videoPlayer?.dataset?.sessionId;
+      
+      const payload = JSON.stringify({ 
+        session_data: JSON.stringify(data),
+        session_id: resumeSessionId || null
+      });
       console.log('送信ペイロード長:', payload.length);
       
       if (useBeacon && navigator.sendBeacon) {
@@ -3863,6 +3981,11 @@ function initializeVideoPlayer() {
         // CSRF token の追加
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
         formData.append('authenticity_token', csrfToken);
+        
+        // セッションIDがあれば追加
+        if (resumeSessionId) {
+          formData.append('session_id', resumeSessionId);
+        }
         
         const beaconUrl = `/videos/${videoId}/management/save_session`;
         console.log('sendBeacon URL:', beaconUrl);
@@ -3880,7 +4003,13 @@ function initializeVideoPlayer() {
       console.log(`送信先URL: /videos/${videoId}/management/save_session`);
       console.log('送信するデータ:', data);
       
-      fetch(`/videos/${videoId}/management/save_session`, {
+      // セッションIDがあればクエリパラメータに追加
+      let fetchUrl = `/videos/${videoId}/management/save_session`;
+      if (resumeSessionId) {
+        fetchUrl += `?session_id=${resumeSessionId}`;
+      }
+      
+      fetch(fetchUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -3931,6 +4060,53 @@ function initializeVideoPlayer() {
     initializeVideoTracking() {
       this.videoElement = document.getElementById('video-player');
       if (!this.videoElement) return;
+      
+      // ページロード時に localStorage から保存されたセッションIDを確認
+      const pathParts = window.location.pathname.split('/');
+      const videoId = pathParts[pathParts.length - 2];
+      const sessionKey = `active_session_${videoId}`;
+      const savedSessionId = localStorage.getItem(sessionKey);
+      
+      let isRestoredSession = false; // セッション復元フラグ
+      let previousSessionElapsed = 0; // 前回のセッション経過時間
+      
+      console.log('[セッション復元] localStorage確認:', {
+        videoId: videoId,
+        sessionKey: sessionKey,
+        savedSessionId: savedSessionId,
+        allLocalStorageKeys: Object.keys(localStorage),
+      });
+      
+      if (savedSessionId) {
+        // localStorage に保存されたセッションIDがあれば使用
+        console.log('[再開機能] localStorage から保存済みセッションIDを復元:', savedSessionId);
+        this.videoElement.dataset.sessionId = savedSessionId;
+        isRestoredSession = true;
+        
+        // 前回のセッション経過時間を取得
+        const lastSessionDataStr = localStorage.getItem('lastTimestampLog');
+        if (lastSessionDataStr) {
+          try {
+            const lastSessionData = JSON.parse(lastSessionDataStr);
+            if (lastSessionData.sessionEndTime && lastSessionData.sessionStartTime) {
+              previousSessionElapsed = (lastSessionData.sessionEndTime - lastSessionData.sessionStartTime) / 1000;
+              // 【修正】sessionStartTime を「今」に設定（ページロード時点を起点）
+              // 前回のセッション経過時間は別途記録して使う
+              this.sessionStartTime = Date.now();
+              
+              console.log('[セッション復元] セッション時刻をリセット:', {
+                previousSessionElapsed: previousSessionElapsed.toFixed(1) + '秒',
+                newSessionStartTime: new Date(this.sessionStartTime),
+                currentTime: new Date(Date.now())
+              });
+            }
+          } catch (e) {
+            console.warn('[セッション復元エラー] lastTimestampLog解析失敗:', e);
+          }
+        }
+      } else {
+        console.log('[再開機能] 新規セッションを開始します。ビデオAPI返却のsessionId:', this.videoElement.dataset.sessionId);
+      }
       
       // 動画イベントリスナーを設定
       this.videoElement.addEventListener('play', () => {
@@ -3989,8 +4165,21 @@ function initializeVideoPlayer() {
         }
       }, 1000);
       
-      // セッション開始を記録
-      this.addTimestamp('session_start', '学習セッション開始');
+      // セッション開始イベントを記録
+      if (!isRestoredSession) {
+        // 新規セッション: session_start を記録
+        this.addTimestamp('session_start', '学習セッション開始');
+        console.log('[セッション管理] session_start イベントを記録しました（新規セッション）');
+      } else {
+        // 復元セッション: session_resumed を記録（タイムスタンプカウントは継続）
+        this.addTimestamp('session_resumed', '学習セッション再開', {
+          prevSessionElapsedTime: previousSessionElapsed.toFixed(1),
+          resumedAt: new Date(this.sessionStartTime).toISOString()
+        });
+        console.log('[セッション管理] session_resumed イベントを記録しました（既存セッション復元）', {
+          previousSessionTime: previousSessionElapsed
+        });
+      }
     }
     
     initializeTimestampPanel() {
@@ -4253,12 +4442,24 @@ function initializeVideoPlayer() {
         const pathParts = window.location.pathname.split('/');
         const videoId = pathParts[pathParts.length - 2];
         
+        // 再開セッションのIDを取得（あれば）
+        const videoPlayer = document.getElementById('video-player');
+        const resumeSessionId = videoPlayer?.dataset?.sessionId;
+        
+        // セッションIDがあればクエリパラメータに追加
+        let syncUrl = `/videos/${videoId}/management/save_session`;
+        if (resumeSessionId) {
+          syncUrl += `?session_id=${resumeSessionId}`;
+        }
+        
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `/videos/${videoId}/management/save_session`, false); // 同期
+        xhr.open('POST', syncUrl, false); // 同期
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.setRequestHeader('X-CSRF-Token', document.querySelector('meta[name="csrf-token"]').content);
         
-        xhr.send(JSON.stringify({ session_data: JSON.stringify(data) }));
+        xhr.send(JSON.stringify({ 
+          session_data: JSON.stringify(data)
+        }));
         
         if (xhr.status === 200) {
           console.log('セッションデータを同期保存しました');
@@ -4278,6 +4479,9 @@ function initializeVideoPlayer() {
     // ページ読み込み時に未保存データをチェック
     checkPendingSessionData() {
       try {
+        // 【修正】sessionStartTime の上書きは行わない
+        // initializeVideoTracking() または コンストラクタ の初期化に任せる
+        
         const pendingData = localStorage.getItem('pendingSessionData');
         if (pendingData) {
           const data = JSON.parse(pendingData);
@@ -5791,4 +5995,279 @@ document.addEventListener('turbo:load', function() {
     setTimeout(initializeVideoPlayer, 50);
   }
 });
+
+// ====== 再開機能イベントハンドラー ======
+document.addEventListener('DOMContentLoaded', function() {
+  setupResumeHandlers();
+  startSessionTracking();
+});
+
+document.addEventListener('turbo:render', function() {
+  setupResumeHandlers();
+  startSessionTracking();
+});
+
+// セッション追跡と保存
+function startSessionTracking() {
+  const videoPlayer = document.getElementById('video-player');
+  if (!videoPlayer) {
+    console.log('[セッション記録] videoPlayer 要素が見つかりません');
+    return;
+  }
+
+  console.log('[セッション記録] 開始');
+  
+  // セッション情報を取得する関数（resumePanel が更新される可能性があるため）
+  const getSessionId = () => {
+    const resumePanel = document.getElementById('resume-panel');
+    return resumePanel ? resumePanel.dataset.sessionId : null;
+  };
+
+  const sessionStartTime = new Date();
+  let lastSaveTime = Date.now();
+  const savingInterval = 5000; // 5秒ごとに保存
+
+  videoPlayer.addEventListener('timeupdate', function() {
+    const currentTime = Date.now();
+    
+    // 5秒ごとにセッション情報を保存
+    if (currentTime - lastSaveTime >= savingInterval) {
+      const videoTime = videoPlayer.currentTime;
+      const sessionElapsed = Math.floor((currentTime - sessionStartTime) / 1000);
+      const sessionId = getSessionId();
+      
+      if (sessionId && videoTime > 0) {
+        console.log(`[セッション記録] 保存中 - 動画時刻: ${videoTime.toFixed(1)}秒, セッションID: ${sessionId}`);
+        
+        // 既存の save_session_data システムから last_video_time が更新される
+        // ここでは単にログのみ
+      }
+      
+      lastSaveTime = currentTime;
+    }
+  });
+
+  // ページ離脱時にセッションを一時停止
+  window.addEventListener('beforeunload', function() {
+    const videoTime = videoPlayer.currentTime;
+    const sessionElapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+    const sessionId = getSessionId();
+    
+    console.log('[ページ離脱] セッション保存:', { videoTime, sessionElapsed, sessionId });
+    
+    // keep-aliveを使って非同期でセッションを保存
+    if (navigator.sendBeacon && sessionId && videoTime > 0) {
+      navigator.sendBeacon(
+        `/api/sessions/${sessionId}/deactivate`,
+        JSON.stringify({
+          video_time: videoTime,
+          session_elapsed: sessionElapsed
+        })
+      );
+    }
+  });
+}
+
+function setupResumeHandlers() {
+  const videoPlayer = document.getElementById('video-player');
+  const resumeButton = document.getElementById('resume-button');
+  const newStartButton = document.getElementById('new-start-button');
+  let resumePanel = document.getElementById('resume-panel');
+  
+  console.log('[再開機能] setupResumeHandlers 呼び出し', {
+    resumeButton: !!resumeButton,
+    newStartButton: !!newStartButton,
+    resumePanel: !!resumePanel,
+    videoPlayer: !!videoPlayer
+  });
+  
+  // resume_panel がない場合、video 要素の data属性から復元
+  if (!resumePanel && videoPlayer) {
+    const latestSessionJson = videoPlayer.dataset.latestSession || '{}';
+    const sessionId = videoPlayer.dataset.sessionId;
+    const resumeTime = parseFloat(videoPlayer.dataset.resumeTime || 0);
+    const canResume = videoPlayer.dataset.canResume === 'true';
+    
+    console.log('[再開機能] video 要素から復元情報を取得:', {
+      latestSessionJson: latestSessionJson,
+      sessionId: sessionId,
+      resumeTime: resumeTime,
+      canResume: canResume
+    });
+    
+    // 前回のセッションで動画を視聴していた場合、resume panel を動的に作成
+    if (sessionId && resumeTime > 0 && canResume) {
+      try {
+        const sessionData = JSON.parse(latestSessionJson);
+        console.log('[再開機能] セッションデータを解析:', sessionData);
+        
+        // resume panel を動的作成
+        const resumePanelDiv = document.createElement('div');
+        resumePanelDiv.className = 'resume-panel';
+        resumePanelDiv.id = 'resume-panel';
+        resumePanelDiv.dataset.sessionId = sessionId;
+        resumePanelDiv.dataset.resumeTime = resumeTime;
+        resumePanelDiv.dataset.formattedTime = sessionData.formatted_resume_time;
+        
+        const minutes = Math.floor(resumeTime / 60);
+        const seconds = Math.floor(resumeTime % 60);
+        const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        
+        resumePanelDiv.innerHTML = `
+          <div class="resume-content">
+            <div class="resume-icon">▶</div>
+            <div class="resume-text">
+              <div class="resume-label">前回から再開できます</div>
+              <div class="resume-time">${formattedTime}から再開</div>
+            </div>
+            <button class="btn btn-sm btn-primary" id="resume-button">再開する</button>
+            <button class="btn btn-sm btn-outline-secondary" id="new-start-button">最初から見る</button>
+          </div>
+        `;
+        
+        // video要素の直後に挿入
+        videoPlayer.parentNode.insertBefore(resumePanelDiv, videoPlayer.nextSibling);
+        resumePanel = resumePanelDiv;
+        
+        console.log('[再開機能] 動的に resume panel を作成しました');
+      } catch (e) {
+        console.warn('[再開機能] セッションデータ解析に失敗:', e);
+      }
+    }
+  }
+  
+  if (resumePanel) {
+    console.log('[再開機能] 再開パネル検出:', {
+      sessionId: resumePanel.dataset.sessionId,
+      resumeTime: resumePanel.dataset.resumeTime,
+      formattedTime: resumePanel.dataset.formattedTime
+    });
+  }
+  
+  if (resumeButton) {
+    resumeButton.addEventListener('click', function() {
+      if (videoPlayer && resumePanel) {
+        const resumeTime = parseFloat(resumePanel.dataset.resumeTime || 0);
+        const sessionId = resumePanel.dataset.sessionId;
+        
+        console.log('[再開機能] 再開ボタンクリック:', { resumeTime, sessionId });
+        
+        // 動画を再開位置に設定
+        setTimeout(function() {
+          videoPlayer.currentTime = resumeTime;
+          videoPlayer.play();
+          
+          console.log('[再開機能] 動画を再開:', videoPlayer.currentTime);
+          
+          // セッションIDを video要素の data-session-id に明示的にセット
+          // （ページリロード時に同じセッションで保存できるように）
+          videoPlayer.dataset.sessionId = sessionId;
+          console.log('[再開機能] video要素のsessionIdを更新:', sessionId);
+          
+          // セッションをアクティブ化するAPIリクエスト
+          activateSession(sessionId);
+        }, 100);
+      }
+    });
+  }
+  
+  if (newStartButton) {
+    newStartButton.addEventListener('click', function() {
+      if (videoPlayer) {
+        console.log('[再開機能] 最初から見るボタンクリック');
+        
+        // localStorage から保存されたセッションIDをクリア
+        const pathParts = window.location.pathname.split('/');
+        const videoId = pathParts[2];
+        const sessionKey = `active_session_${videoId}`;
+        localStorage.removeItem(sessionKey);
+        console.log('[再開機能] localStorage のセッションIDをクリア:', sessionKey);
+        
+        // 前のセッションを終了し、新规セッションを開始
+        resetSession();
+        
+        setTimeout(function() {
+          videoPlayer.currentTime = 0;
+          videoPlayer.play();
+          console.log('[再開機能] 最初から動画を再生');
+        }, 100);
+      }
+    });
+  }
+}
+
+// セッションをアクティブ化（バックエンド）
+function activateSession(sessionId) {
+  if (!sessionId) {
+    console.log('[セッション API] sessionId がありません');
+    return;
+  }
+  
+  // videoId との紐付けでセッションIDを記録
+  const pathParts = window.location.pathname.split('/');
+  const videoId = pathParts[2];
+  const sessionKey = `active_session_${videoId}`;
+  
+  fetch(`/api/sessions/${sessionId}/activate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log('[セッション API] アクティブ化成功:', data);
+    // セッションIDをlocalStorageに記録（ページリロード後も同じセッションを使用するため）
+    localStorage.setItem(sessionKey, sessionId);
+    console.log('[セッション API] localStorage にセッションID を記録:', sessionKey, sessionId);
+  })
+  .catch(error => console.error('[セッション API エラー]', error));
+}
+
+// セッションをリセット（新規セッション開始）
+function resetSession() {
+  const pathParts = window.location.pathname.split('/');
+  const videoId = pathParts[2]; // /videos/{id}/player
+  
+  if (!videoId) {
+    console.log('[セッション API] videoId が取得できません');
+    return;
+  }
+  
+  console.log('[セッション API] 新規セッション開始:', { videoId });
+  
+  fetch(`/api/videos/${videoId}/new-session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log('[セッション API] 新規作成成功:', data);
+    
+    // 新規セッションIDをデータ属性に更新
+    const resumePanel = document.getElementById('resume-panel');
+    const videoPlayer = document.getElementById('video-player');
+    
+    if (videoPlayer && data.session_id) {
+      videoPlayer.dataset.sessionId = data.session_id;
+      console.log('[セッション API] video要素のsessionIdを新しいセッションで更新:', data.session_id);
+      
+      // localStorage に新しいセッションIDを記録
+      const sessionKey = `active_session_${videoId}`;
+      localStorage.setItem(sessionKey, data.session_id);
+      console.log('[セッション API] localStorage のセッションIDを更新:', sessionKey, data.session_id);
+    }
+    
+    if (resumePanel) {
+      // セッションを削除して再開パネルを消す
+      resumePanel.style.display = 'none';
+      console.log('[セッション API] 再開パネルを非表示にしました');
+    }
+  })
+  .catch(error => console.error('[セッション API エラー]', error));
+}
 </script>
