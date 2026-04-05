@@ -466,7 +466,9 @@ class VideoManagementController < ApplicationController
       {
         label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')} ID:#{session.id})",
         data: events.map { |e| { x: e.session_elapsed.round(1), y: e.concentration_score, video_time: e.video_time } },
-        session_id: session.id
+        session_id: session.id,
+        user_id: session.user_id,
+        user_email: session.user.email
       }
     end.select { |data| data[:data].any? }
 
