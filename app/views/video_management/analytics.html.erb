@@ -166,6 +166,11 @@
                   ユーザー別操作
                 </button>
               </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="user-classification-tab" data-bs-toggle="tab" data-bs-target="#user-classification" type="button">
+                  ユーザー分類分析
+                </button>
+              </li>
             </ul>
 
             <!-- グラフコンテンツ -->
@@ -311,6 +316,45 @@
                 <p class="text-muted mt-2 text-center">
                   <small>各ユーザーが動画のどの時間で操作を行ったかをセッション別に表示します。</small>
                 </p>
+              </div>
+
+              <!-- 8. ユーザー分類分析 -->
+              <div class="tab-pane fade" id="user-classification" role="tabpanel">
+                <div class="mb-3">
+                  <div class="alert alert-info">
+                    <strong>使い方：</strong>グラフのセッションラインをクリックして、ユーザーをグループに分類してください。
+                    <button class="btn btn-sm btn-warning ms-2" onclick="resetUserClassification()">分類をリセット</button>
+                  </div>
+                  
+                  <!-- グループ分類UI -->
+                  <div class="mb-3">
+                    <label><strong>分類対象グループ:</strong></label>
+                    <div class="btn-group" role="group">
+                      <input type="radio" class="btn-check" name="classificationGroup" id="groupA" value="groupA" checked>
+                      <label class="btn btn-outline-primary" for="groupA">グループA</label>
+                      
+                      <input type="radio" class="btn-check" name="classificationGroup" id="groupB" value="groupB">
+                      <label class="btn btn-outline-success" for="groupB">グループB</label>
+                      
+                      <input type="radio" class="btn-check" name="classificationGroup" id="groupC" value="groupC">
+                      <label class="btn btn-outline-warning" for="groupC">グループC</label>
+                      
+                      <input type="radio" class="btn-check" name="classificationGroup" id="groupD" value="groupD">
+                      <label class="btn btn-outline-danger" for="groupD">グループD</label>
+                    </div>
+                  </div>
+
+                  <!-- グラフ領域 -->
+                  <div class="chart-container" style="position: relative; height: 400px; border: 2px dashed #ccc; padding: 10px; border-radius: 5px;">
+                    <canvas id="userClassificationChart"></canvas>
+                  </div>
+                </div>
+
+                <!-- 分類結果・統計表 -->
+                <div class="mt-4">
+                  <h5>分類結果と統計</h5>
+                  <div id="classificationStats" class="row"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -2408,6 +2452,313 @@ function initializeAnalyticsCharts() {
     };
   }
 }
+
+// ユーザー分類グラフの初期化
+function initializeUserClassificationChart() {
+  if (typeof Chart === 'undefined') {
+    setTimeout(initializeUserClassificationChart, 100);
+    return;
+  }
+  
+  const ctx = document.getElementById('userClassificationChart');
+  if (!ctx) return;
+  
+  // 既存チャートを破棄
+  if (chartInstances.userClassification) {
+    chartInstances.userClassification.destroy();
+  }
+  
+  const scoreTimelineData = <%= raw @score_timeline_data.to_json %>;
+  const responseData = <%= raw @response_data.to_json %>;
+  
+  // ユーザー分類を保持するオブジェクト
+  window.userClassifications = {
+    groupA: [],
+    groupB: [],
+    groupC: [],
+    groupD: []
+  };
+  
+  // ユーザーIDとセッションIDのマッピング
+  window.sessionUserMap = {};
+  scoreTimelineData.forEach(session => {
+    window.sessionUserMap[session.session_id] = {
+      user_id: session.user_id,
+      label: session.label
+    };
+  });
+  
+  // デフォルトカラー定義（グループごと）
+  const groupColors = {
+    groupA: 'rgba(13, 110, 253, 0.6)',   // 青
+    groupB: 'rgba(40, 167, 69, 0.6)',    // 緑
+    groupC: 'rgba(255, 193, 7, 0.6)',    // 黄
+    groupD: 'rgba(220, 53, 69, 0.6)'     // 赤
+  };
+  
+  const lineColor = 'rgba(128, 128, 128, 0.3)'; // グレー（未分類）
+  
+  // グラフ用のデータセットを作成
+  const datasets = [];
+  
+  scoreTimelineData.forEach((session, sessionIndex) => {
+    const sessionData = session.data.map(point => ({
+      x: point.x,
+      y: point.video_time || 0,
+      score: point.y,
+      video_time: point.video_time,
+      color: '#999'
+    }));
+    
+    datasets.push({
+      label: session.label,
+      data: sessionData,
+      borderColor: lineColor,
+      borderWidth: 2,
+      showLine: true,
+      tension: 0,
+      pointRadius: 2,
+      pointHoverRadius: 5,
+      pointBackgroundColor: '#999',
+      pointBorderColor: '#999',
+      order: 2,
+      sessionId: session.session_id,
+      userId: session.user_id,
+      classification: null // 分類状態を保持
+    });
+  });
+  
+  // グラフを作成
+  chartInstances.userClassification = new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          type: 'linear',
+          title: {
+            display: true,
+            text: 'セッション経過時間（秒）'
+          },
+          ticks: {
+            callback: function(value) {
+              const minutes = Math.floor(value / 60);
+              const seconds = Math.floor(value % 60);
+              return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+          }
+        },
+        y: {
+          type: 'linear',
+          title: {
+            display: true,
+            text: '動画再生時間（秒）'
+          },
+          ticks: {
+            callback: function(value) {
+              const minutes = Math.floor(value / 60);
+              const seconds = Math.floor(value % 60);
+              return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top'
+        }
+      }
+    }
+  });
+  
+  // クリックイベントを登録
+  ctx.addEventListener('click', function(event) {
+    const points = chartInstances.userClassification.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+    if (points.length > 0) {
+      classifyUserSession(points[0].datasetIndex);
+    }
+  });
+}
+
+// ユーザーをグループに分類
+function classifyUserSession(datasetIndex) {
+  const selectedGroup = document.querySelector('input[name="classificationGroup"]:checked').value;
+  const dataset = chartInstances.userClassification.data.datasets[datasetIndex];
+  
+  if (!dataset) return;
+  
+  const sessionId = dataset.sessionId;
+  const groupColors = {
+    groupA: 'rgba(13, 110, 253, 0.8)',   // 青
+    groupB: 'rgba(40, 167, 69, 0.8)',    // 緑
+    groupC: 'rgba(255, 193, 7, 0.8)',    // 黄
+    groupD: 'rgba(220, 53, 69, 0.8)'     // 赤
+  };
+  
+  // 前の分類から外す
+  if (dataset.classification) {
+    const oldGroup = dataset.classification;
+    const index = window.userClassifications[oldGroup].indexOf(sessionId);
+    if (index > -1) {
+      window.userClassifications[oldGroup].splice(index, 1);
+    }
+  }
+  
+  // 新しいグループに追加
+  if (!window.userClassifications[selectedGroup].includes(sessionId)) {
+    window.userClassifications[selectedGroup].push(sessionId);
+  }
+  
+  // 分類状態を更新
+  dataset.classification = selectedGroup;
+  dataset.borderColor = groupColors[selectedGroup];
+  dataset.borderWidth = 3;
+  dataset.pointBackgroundColor = groupColors[selectedGroup];
+  dataset.pointBorderColor = groupColors[selectedGroup];
+  dataset.pointRadius = 3;
+  
+  // チャート更新
+  chartInstances.userClassification.update('none');
+  
+  // 統計を表示
+  updateClassificationStats();
+  
+  console.log(`セッション ${sessionId} を ${selectedGroup} に分類しました`);
+}
+
+// 分類結果をリセット
+function resetUserClassification() {
+  if (!confirm('分類をすべてリセットしていいですか？')) {
+    return;
+  }
+  
+  window.userClassifications = {
+    groupA: [],
+    groupB: [],
+    groupC: [],
+    groupD: []
+  };
+  
+  const lineColor = 'rgba(128, 128, 128, 0.3)' ;
+  
+  chartInstances.userClassification.data.datasets.forEach(dataset => {
+    dataset.classification = null;
+    dataset.borderColor = lineColor;
+    dataset.borderWidth = 2;
+    dataset.pointBackgroundColor = '#999';
+    dataset.pointBorderColor = '#999';
+    dataset.pointRadius = 2;
+  });
+  
+  chartInstances.userClassification.update('none');
+  
+  document.getElementById('classificationStats').innerHTML = '';
+}
+
+// 分類ごとの統計を計算・表示
+function updateClassificationStats() {
+  const responseData = <%= raw @response_data.to_json %>;
+  
+  // responseDataが存在しないか空の場合は処理をスキップ
+  if (!responseData || responseData.length === 0) {
+    console.warn('回答データが利用できません', responseData);
+    return;
+  }
+  
+  const statsContainer = document.getElementById('classificationStats');
+  
+  const groupLabels = {
+    groupA: 'グループA',
+    groupB: 'グループB',
+    groupC: 'グループC',
+    groupD: 'グループD'
+  };
+  
+  const groupBgColors = {
+    groupA: '#007bff',
+    groupB: '#28a745',
+    groupC: '#ffc107',
+    groupD: '#dc3545'
+  };
+  
+  let html = '';
+  
+  Object.keys(window.userClassifications).forEach(group => {
+    const sessionIds = window.userClassifications[group];
+    
+    if (sessionIds.length === 0) {
+      html += `
+        <div class="col-md-6 col-lg-3 mb-3">
+          <div class="card" style="border-left: 4px solid ${groupBgColors[group]}">
+            <div class="card-body">
+              <h6 class="card-title">${groupLabels[group]}</h6>
+              <p class="text-muted">分類なし</p>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+    
+    // このグループのセッションに関連する回答データを集計
+    const groupResponses = responseData.filter(r => sessionIds.includes(r.session_id));
+    
+    if (groupResponses.length === 0) {
+      html += `
+        <div class="col-md-6 col-lg-3 mb-3">
+          <div class="card" style="border-left: 4px solid ${groupBgColors[group]}">
+            <div class="card-body">
+              <h6 class="card-title">${groupLabels[group]}</h6>
+              <p class="text-muted">セッション数: ${sessionIds.length}</p>
+              <p class="text-muted">回答なし</p>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+    
+    // 統計計算
+    const totalResponses = groupResponses.length;
+    const correctResponses = groupResponses.filter(r => r.correct).length;
+    const correctRate = ((correctResponses / totalResponses) * 100).toFixed(1);
+    const avgResponseTime = (groupResponses.reduce((sum, r) => sum + (r.response_time || 0), 0) / totalResponses / 1000).toFixed(1);
+    
+    html += `
+      <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card" style="border-left: 4px solid ${groupBgColors[group]}">
+          <div class="card-body">
+            <h6 class="card-title">${groupLabels[group]}</h6>
+            <dl class="small mb-0">
+              <dt>セッション数</dt>
+              <dd>${sessionIds.length}件</dd>
+              <dt>回答数</dt>
+              <dd>${totalResponses}件</dd>
+              <dt>正解数</dt>
+              <dd>${correctResponses}件</dd>
+              <dt>正解率</dt>
+              <dd><strong style="color: ${groupBgColors[group]}">${correctRate}%</strong></dd>
+              <dt>平均回答時間</dt>
+              <dd>${avgResponseTime}秒</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  
+  statsContainer.innerHTML = html || '<p class="text-muted">分類したユーザーがありません</p>';
+}
+
+// Tab切り替え時に初期化
+document.addEventListener('shown.bs.tab', function(e) {
+  if (e.target.id === 'user-classification-tab') {
+    initializeUserClassificationChart();
+  }
+});
 
 // 初回読み込みとTurbo遷移の両方で実行
 // DOMContentLoadedは通常のページ読み込み用

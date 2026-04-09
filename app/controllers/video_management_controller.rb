@@ -687,6 +687,19 @@ class VideoManagementController < ApplicationController
         end.sort_by { |d| d[:x] }
       }
     end.compact
+
+    # 7. 回答データ（分類分析用）
+    @response_data = @video.user_responses.includes(:user, :question, :learning_session)
+                            .map { |response|
+      {
+        session_id: response.learning_session_id,
+        question_id: response.question_id,
+        correct: response.is_correct?,
+        response_time: response.response_time,
+        user_id: response.user_id,
+        user_email: response.user&.email
+      }
+    }
   end
 
   # CSV Export Methods
