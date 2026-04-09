@@ -102,25 +102,36 @@ class VideoManagementController < ApplicationController
     end
 
     chart_type = params[:chart_type] || "score_timeline"
-    @learning_sessions = @video.learning_sessions.includes(:user, :timestamp_events).order(:session_start_time)
+    # ⚠️ メモリ効率化: @learning_sessions は不要時は読み込まない（chart_type で必要な場合のみロード）
 
     case chart_type
     when "score_timeline"
       # チャンク分割でメモリ効率化（512MB 制約対応）
+      # ⚠️ 重要: 全データをメモリロードせず、DBレベルで計数・パジネーション処理
       session_page = (params[:session_page] || 0).to_i
       sessions_per_page = 5  # 1リクエストで5セッション分のみ
 
-      all_sessions = @learning_sessions.select { |s| s.timestamp_events.any? { |e| e.concentration_score } }
-      total_sessions = all_sessions.count
+      # DB側で集中度スコアを持つセッションのみを取得（メモリ効率化）
+      sessions_with_scores = @video.learning_sessions
+        .joins(:timestamp_events)
+        .where.not(timestamp_events: { concentration_score: nil })
+        .distinct
+        .order("learning_sessions.session_start_time DESC")
+
+      total_sessions = sessions_with_scores.count
       total_pages = (total_sessions + sessions_per_page - 1) / sessions_per_page
 
-      # ページネーション
-      start_idx = session_page * sessions_per_page
-      end_idx = start_idx + sessions_per_page
-      paginated_sessions = all_sessions[start_idx...end_idx]
+      # DBレベルでLIMIT/OFFSETを使用してデータを取得（メモリ効率的）
+      offset = session_page * sessions_per_page
+      paginated_sessions = sessions_with_scores
+        .limit(sessions_per_page)
+        .offset(offset)
+        .includes(:user, :timestamp_events)
 
       @score_timeline_data = paginated_sessions.map do |session|
         events = session.timestamp_events.where.not(concentration_score: nil).order(:session_elapsed)
+        next unless events.any?  # データがない場合はスキップ
+
         {
           label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')} ID:#{session.id})",
           data: events.map { |e| { x: e.session_elapsed.round(1), y: e.concentration_score, video_time: e.video_time } },
@@ -128,7 +139,7 @@ class VideoManagementController < ApplicationController
           user_id: session.user_id,
           user_email: session.user.email
         }
-      end.select { |data| data[:data].any? }
+      end.compact
 
       render json: {
         data: @score_timeline_data,
@@ -143,22 +154,32 @@ class VideoManagementController < ApplicationController
 
     when "response_data"
       # チャンク分割でメモリ効率化（512MB 制約対応）
+      # ⚠️ 重要: 全データをメモリロードせず、DBレベルでパジネーション処理
       response_page = (params[:response_page] || 0).to_i
       responses_per_page = 50  # 1リクエストで50件の回答のみ
 
-      all_video_responses = @video.user_responses.includes(:user, :question).to_a
-      total_responses = all_video_responses.count
-      total_pages = (total_responses + responses_per_page - 1) / responses_per_page
+      # DBレベルで全体件数を取得（高速）
+      total_responses = @video.user_responses.count
 
-      # ページネーション
-      start_idx = response_page * responses_per_page
-      end_idx = start_idx + responses_per_page
-      paginated_responses = all_video_responses[start_idx...end_idx]
+      # DBレベルでLIMIT/OFFSETを使用してページ分割（メモリ効率的）
+      offset = response_page * responses_per_page
+      paginated_responses = @video.user_responses
+        .includes(:user, :question)
+        .limit(responses_per_page)
+        .offset(offset)
+        .order("created_at DESC")
+
+      total_pages = (total_responses + responses_per_page - 1) / responses_per_page
 
       Rails.logger.info "[get_chart_data/response_data] ページ: #{response_page}/#{total_pages}, 件数: #{paginated_responses.count}/#{total_responses}"
 
       # セッション情報をハッシュで事前構築（マッチング高速化）
-      sessions_by_user = @learning_sessions.group_by(&:user_id)
+      # ⚠️ 対象ユーザーのセッションのみを読み込み
+      user_ids = paginated_responses.map(&:user_id).uniq  # pluck → map に変更（LazyLoader 回避）
+      sessions_by_user = @video.learning_sessions
+        .where(user_id: user_ids)
+        .to_a  # 明示的にメモリ読み込み（小規模なセッション群のみ）
+        .group_by(&:user_id)
 
       @response_data = paginated_responses.map { |response|
         user_sessions = sessions_by_user[response.user_id] || []
@@ -201,6 +222,7 @@ class VideoManagementController < ApplicationController
 
     when "other_charts"
       # その他のグラフデータを一括取得（eventDistribution, hourlyActivity など）
+      @learning_sessions = @video.learning_sessions.includes(:user, :timestamp_events).order(:session_start_time)
       prepare_analytics_chart_data
 
       render json: {
@@ -214,6 +236,7 @@ class VideoManagementController < ApplicationController
 
     else
       # デフォルト：既存の prepare_analytics_chart_data で後方互換性を保つ
+      @learning_sessions = @video.learning_sessions.includes(:user, :timestamp_events).order(:session_start_time)
       prepare_analytics_chart_data
       render json: {
         score_timeline: @score_timeline_data,
