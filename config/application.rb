@@ -30,5 +30,11 @@ module OndemandViewerclass
 
     # Active Storage URL expiration time (default: 5 minutes, changed to 2 hours)
     config.active_storage.service_urls_expire_in = 2.hours
+
+    # Gzip 圧縮で AJAX レスポンスサイズを削減（512MB メモリ制約対応）
+    config.middleware.use Rack::Deflater
+
+    # JSON API レスポンスのキャッシング設定
+    config.action_controller.perform_caching = true
   end
 end

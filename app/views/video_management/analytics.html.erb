@@ -1308,13 +1308,69 @@ function initializeOtherCharts(chartsData) {
 // タイムライン分析グラフの初期化
 <% if @learning_sessions.any? %>
 // Turbo対応: DOMContentLoadedとturbo:loadの両方に対応
-// チャートインスタンスを保持するグローバル変数
-let chartInstances = {};
-// 初期化フラグで重複実行を防ぐ
-let isInitializingCharts = false;
-let chartsInitialized = false;
-// scoreTimeline AJAX の AbortController（重複リクエストをキャンセルするため）
-let scoreTimelineAbortController = null;
+// チャートインスタンスを保持するグローバル変数 (Turbo キャッシュ対応: 再宣言エラー防止)
+if (typeof chartInstances === 'undefined') {
+  var chartInstances = {};
+}
+// 初期化フラグで重複実行を防ぐ (Turbo キャッシュ対応: 再宣言エラー防止)
+if (typeof isInitializingCharts === 'undefined') {
+  var isInitializingCharts = false;
+}
+if (typeof chartsInitialized === 'undefined') {
+  var chartsInitialized = false;
+}
+// scoreTimeline AJAX の AbortController（重複リクエストをキャンセルするため）(Turbo キャッシュ対応)
+if (typeof scoreTimelineAbortController === 'undefined') {
+  var scoreTimelineAbortController = null;
+}
+
+// チャンク読み込み（512MB 制約対応）
+async function loadScoreTimelineChunks(initialData, pagination) {
+  let allData = initialData;
+  const videoId = <%= @video.id %>;
+  
+  for (let page = 1; page < pagination.total_pages; page++) {
+    try {
+      console.log(`[scoreTimeline] チャンク読 込: ページ ${page + 1}/${pagination.total_pages}`);
+      const response = await fetch(
+        `/video_management/get_chart_data?video_id=${videoId}&chart_type=score_timeline&session_page=${page}`,
+        { signal: scoreTimelineAbortController.signal }
+      );
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      allData = allData.concat(result.data || []);
+    } catch (error) {
+      console.warn(`[scoreTimeline] ページ ${page} 読み込みエラー:`, error);
+      break;  // エラーでも進行中のデータで続行
+    }
+  }
+  
+  return allData;
+}
+
+// responseData チャンク読み込み
+async function loadResponseDataChunks(initialData, pagination, videoId) {
+  let allData = initialData;
+  
+  for (let page = 1; page < pagination.total_pages; page++) {
+    try {
+      console.log(`[responseData] チャンク読 込: ページ ${page + 1}/${pagination.total_pages}`);
+      const response = await fetch(
+        `/video_management/get_chart_data?video_id=${videoId}&chart_type=response_data&response_page=${page}`
+      );
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      allData = allData.concat(result.data || []);
+    } catch (error) {
+      console.warn(`[responseData] ページ ${page} 読み込みエラー:`, error);
+      break;  // エラーでも進行中のデータで続行
+    }
+  }
+  
+  return allData;
+}
 
 // セッション表示/非表示切り替え機能
 function toggleAllSessions(chartType, show) {
@@ -1487,9 +1543,13 @@ function createSessionToggles(chartType, datasets) {
   container.innerHTML = html;
 }
 
-// 元のデータを保存する変数（フィルタリング用）
-let originalScoreTimelineDatasets = null;
-let originalOperationsMapData = null; // 動画操作マップの元データ
+// 元のデータを保存する変数（フィルタリング用）(Turbo キャッシュ対応: 再宣言エラー防止)
+if (typeof originalScoreTimelineDatasets === 'undefined') {
+  var originalScoreTimelineDatasets = null;
+}
+if (typeof originalOperationsMapData === 'undefined') {
+  var originalOperationsMapData = null; // 動画操作マップの元データ
+}
 
 // スライダーの値を表示更新
 document.addEventListener('DOMContentLoaded', function() {
@@ -1807,6 +1867,16 @@ function initializeAnalyticsCharts() {
         }
         
         const scoreTimelineData = result.data || [];
+        
+        // チャンク読み込み対応：複数ページを統合
+        if (result.pagination && result.pagination.has_next) {
+          console.log('[scoreTimeline] チャンク読み込み開始: ページ 1/' + result.pagination.total_pages);
+          return loadScoreTimelineChunks(scoreTimelineData, result.pagination);
+        }
+        
+        return scoreTimelineData;
+      })
+      .then(scoreTimelineData => {
         // 分類グラフから利用できるようにグローバル変数に保存
         window.scoreTimelineData = scoreTimelineData;
         console.log('[scoreTimeline] window.scoreTimelineData に保存完了:', scoreTimelineData.length, 'セッション');
@@ -2602,14 +2672,18 @@ function initializeUserClassificationChart() {
           console.error('[分類グラフ初期化] scoreTimeline AJAX エラー:', error);
           return [];  // エラー時は空配列を返す
         }),
-    // responseData を fetch
-    fetch(`/video_management/get_chart_data?video_id=${videoId}&chart_type=response_data`)
+    // responseData を fetch（チャンク読 込対応）
+    fetch(`/video_management/get_chart_data?video_id=${videoId}&chart_type=response_data&response_page=0`)
       .then(response => {
         if (!response.ok) throw new Error(`HTTP ${response.status} from response_data fetch`);
         return response.json();
       })
       .then(result => {
-        console.log('[分類グラフ初期化] responseData 取得:', result);
+        console.log('[分類グラフ初期化] responseData 取得（ページ 1）:', result.pagination);
+        // チャンク読 込対応：複数ページを統合
+        if (result.pagination && result.pagination.has_next) {
+          return loadResponseDataChunks(result.data || [], result.pagination, videoId);
+        }
         return result.data || [];
       })
       .catch(error => {

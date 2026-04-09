@@ -106,8 +106,20 @@ class VideoManagementController < ApplicationController
 
     case chart_type
     when "score_timeline"
-      # 既存実装のまま
-      @score_timeline_data = @learning_sessions.map do |session|
+      # チャンク分割でメモリ効率化（512MB 制約対応）
+      session_page = (params[:session_page] || 0).to_i
+      sessions_per_page = 5  # 1リクエストで5セッション分のみ
+
+      all_sessions = @learning_sessions.select { |s| s.timestamp_events.any? { |e| e.concentration_score } }
+      total_sessions = all_sessions.count
+      total_pages = (total_sessions + sessions_per_page - 1) / sessions_per_page
+
+      # ページネーション
+      start_idx = session_page * sessions_per_page
+      end_idx = start_idx + sessions_per_page
+      paginated_sessions = all_sessions[start_idx...end_idx]
+
+      @score_timeline_data = paginated_sessions.map do |session|
         events = session.timestamp_events.where.not(concentration_score: nil).order(:session_elapsed)
         {
           label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')} ID:#{session.id})",
@@ -118,30 +130,46 @@ class VideoManagementController < ApplicationController
         }
       end.select { |data| data[:data].any? }
 
-      render json: { data: @score_timeline_data }
+      render json: {
+        data: @score_timeline_data,
+        pagination: {
+          current_page: session_page,
+          total_pages: total_pages,
+          total_sessions: total_sessions,
+          sessions_per_page: sessions_per_page,
+          has_next: session_page < total_pages - 1
+        }
+      }
 
     when "response_data"
-      # ユーザーの回答データを取得
-      @video_responses = @video.user_responses.includes(:user, :question).to_a
+      # チャンク分割でメモリ効率化（512MB 制約対応）
+      response_page = (params[:response_page] || 0).to_i
+      responses_per_page = 50  # 1リクエストで50件の回答のみ
 
-      Rails.logger.info "[get_chart_data/response_data] ビデオID=#{@video.id}, 総回答数=#{@video_responses.count}, セッション数=#{@learning_sessions.count}"
+      all_video_responses = @video.user_responses.includes(:user, :question).to_a
+      total_responses = all_video_responses.count
+      total_pages = (total_responses + responses_per_page - 1) / responses_per_page
+
+      # ページネーション
+      start_idx = response_page * responses_per_page
+      end_idx = start_idx + responses_per_page
+      paginated_responses = all_video_responses[start_idx...end_idx]
+
+      Rails.logger.info "[get_chart_data/response_data] ページ: #{response_page}/#{total_pages}, 件数: #{paginated_responses.count}/#{total_responses}"
 
       # セッション情報をハッシュで事前構築（マッチング高速化）
       sessions_by_user = @learning_sessions.group_by(&:user_id)
 
-      @response_data = @video_responses.map { |response|
-        # 同じユーザーのセッションから探す
+      @response_data = paginated_responses.map { |response|
         user_sessions = sessions_by_user[response.user_id] || []
 
-        # 該当するセッションのうち、時間範囲内のものを探す
         matching_session = user_sessions.find { |s|
           response_time = response.created_at
           session_start = s.session_start_time
-          session_end = s.session_end_time || s.session_start_time + 24.hours # 24時間のデフォルト
+          session_end = s.session_end_time || s.session_start_time + 24.hours
           response_time >= session_start && response_time <= session_end
         }
 
-        # マッチング失敗時のフォールバック：最新セッションを使用
         unless matching_session
           if user_sessions.any?
             matching_session = user_sessions.max_by { |s| s.session_start_time }
@@ -160,9 +188,16 @@ class VideoManagementController < ApplicationController
         }
       }.compact
 
-      Rails.logger.info "[get_chart_data/response_data] 結果: マッチ数=#{@response_data.count} / 総回答数=#{@video_responses.count}"
-
-      render json: { data: @response_data }
+      render json: {
+        data: @response_data,
+        pagination: {
+          current_page: response_page,
+          total_pages: total_pages,
+          total_responses: total_responses,
+          responses_per_page: responses_per_page,
+          has_next: response_page < total_pages - 1
+        }
+      }
 
     when "other_charts"
       # その他のグラフデータを一括取得（eventDistribution, hourlyActivity など）
