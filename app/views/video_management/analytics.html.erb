@@ -2471,6 +2471,14 @@ function initializeUserClassificationChart() {
   const scoreTimelineData = <%= raw @score_timeline_data.to_json %>;
   const responseData = <%= raw @response_data.to_json %>;
   
+  console.log('[分類グラフ初期化] responseData:', {
+    型: typeof responseData,
+    isArray: Array.isArray(responseData),
+    長さ: responseData ? responseData.length : 'null',
+    最初の要素: responseData && responseData[0] ? responseData[0] : 'なし',
+    JSON文字列: JSON.stringify(responseData).substring(0, 500)
+  });
+  
   // ユーザー分類を保持するオブジェクト
   window.userClassifications = {
     groupA: [],
@@ -2598,35 +2606,54 @@ function classifyUserSession(datasetIndex) {
     groupD: 'rgba(220, 53, 69, 0.8)'     // 赤
   };
   
-  // 前の分類から外す
-  if (dataset.classification) {
-    const oldGroup = dataset.classification;
-    const index = window.userClassifications[oldGroup].indexOf(sessionId);
+  // 既に同じグループに分類されている場合は、分類を解除
+  if (dataset.classification === selectedGroup) {
+    console.log(`セッション ${sessionId} を ${selectedGroup} から削除しました`);
+    
+    // 分類を解除
+    const index = window.userClassifications[selectedGroup].indexOf(sessionId);
     if (index > -1) {
-      window.userClassifications[oldGroup].splice(index, 1);
+      window.userClassifications[selectedGroup].splice(index, 1);
     }
+    
+    // グラフ表示をリセット
+    dataset.classification = null;
+    dataset.borderColor = 'rgba(128, 128, 128, 0.3)';
+    dataset.borderWidth = 2;
+    dataset.pointBackgroundColor = '#999';
+    dataset.pointBorderColor = '#999';
+    dataset.pointRadius = 2;
+  } else {
+    // 前の分類から外す
+    if (dataset.classification) {
+      const oldGroup = dataset.classification;
+      const oldIndex = window.userClassifications[oldGroup].indexOf(sessionId);
+      if (oldIndex > -1) {
+        window.userClassifications[oldGroup].splice(oldIndex, 1);
+      }
+    }
+    
+    // 新しいグループに追加
+    if (!window.userClassifications[selectedGroup].includes(sessionId)) {
+      window.userClassifications[selectedGroup].push(sessionId);
+    }
+    
+    // 分類状態を更新
+    dataset.classification = selectedGroup;
+    dataset.borderColor = groupColors[selectedGroup];
+    dataset.borderWidth = 3;
+    dataset.pointBackgroundColor = groupColors[selectedGroup];
+    dataset.pointBorderColor = groupColors[selectedGroup];
+    dataset.pointRadius = 3;
+    
+    console.log(`セッション ${sessionId} を ${selectedGroup} に分類しました`);
   }
-  
-  // 新しいグループに追加
-  if (!window.userClassifications[selectedGroup].includes(sessionId)) {
-    window.userClassifications[selectedGroup].push(sessionId);
-  }
-  
-  // 分類状態を更新
-  dataset.classification = selectedGroup;
-  dataset.borderColor = groupColors[selectedGroup];
-  dataset.borderWidth = 3;
-  dataset.pointBackgroundColor = groupColors[selectedGroup];
-  dataset.pointBorderColor = groupColors[selectedGroup];
-  dataset.pointRadius = 3;
   
   // チャート更新
   chartInstances.userClassification.update('none');
   
   // 統計を表示
   updateClassificationStats();
-  
-  console.log(`セッション ${sessionId} を ${selectedGroup} に分類しました`);
 }
 
 // 分類結果をリセット
@@ -2668,6 +2695,12 @@ function updateClassificationStats() {
     return;
   }
   
+  console.log('[分類統計] 全回答データ:', {
+    総数: responseData.length,
+    セッション数: [...new Set(responseData.map(r => r.session_id))].length,
+    サンプル: responseData.slice(0, 3)
+  });
+  
   const statsContainer = document.getElementById('classificationStats');
   
   const groupLabels = {
@@ -2706,6 +2739,19 @@ function updateClassificationStats() {
     // このグループのセッションに関連する回答データを集計
     const groupResponses = responseData.filter(r => sessionIds.includes(r.session_id));
     
+    console.log(`[分類統計] グループ ${group}:`, {
+      セッション数: sessionIds.length,
+      セッションIDs: sessionIds,
+      型チェック: sessionIds.map(id => typeof id),
+      該当回答数: groupResponses.length,
+      回答の型チェック: responseData.slice(0, 1).map(r => ({ session_id: r.session_id, 型: typeof r.session_id })),
+      詳細フィルタ: responseData.map(r => ({
+        session_id: r.session_id,
+        マッチ: sessionIds.includes(r.session_id),
+        sessionIdsに含: sessionIds.includes(r.session_id)
+      }))
+    });
+    
     if (groupResponses.length === 0) {
       html += `
         <div class="col-md-6 col-lg-3 mb-3">
@@ -2726,6 +2772,7 @@ function updateClassificationStats() {
     const correctResponses = groupResponses.filter(r => r.correct).length;
     const correctRate = ((correctResponses / totalResponses) * 100).toFixed(1);
     const avgResponseTime = (groupResponses.reduce((sum, r) => sum + (r.response_time || 0), 0) / totalResponses / 1000).toFixed(1);
+    const avgResponsesPerSession = (totalResponses / sessionIds.length).toFixed(1);
     
     html += `
       <div class="col-md-6 col-lg-3 mb-3">
@@ -2737,6 +2784,8 @@ function updateClassificationStats() {
               <dd>${sessionIds.length}件</dd>
               <dt>回答数</dt>
               <dd>${totalResponses}件</dd>
+              <dt>平均回答数</dt>
+              <dd><strong>${avgResponsesPerSession}回/セッション</strong></dd>
               <dt>正解数</dt>
               <dd>${correctResponses}件</dd>
               <dt>正解率</dt>

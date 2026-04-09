@@ -689,17 +689,46 @@ class VideoManagementController < ApplicationController
     end.compact
 
     # 7. 回答データ（分類分析用）
-    @response_data = @video.user_responses.includes(:user, :question, :learning_session)
-                            .map { |response|
+    # 方針：UserResponseテーブル（実際の回答データ）を第一優先で使用する
+    # 各回答に関連するセッションを見つけるために、created_atの時間帯でマッチさせる
+
+    Rails.logger.info "[回答データ] ビデオ #{@video.id} のUserResponse総数: #{@video.user_responses.count}"
+
+    all_user_responses = @video.user_responses.includes(:user, :question).to_a
+    Rails.logger.info "[回答データ] 取得したUserResponse数: #{all_user_responses.count}"
+
+    @response_data = all_user_responses.map { |response|
+      # 回答の作成時刻に基づいて、対応するセッションを探す
+      # セッション時間帯内に回答が作成されたセッションを見つける
+      matching_session = @learning_sessions.find { |s|
+        response_time = response.created_at
+        session_start = s.session_start_time
+        session_end = s.session_end_time || s.session_start_time + 1.hour  # 終了時刻がなければ1時間後と仮定
+
+        # 回答がセッション時間帯内に作成されたかチェック
+        response_time >= session_start && response_time <= session_end
+      }
+
+      unless matching_session
+        Rails.logger.warn "[回答データ] 回答 #{response.id}（作成時刻: #{response.created_at}）のセッションが見つかりません"
+        next
+      end
+
       {
-        session_id: response.learning_session_id,
+        session_id: matching_session.id,
         question_id: response.question_id,
         correct: response.is_correct?,
         response_time: response.response_time,
         user_id: response.user_id,
         user_email: response.user&.email
       }
-    }
+    }.compact
+
+    Rails.logger.info "[回答データ] 最終的な回答データ数: #{@response_data.count}"
+
+    # 重複チェック
+    session_response_counts = @response_data.group_by { |r| r[:session_id] }.map { |sid, ary| [ sid, ary.count ] }
+    Rails.logger.info "[回答データ] セッション別回答数: #{session_response_counts.inspect}"
   end
 
   # CSV Export Methods
