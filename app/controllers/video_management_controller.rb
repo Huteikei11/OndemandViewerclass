@@ -1,7 +1,7 @@
 class VideoManagementController < ApplicationController
   before_action :authenticate_user!
-  before_action :set_video, except: [ :delete_sessions ]
-  before_action :check_management_permission, except: [ :save_session_data, :delete_sessions ]
+  before_action :set_video, except: [ :delete_sessions, :get_chart_data ]
+  before_action :check_management_permission, except: [ :save_session_data, :delete_sessions, :get_chart_data ]
 
   def analytics
     @questions = @video.questions.includes(:user_responses, :options).order(:time_position)
@@ -78,20 +78,119 @@ class VideoManagementController < ApplicationController
       }
     end
 
-    # グラフ用データを準備
+    # グラフ用データを準備（メモリ節約のため空配列で初期化）
+    # 実際のデータは AJAX で get_chart_data アクションから動的に取得する
+    @score_timeline_data = []
+    @video_operations_markers = []
+    @response_time_markers = []
+    @video_operations_map_data = []
+    @user_operations_map_data = []
+    @response_data = []
+
+    # ページロード時に必要なグラフデータを準備
     prepare_analytics_chart_data
   end
 
-  def session_detail
-    @session = LearningSession.find(params[:session_id])
-    @timestamp_events = @session.timestamp_events.order(:session_elapsed)
+  # AJAX: グラフデータを段階的に取得
+  def get_chart_data
+    @video = Video.find(params[:video_id])
 
-    # グラフ用データの準備
-    @chart_data = prepare_chart_data(@timestamp_events)
+    # 権限チェック
+    unless current_user.can_manage_video?(@video)
+      render json: { error: "管理権限がありません" }, status: :forbidden
+      return
+    end
 
-    Rails.logger.info "Session #{params[:session_id]} chart data: #{@chart_data.inspect}"
+    chart_type = params[:chart_type] || "score_timeline"
+    @learning_sessions = @video.learning_sessions.includes(:user, :timestamp_events).order(:session_start_time)
 
-    render json: @chart_data
+    case chart_type
+    when "score_timeline"
+      # 既存実装のまま
+      @score_timeline_data = @learning_sessions.map do |session|
+        events = session.timestamp_events.where.not(concentration_score: nil).order(:session_elapsed)
+        {
+          label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d')} ID:#{session.id})",
+          data: events.map { |e| { x: e.session_elapsed.round(1), y: e.concentration_score, video_time: e.video_time } },
+          session_id: session.id,
+          user_id: session.user_id,
+          user_email: session.user.email
+        }
+      end.select { |data| data[:data].any? }
+
+      render json: { data: @score_timeline_data }
+
+    when "response_data"
+      # ユーザーの回答データを取得
+      @video_responses = @video.user_responses.includes(:user, :question).to_a
+
+      Rails.logger.info "[get_chart_data/response_data] ビデオID=#{@video.id}, 総回答数=#{@video_responses.count}, セッション数=#{@learning_sessions.count}"
+
+      # セッション情報をハッシュで事前構築（マッチング高速化）
+      sessions_by_user = @learning_sessions.group_by(&:user_id)
+
+      @response_data = @video_responses.map { |response|
+        # 同じユーザーのセッションから探す
+        user_sessions = sessions_by_user[response.user_id] || []
+
+        # 該当するセッションのうち、時間範囲内のものを探す
+        matching_session = user_sessions.find { |s|
+          response_time = response.created_at
+          session_start = s.session_start_time
+          session_end = s.session_end_time || s.session_start_time + 24.hours # 24時間のデフォルト
+          response_time >= session_start && response_time <= session_end
+        }
+
+        # マッチング失敗時のフォールバック：最新セッションを使用
+        unless matching_session
+          if user_sessions.any?
+            matching_session = user_sessions.max_by { |s| s.session_start_time }
+          else
+            next
+          end
+        end
+
+        {
+          session_id: matching_session.id,
+          question_id: response.question_id,
+          correct: response.is_correct?,
+          response_time: response.response_time,
+          user_id: response.user_id,
+          user_email: response.user&.email
+        }
+      }.compact
+
+      Rails.logger.info "[get_chart_data/response_data] 結果: マッチ数=#{@response_data.count} / 総回答数=#{@video_responses.count}"
+
+      render json: { data: @response_data }
+
+    when "other_charts"
+      # その他のグラフデータを一括取得（eventDistribution, hourlyActivity など）
+      prepare_analytics_chart_data
+
+      render json: {
+        event_distribution_data: @event_distribution_data,
+        hourly_activity_data: @hourly_activity_data,
+        user_score_data: @user_score_data,
+        video_time_density_data: @video_time_density_data,
+        video_operations_map_data: @video_operations_map_data,
+        user_operations_map_data: @user_operations_map_data
+      }
+
+    else
+      # デフォルト：既存の prepare_analytics_chart_data で後方互換性を保つ
+      prepare_analytics_chart_data
+      render json: {
+        score_timeline: @score_timeline_data,
+        video_operations_markers: @video_operations_markers,
+        response_time_markers: @response_time_markers,
+        event_distribution: @event_distribution_data,
+        hourly_activity: @hourly_activity_data,
+        user_operations_map: @user_operations_map_data
+      }
+    end
+  rescue => e
+    render json: { error: e.message }, status: :internal_server_error
   end
 
   def timeline
@@ -697,21 +796,37 @@ class VideoManagementController < ApplicationController
     all_user_responses = @video.user_responses.includes(:user, :question).to_a
     Rails.logger.info "[回答データ] 取得したUserResponse数: #{all_user_responses.count}"
 
+    # セッション情報をハッシュで事前構築（マッチング高速化）
+    sessions_by_user = @learning_sessions.group_by(&:user_id)
+
     @response_data = all_user_responses.map { |response|
       # 回答の作成時刻に基づいて、対応するセッションを探す
-      # セッション時間帯内に回答が作成されたセッションを見つける
-      matching_session = @learning_sessions.find { |s|
+      # 同じユーザーのセッションから探す（最初に日付でフィルタ）
+      user_sessions = sessions_by_user[response.user_id] || []
+
+      Rails.logger.debug "[回答データ] 回答 #{response.id}: ユーザー=#{response.user_id}, 時刻=#{response.created_at}, ユーザーのセッション数=#{user_sessions.count}"
+
+      matching_session = user_sessions.find { |s|
         response_time = response.created_at
         session_start = s.session_start_time
-        session_end = s.session_end_time || s.session_start_time + 1.hour  # 終了時刻がなければ1時間後と仮定
+        # セッション終了時刻がなければ、セッション開始から24時間後と仮定（長めに）
+        session_end = s.session_end_time || s.session_start_time + 24.hours
 
         # 回答がセッション時間帯内に作成されたかチェック
-        response_time >= session_start && response_time <= session_end
+        in_range = response_time >= session_start && response_time <= session_end
+        Rails.logger.debug "[回答データ] セッション #{s.id}: 開始=#{session_start}, 終了=#{session_end}, 回答時刻=#{response_time}, マッチ=#{in_range}" if user_sessions.count <= 3
+        in_range
       }
 
       unless matching_session
-        Rails.logger.warn "[回答データ] 回答 #{response.id}（作成時刻: #{response.created_at}）のセッションが見つかりません"
-        next
+        Rails.logger.warn "[回答データ] ⚠️ 回答 #{response.id}（ユーザー=#{response.user_id}, 時刻=#{response.created_at}）のセッションが見つかりません"
+        # セッションが見つからない場合、ユーザーの最新セッションを使用（フォールバック）
+        if user_sessions.any?
+          matching_session = user_sessions.max_by { |s| s.session_start_time }
+          Rails.logger.info "[回答データ] フォールバック: 最新セッション #{matching_session.id} を使用"
+        else
+          next
+        end
       end
 
       {

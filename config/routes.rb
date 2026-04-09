@@ -70,4 +70,5 @@ Rails.application.routes.draw do
   post "video_management/delete_sessions", to: "video_management#delete_sessions"
   post "video_management/delete_response", to: "video_management#delete_response"
   post "video_management/delete_responses", to: "video_management#delete_responses"
+  get "video_management/get_chart_data", to: "video_management#get_chart_data"
 end
