@@ -115,9 +115,18 @@ class VideoManagementController < ApplicationController
       counts: user_scores.map { |d| d[:session_count] }
     }
 
-    # 動画時間別イベント密度データ（初期ロード時に計算）
+    # グラフ初期化用データを準備
     limited_sessions = @video.learning_sessions.limit(500).includes(:timestamp_events)
     all_events = limited_sessions.flat_map(&:timestamp_events)
+
+    # 時間帯別活動量データ（初期ロード時に計算）
+    hourly_events = all_events.group_by { |e| e.timestamp.hour }
+    @hourly_activity_data = {
+      labels: (0..23).to_a,
+      values: (0..23).map { |hour| hourly_events[hour]&.count || 0 }
+    }
+
+    # 動画時間別イベント密度データ（初期ロード時に計算）
     video_time_events = all_events.select { |e| e.video_time && e.video_time > 0 }
     time_buckets = video_time_events.group_by { |e| (e.video_time / 30).floor * 30 }
     @video_time_density_data = time_buckets.map do |time, events|
@@ -127,6 +136,78 @@ class VideoManagementController < ApplicationController
         label: "#{time}s - #{time + 30}s"
       }
     end.sort_by { |d| d[:x] }
+
+    # 動画操作マップデータ（一時停止・スキップの位置）- 全体
+    video_operations = all_events.select { |e|
+      e.video_time && e.video_time > 0 &&
+      e.event_type && (e.event_type.include?("pause") || e.event_type.include?("seek") || e.event_type.include?("skip"))
+    }
+    
+    operation_buckets = video_operations.group_by { |e| (e.video_time / 10).floor * 10 }
+    
+    response_events = all_events.select { |e|
+      e.event_type && e.video_time && e.video_time > 0 &&
+      (e.event_type == "response_quick" || e.event_type == "response_normal" || e.event_type == "response_slow")
+    }
+    response_buckets = response_events.group_by { |e| (e.video_time / 10).floor * 10 }
+    
+    @video_operations_map_data = operation_buckets.map do |time, events|
+      pause_count = events.count { |e| e.event_type&.include?("pause") }
+      seek_count = events.count { |e| e.event_type&.include?("seek") || e.event_type&.include?("skip") }
+      response_count = response_buckets[time]&.count || 0
+      minutes = time / 60
+      seconds = (time % 60).to_s.rjust(2, "0")
+      {
+        time: time,
+        label: "#{minutes}:#{seconds}",
+        pause: pause_count,
+        seek: seek_count,
+        response: response_count,
+        total: events.count + response_count
+      }
+    end
+    
+    # 操作がない時間帯でも回答がある場合は追加
+    response_buckets.each do |time, events|
+      unless @video_operations_map_data.any? { |d| d[:time] == time }
+        minutes = time / 60
+        seconds = (time % 60).to_s.rjust(2, "0")
+        @video_operations_map_data << {
+          time: time,
+          label: "#{minutes}:#{seconds}",
+          pause: 0,
+          seek: 0,
+          response: events.count,
+          total: events.count
+        }
+      end
+    end
+    
+    @video_operations_map_data.sort_by! { |d| d[:time] }
+
+    # ユーザー別の動画操作マップ
+    @user_operations_map_data = @learning_sessions.map do |session|
+      user_ops = session.timestamp_events
+        .where.not(video_time: nil)
+        .where("video_time > 0")
+        .select { |e| e.event_type && (e.event_type.include?("pause") || e.event_type.include?("seek") || e.event_type.include?("skip")) }
+
+      next nil if user_ops.empty?
+
+      ops_by_time = user_ops.group_by { |e| (e.video_time / 10).floor * 10 }
+      {
+        label: "#{session.user.email.split('@').first} (#{session.session_start_time.strftime('%m/%d %H:%M')} ID:#{session.id})",
+        session_id: session.id,
+        data: ops_by_time.map do |time, events|
+          {
+            x: time,
+            y: events.count,
+            pause: events.count { |e| e.event_type&.include?("pause") },
+            seek: events.count { |e| e.event_type&.include?("seek") || e.event_type&.include?("skip") }
+          }
+        end.sort_by { |d| d[:x] }
+      }
+    end.compact
   end
 
   # AJAX: グラフデータを段階的に取得

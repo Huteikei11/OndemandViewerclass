@@ -137,11 +137,6 @@
                 </button>
               </li>
               <li class="nav-item" role="presentation">
-                <button class="nav-link" id="event-distribution-tab" data-bs-toggle="tab" data-bs-target="#event-distribution" type="button">
-                  イベント分布
-                </button>
-              </li>
-              <li class="nav-item" role="presentation">
                 <button class="nav-link" id="hourly-activity-tab" data-bs-toggle="tab" data-bs-target="#hourly-activity" type="button">
                   時間帯別活動
                 </button>
@@ -232,21 +227,7 @@
                 </p>
               </div>
 
-              <!-- 2. イベントタイプ分布グラフ -->
-              <div class="tab-pane fade" id="event-distribution" role="tabpanel">
-                <div class="row">
-                  <div class="col-md-6 offset-md-3">
-                    <div class="chart-container" style="position: relative; height: 400px;">
-                      <canvas id="eventDistributionChart"></canvas>
-                    </div>
-                  </div>
-                </div>
-                <p class="text-muted mt-2 text-center">
-                  <small>全セッションで記録されたイベントのカテゴリ別分布を表示します。</small>
-                </p>
-              </div>
-
-              <!-- 3. 時間帯別活動量グラフ -->
+              <!-- 2. 時間帯別活動量グラフ -->
               <div class="tab-pane fade" id="hourly-activity" role="tabpanel">
                 <div class="chart-container" style="position: relative; height: 400px;">
                   <canvas id="hourlyActivityChart"></canvas>
@@ -1194,12 +1175,37 @@
   };
 })();
 
+// ERBテンプレートからのデータを準備（Turboキャッシュ対応：varで条件付き定義）
+if (typeof chartsData === 'undefined') {
+  var chartsData = {
+    hourly_activity_data: <%= raw @hourly_activity_data.to_json %>,
+    user_score_data: <%= raw @user_score_data.to_json %>,
+    video_time_density_data: <%= raw @video_time_density_data.to_json %>
+  };
+} else {
+  chartsData = {
+    hourly_activity_data: <%= raw @hourly_activity_data.to_json %>,
+    user_score_data: <%= raw @user_score_data.to_json %>,
+    video_time_density_data: <%= raw @video_time_density_data.to_json %>
+  };
+}
+
+// 他のチャート初期化実行フラグ
+var otherChartsInitialized = false;
+
 // 他のチャート（eventDistribution, hourlyActivity等）を初期化する関数
 function initializeOtherCharts(chartsData) {
+  // 既に初期化済みなら実行しない
+  if (otherChartsInitialized) {
+    return;
+  }
+  
   if (!chartsData) {
     console.warn('[他のチャート] データが利用できません');
     return;
   }
+  
+  otherChartsInitialized = true;
   
   const commonOptions = {
     responsive: true,
@@ -1212,47 +1218,7 @@ function initializeOtherCharts(chartsData) {
     }
   };
   
-  // 1. イベント分布グラフ（円グラフ）
-  if (chartsData.event_distribution_data) {
-    const ctx = document.getElementById('eventDistributionChart');
-    if (ctx) {
-      const eventData = chartsData.event_distribution_data;
-      
-      chartInstances.eventDistribution = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: eventData.labels,
-          datasets: [{
-            data: eventData.values,
-            backgroundColor: Object.values(eventData.colors),
-            borderWidth: 2,
-            borderColor: '#fff'
-          }]
-        },
-        options: {
-          ...commonOptions,
-          plugins: {
-            ...commonOptions.plugins,
-            legend: {
-              position: 'right'
-            },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                  const percentage = ((context.parsed / total) * 100).toFixed(1);
-                  return context.label + ': ' + context.parsed + '件 (' + percentage + '%)';
-                }
-              }
-            }
-          }
-        }
-      });
-      console.log('[イベント分布グラフ] 初期化完了');
-    }
-  }
-  
-  // 2. 時間帯別活動量グラフ
+  // 1. 時間帯別活動量グラフ
   if (chartsData.hourly_activity_data) {
     const ctx = document.getElementById('hourlyActivityChart');
     if (ctx) {
@@ -2639,6 +2605,9 @@ function initializeAnalyticsCharts() {
   isInitializingCharts = false;
   chartsInitialized = true;
   console.log('[グラフ初期化] すべてのチャート初期化完了');
+  
+  // 他のチャートも初期化
+  initializeOtherCharts(chartsData);
 }
 
 // ユーザー分類グラフの初期化
@@ -2720,6 +2689,16 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
     JSON文字列: JSON.stringify(responseData).substring(0, 500)
   });
   
+  // 既存のチャートインスタンスがあれば破棄
+  if (chartInstances.userClassification) {
+    try {
+      chartInstances.userClassification.destroy();
+      chartInstances.userClassification = null;
+    } catch (e) {
+      console.warn('[分類グラフ] 既存チャートの破棄エラー:', e.message);
+    }
+  }
+  
   // ユーザー分類を保持するオブジェクト
   window.userClassifications = {
     groupA: [],
@@ -2776,6 +2755,16 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
       classification: null // 分類状態を保持
     });
   });
+  
+  // グラフを作成する前にcanvas要素が有効か確認
+  if (!ctx) {
+    const canvasElement = document.getElementById('userClassificationChart');
+    if (!canvasElement) {
+      console.warn('[分類グラフ] Canvas要素が見つかりません');
+      return;
+    }
+    ctx = canvasElement.getContext('2d');
+  }
   
   // グラフを作成
   chartInstances.userClassification = new Chart(ctx, {
@@ -3088,6 +3077,7 @@ document.addEventListener('turbo:before-cache', function() {
   console.log('[Turbo キャッシュ] チャートをクリアします');
   isInitializingCharts = false;
   chartsInitialized = false;
+  otherChartsInitialized = false;  // 他のチャート初期化フラグもリセット
   // 保持しているチャートインスタンスを破棄
   Object.keys(chartInstances).forEach(key => {
     try {
