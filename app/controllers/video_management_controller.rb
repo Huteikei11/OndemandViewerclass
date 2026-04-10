@@ -6,22 +6,22 @@ class VideoManagementController < ApplicationController
   def analytics
     @questions = @video.questions.includes(:user_responses, :options).order(:time_position)
     @user_responses = @video.user_responses.includes(:user, :question).order(:created_at)
-    @learning_sessions = @video.learning_sessions.includes(:user, :timestamp_events).order(:session_start_time)
 
-    # 統計データを計算
-    @total_responses = @user_responses.count
-    @unique_users = @user_responses.joins(:user).distinct.count(:user_id)
-    @correct_responses = @user_responses.where(is_correct: true).count
+    # 統計データを計算（DBレベルで集計）
+    @total_responses = @video.user_responses.count
+    @unique_users = @video.user_responses.joins(:user).distinct.count(:user_id)
+    @correct_responses = @video.user_responses.where(is_correct: true).count
     @accuracy_rate = @total_responses > 0 ? (@correct_responses.to_f / @total_responses * 100).round(1) : 0
 
-    # 学習セッション統計
-    @total_sessions = @learning_sessions.count
-    @completed_sessions = @learning_sessions.where.not(session_end_time: nil).count
+    # 学習セッション統計（DBレベル）
+    @total_sessions = @video.learning_sessions.count
+    @completed_sessions = @video.learning_sessions.where.not(session_end_time: nil).count
 
-    # SQLiteでは時間計算をRubyで行う
-    completed_sessions = @learning_sessions.where.not(session_end_time: nil)
-    if completed_sessions.any?
-      durations = completed_sessions.map do |session|
+    # セッション統計は必要に応じて計算（全ロードではなく）
+    completed_sessions_relation = @video.learning_sessions.where.not(session_end_time: nil)
+    if completed_sessions_relation.exists?
+      # 計算用に限定範囲で取得
+      durations = completed_sessions_relation.limit(1000).map do |session|
         (session.session_end_time - session.session_start_time).to_i
       end
       @average_session_duration = durations.sum.to_f / durations.length
@@ -29,12 +29,13 @@ class VideoManagementController < ApplicationController
       @average_session_duration = nil
     end
 
-    @average_final_score = @learning_sessions.where.not(final_score: nil).average(:final_score)
+    @average_final_score = @video.learning_sessions.where.not(final_score: nil).average(:final_score)
 
-    # 動画操作統計（1分以上のセッションのみ）
-    valid_sessions = @learning_sessions.where.not(session_end_time: nil).select do |session|
-      session.duration >= 60 # 60秒以上
-    end
+    # 動画操作統計（1分以上のセッションのみ）- 限定的に取得
+    valid_sessions = @video.learning_sessions
+      .where.not(session_end_time: nil)
+      .limit(1000)  # DB レベルで最初の 1000 セッションのみ取得
+      .select { |session| session.duration >= 60 }
 
     if valid_sessions.any?
       total_pause = 0
@@ -78,6 +79,12 @@ class VideoManagementController < ApplicationController
       }
     end
 
+    # セッション履歴表示用：最初の 100 セッションのみ取得（メモリ効率化）
+    @learning_sessions = @video.learning_sessions
+      .includes(:user, :timestamp_events)
+      .order(session_start_time: :desc)
+      .limit(100)
+
     # グラフ用データを準備（メモリ節約のため空配列で初期化）
     # 実際のデータは AJAX で get_chart_data アクションから動的に取得する
     @score_timeline_data = []
@@ -87,8 +94,39 @@ class VideoManagementController < ApplicationController
     @user_operations_map_data = []
     @response_data = []
 
-    # ページロード時に必要なグラフデータを準備
-    prepare_analytics_chart_data
+    # ユーザー別平均スコアデータ（初期ロード時に計算）
+    user_scores = @video.learning_sessions
+      .where.not(final_score: nil)
+      .limit(500)
+      .includes(:user)
+      .group_by(&:user)
+      .map do |user, sessions|
+        scores = sessions.map(&:final_score).compact
+        {
+          user: user.email.split("@").first,
+          avg_score: scores.any? ? (scores.sum.to_f / scores.length).round(1) : 0,
+          session_count: sessions.count
+        }
+      end.sort_by { |data| -data[:avg_score] }
+
+    @user_score_data = {
+      labels: user_scores.map { |d| d[:user] },
+      values: user_scores.map { |d| d[:avg_score] },
+      counts: user_scores.map { |d| d[:session_count] }
+    }
+
+    # 動画時間別イベント密度データ（初期ロード時に計算）
+    limited_sessions = @video.learning_sessions.limit(500).includes(:timestamp_events)
+    all_events = limited_sessions.flat_map(&:timestamp_events)
+    video_time_events = all_events.select { |e| e.video_time && e.video_time > 0 }
+    time_buckets = video_time_events.group_by { |e| (e.video_time / 30).floor * 30 }
+    @video_time_density_data = time_buckets.map do |time, events|
+      {
+        x: time,
+        y: events.count,
+        label: "#{time}s - #{time + 30}s"
+      }
+    end.sort_by { |d| d[:x] }
   end
 
   # AJAX: グラフデータを段階的に取得
@@ -611,6 +649,12 @@ class VideoManagementController < ApplicationController
   end
 
   def prepare_analytics_chart_data
+    # ⚠️ メモリ効率化: 限定的に学習セッションを読み込み
+    @learning_sessions = @video.learning_sessions
+      .includes(:user, :timestamp_events)
+      .limit(500)  # 最初の500セッションのみ処理
+      .order(:session_start_time)
+
     # 全タイムスタンプイベントを取得（この動画のセッションのみ）
     all_events = @learning_sessions.where(video_id: @video.id)
                                    .joins(:timestamp_events)
