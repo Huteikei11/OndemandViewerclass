@@ -120,7 +120,7 @@ class VideoManagementController < ApplicationController
     all_events = limited_sessions.flat_map(&:timestamp_events)
 
     # 時間帯別活動量データ（初期ロード時に計算）
-    hourly_events = all_events.group_by { |e| e.timestamp.hour }
+    hourly_events = all_events.group_by { |e| e.timestamp.hour rescue 0 }
     @hourly_activity_data = {
       labels: (0..23).to_a,
       values: (0..23).map { |hour| hourly_events[hour]&.count || 0 }

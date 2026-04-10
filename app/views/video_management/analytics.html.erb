@@ -236,6 +236,66 @@
                   <small>1日の中でどの時間帯に学習活動が活発かを表示します。</small>
                 </p>
               </div>
+              
+              <script>
+                // 時間帯別活動タブクリック時に再度グラフを初期化
+                document.getElementById('hourly-activity-tab')?.addEventListener('shown.bs.tab', function() {
+                  console.log('[時間帯別活動タブ] クリック検出');
+                  if (chartInstances.hourlyActivity) {
+                    chartInstances.hourlyActivity.destroy();
+                    chartInstances.hourlyActivity = null;
+                  }
+                  
+                  // 再度グラフを初期化
+                  if (chartsData && chartsData.hourly_activity_data) {
+                    const ctx = document.getElementById('hourlyActivityChart');
+                    const hourlyData = chartsData.hourly_activity_data;
+                    
+                    chartInstances.hourlyActivity = new Chart(ctx, {
+                      type: 'bar',
+                      data: {
+                        labels: hourlyData.labels.map(h => h + '時'),
+                        datasets: [{
+                          label: 'イベント数',
+                          data: hourlyData.values,
+                          backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                          borderColor: 'rgba(54, 162, 235, 1)',
+                          borderWidth: 1
+                        }]
+                      },
+                      options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: true,
+                            position: 'top'
+                          }
+                        },
+                        scales: {
+                          x: {
+                            title: {
+                              display: true,
+                              text: '時間帯'
+                            }
+                          },
+                          y: {
+                            title: {
+                              display: true,
+                              text: 'イベント数'
+                            },
+                            beginAtZero: true,
+                            ticks: {
+                              stepSize: 1
+                            }
+                          }
+                        }
+                      }
+                    });
+                    console.log('[時間帯別活動タブ] グラフ再初期化完了');
+                  }
+                });
+              </script>
 
               <!-- 4. ユーザー別平均スコアグラフ -->
               <div class="tab-pane fade" id="user-scores" role="tabpanel">
@@ -246,6 +306,64 @@
                   <small>各ユーザーの平均集中スコアを比較表示します。</small>
                 </p>
               </div>
+              
+              <script>
+                // ユーザースコアタブクリック時に再度グラフを初期化
+                document.getElementById('user-scores-tab')?.addEventListener('shown.bs.tab', function() {
+                  console.log('[ユーザースコアタブ] クリック検出');
+                  if (chartInstances.userScores) {
+                    chartInstances.userScores.destroy();
+                    chartInstances.userScores = null;
+                  }
+                  
+                  // 再度グラフを初期化
+                  if (chartsData && chartsData.user_score_data) {
+                    const ctx = document.getElementById('userScoresChart');
+                    const scoreData = chartsData.user_score_data;
+                    
+                    chartInstances.userScores = new Chart(ctx, {
+                      type: 'bar',
+                      data: {
+                        labels: scoreData.labels,
+                        datasets: [{
+                          label: '平均スコア',
+                          data: scoreData.values,
+                          backgroundColor: 'rgba(255, 159, 64, 0.8)',
+                          borderColor: 'rgba(255, 159, 64, 1)',
+                          borderWidth: 1
+                        }]
+                      },
+                      options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: true,
+                            position: 'top'
+                          }
+                        },
+                        scales: {
+                          x: {
+                            title: {
+                              display: true,
+                              text: 'ユーザー'
+                            }
+                          },
+                          y: {
+                            title: {
+                              display: true,
+                              text: '平均スコア'
+                            },
+                            beginAtZero: true,
+                            max: 100
+                          }
+                        }
+                      }
+                    });
+                    console.log('[ユーザースコアタブ] グラフ再初期化完了');
+                  }
+                });
+              </script>
 
               <!-- 5. 動画時間別イベント密度グラフ -->
               <div class="tab-pane fade" id="video-density" role="tabpanel">
@@ -256,6 +374,65 @@
                   <small>動画のどの部分で学習活動が活発かを30秒単位で表示します。</small>
                 </p>
               </div>
+              
+              <script>
+                // 動画密度チャートタブクリック時に再度グラフを初期化
+                document.getElementById('video-density-tab')?.addEventListener('shown.bs.tab', function() {
+                  console.log('[動画密度タブ] クリック検出');
+                  if (chartInstances.videoDensity) {
+                    chartInstances.videoDensity.destroy();
+                    chartInstances.videoDensity = null;
+                  }
+                  
+                  // 再度グラフを初期化
+                  if (chartsData && chartsData.video_time_density_data) {
+                    const ctx = document.getElementById('videoDensityChart');
+                    const densityData = chartsData.video_time_density_data;
+                    
+                    chartInstances.videoDensity = new Chart(ctx, {
+                      type: 'line',
+                      data: {
+                        labels: densityData.labels,
+                        datasets: [{
+                          label: 'イベント数',
+                          data: densityData.values,
+                          backgroundColor: 'rgba(75, 192, 75, 0.2)',
+                          borderColor: 'rgba(75, 192, 75, 1)',
+                          borderWidth: 2,
+                          tension: 0.1,
+                          fill: true
+                        }]
+                      },
+                      options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: true,
+                            position: 'top'
+                          }
+                        },
+                        scales: {
+                          x: {
+                            title: {
+                              display: true,
+                              text: '動画時刻（秒）'
+                            }
+                          },
+                          y: {
+                            title: {
+                              display: true,
+                              text: 'イベント集約度'
+                            },
+                            beginAtZero: true
+                          }
+                        }
+                      }
+                    });
+                    console.log('[動画密度タブ] グラフ再初期化完了');
+                  }
+                });
+              </script>
 
               <!-- 6. 動画操作マップ（全体） -->
               <div class="tab-pane fade" id="video-operations" role="tabpanel">
@@ -1176,18 +1353,23 @@
 })();
 
 // ERBテンプレートからのデータを準備（Turboキャッシュ対応：varで条件付き定義）
+console.log('[chartsData] 定義開始');
 if (typeof chartsData === 'undefined') {
+  console.log('[chartsData] 初回定義');
   var chartsData = {
     hourly_activity_data: <%= raw @hourly_activity_data.to_json %>,
     user_score_data: <%= raw @user_score_data.to_json %>,
     video_time_density_data: <%= raw @video_time_density_data.to_json %>
   };
+  console.log('[chartsData] 定義完了:', chartsData);
 } else {
+  console.log('[chartsData] 再定義');
   chartsData = {
     hourly_activity_data: <%= raw @hourly_activity_data.to_json %>,
     user_score_data: <%= raw @user_score_data.to_json %>,
     video_time_density_data: <%= raw @video_time_density_data.to_json %>
   };
+  console.log('[chartsData] 再定義完了:', chartsData);
 }
 
 // 他のチャート初期化実行フラグ
@@ -1195,8 +1377,12 @@ var otherChartsInitialized = false;
 
 // 他のチャート（eventDistribution, hourlyActivity等）を初期化する関数
 function initializeOtherCharts(chartsData) {
+  console.log('[initializeOtherCharts] 関数呼び出し');
+  console.log('[initializeOtherCharts] otherChartsInitialized:', otherChartsInitialized);
+  
   // 既に初期化済みなら実行しない
   if (otherChartsInitialized) {
+    console.log('[initializeOtherCharts] 既に初期化済みのため処理をスキップ');
     return;
   }
   
@@ -1206,6 +1392,7 @@ function initializeOtherCharts(chartsData) {
   }
   
   otherChartsInitialized = true;
+  console.log('[initializeOtherCharts] 初期化開始');
   
   const commonOptions = {
     responsive: true,
@@ -1220,46 +1407,61 @@ function initializeOtherCharts(chartsData) {
   
   // 1. 時間帯別活動量グラフ
   if (chartsData.hourly_activity_data) {
+    console.log('[時間帯別活動] グラフ初期化開始');
     const ctx = document.getElementById('hourlyActivityChart');
+    console.log('[時間帯別活動] canvas要素:', ctx);
+    console.log('[時間帯別活動] canvas親要素:', ctx ? ctx.parentElement : 'なし');
+    console.log('[時間帯別活動] canvas表示:', ctx ? window.getComputedStyle(ctx).display : 'なし');
+    
     if (ctx) {
       const hourlyData = chartsData.hourly_activity_data;
+      console.log('[時間帯別活動] グラフ作成中...');
       
-      chartInstances.hourlyActivity = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: hourlyData.labels.map(h => h + '時'),
-          datasets: [{
-            label: 'イベント数',
-            data: hourlyData.values,
-            backgroundColor: 'rgba(54, 162, 235, 0.8)',
-            borderColor: 'rgba(54, 162, 235, 1)',
-            borderWidth: 1
-          }]
-        },
-        options: {
-          ...commonOptions,
-          scales: {
-            x: {
-              title: {
-                display: true,
-                text: '時間帯'
-              }
-            },
-            y: {
-              title: {
-                display: true,
-                text: 'イベント数'
+      try {
+        chartInstances.hourlyActivity = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: hourlyData.labels.map(h => h + '時'),
+            datasets: [{
+              label: 'イベント数',
+              data: hourlyData.values,
+              backgroundColor: 'rgba(54, 162, 235, 0.8)',
+              borderColor: 'rgba(54, 162, 235, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            ...commonOptions,
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: '時間帯'
+                }
               },
-              beginAtZero: true,
-              ticks: {
-                stepSize: 1
+              y: {
+                title: {
+                  display: true,
+                  text: 'イベント数'
+                },
+                beginAtZero: true,
+                ticks: {
+                  stepSize: 1
+                }
               }
             }
           }
-        }
-      });
-      console.log('[時間帯別活動量グラフ] 初期化完了');
+        });
+        console.log('[時間帯別活動量グラフ] 初期化成功');
+        console.log('[時間帯別活動] chartInstances.hourlyActivity:', chartInstances.hourlyActivity);
+      } catch (e) {
+        console.error('[時間帯別活動] グラフ作成エラー:', e.message, e);
+      }
+    } else {
+      console.warn('[時間帯別活動] canvas要素が見つかりません');
     }
+  } else {
+    console.warn('[時間帯別活動] hourly_activity_dataが見つかりません:', chartsData);
   }
   
   // 3. ユーザー別平均スコアグラフ（必要に応じて初期化）
