@@ -502,6 +502,17 @@
                     </div>
                   </div>
 
+                  <!-- マーカー非表示トグル -->
+                  <div class="mt-3 mb-3">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="hideMarkersClassificationToggle" onchange="toggleMarkerVisibilityClassification()">
+                      <label class="form-check-label" for="hideMarkersClassificationToggle">
+                        <strong>マーカーを非表示にして線だけ表示</strong>
+                      </label>
+                      <small class="text-muted d-block ms-4">セッションラインのマーカー（ポイント）を非表示にエシステムを簡潔にします</small>
+                    </div>
+                  </div>
+
                   <!-- グラフ領域 -->
                   <div class="chart-container" style="position: relative; height: 400px; border: 2px dashed #ccc; padding: 10px; border-radius: 5px;">
                     <canvas id="userClassificationChart"></canvas>
@@ -1936,6 +1947,42 @@ function toggleMarkerVisibility() {
   console.log('[マーカートグル] グラフ更新完了');
 }
 
+function toggleMarkerVisibilityClassification() {
+  const checkbox = document.getElementById('hideMarkersClassificationToggle');
+  const chart = chartInstances.userClassification;
+  
+  if (!chart) {
+    console.warn('[分類マーカートグル] チャートインスタンスが見つかりません');
+    return;
+  }
+  
+  console.log('[分類マーカートグル] 実行開始', {
+    checked: checkbox.checked,
+    datasetCount: chart.data.datasets.length
+  });
+  
+  // 各データセットのマーカー表示を制御
+  chart.data.datasets.forEach((dataset, index) => {
+    if (!dataset.label) return;
+    
+    // すべてのセッションラインのマーカーを制御
+    if (checkbox.checked) {
+      // チェック時：マーカー非表示
+      dataset.pointRadius = 0;
+      dataset.pointHoverRadius = 0;
+      console.log(`[分類マーカートグル] データセット ${index} (${dataset.label}) マーカー非表示`);
+    } else {
+      // チェック解除時：マーカー表示
+      dataset.pointRadius = 2;
+      dataset.pointHoverRadius = 5;
+      console.log(`[分類マーカートグル] データセット ${index} (${dataset.label}) マーカー表示`);
+    }
+  });
+  
+  chart.update('none');
+  console.log('[分類マーカートグル] グラフ更新完了');
+}
+
 function initializeAnalyticsCharts() {
   // 既に初期化中なら返す
   if (isInitializingCharts) {
@@ -3015,7 +3062,8 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
   });
   
   // クリックイベントを登録
-  ctx.addEventListener('click', function(event) {
+  const canvasElement = ctx.canvas || document.getElementById('userClassificationChart');
+  canvasElement.addEventListener('click', function(event) {
     const points = chartInstances.userClassification.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
     if (points.length > 0) {
       classifyUserSession(points[0].datasetIndex);
