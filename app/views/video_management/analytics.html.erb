@@ -502,17 +502,6 @@
                     </div>
                   </div>
 
-                  <!-- マーカーを非表示にするトグル -->
-                  <div class="mt-3 mb-3">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="classificationHideMarkersToggle" onchange="toggleUserClassificationMarkers()">
-                      <label class="form-check-label" for="classificationHideMarkersToggle">
-                        <strong>マーカーを非表示にする</strong>
-                      </label>
-                      <small class="text-muted d-block ms-4">セッションラインのマーカーを非表示にします</small>
-                    </div>
-                  </div>
-
                   <!-- グラフ領域 -->
                   <div class="chart-container" style="position: relative; height: 400px; border: 2px dashed #ccc; padding: 10px; border-radius: 5px;">
                     <canvas id="userClassificationChart"></canvas>
@@ -525,14 +514,6 @@
                   <div id="classificationStats" class="row"></div>
                 </div>
               </div>
-              
-              <script>
-                // ユーザー分類タブクリック時に再度グラフを初期化
-                document.getElementById('user-classification-tab')?.addEventListener('shown.bs.tab', function() {
-                  console.log('[ユーザー分類タブ] クリック検出');
-                  initializeUserClassificationChart();
-                });
-              </script>
             </div>
           </div>
         </div>
@@ -1953,41 +1934,6 @@ function toggleMarkerVisibility() {
   
   chart.update('none');
   console.log('[マーカートグル] グラフ更新完了');
-}
-
-function toggleUserClassificationMarkers() {
-  const checkbox = document.getElementById('classificationHideMarkersToggle');
-  const chart = chartInstances.userClassification;
-  
-  if (!chart) {
-    console.log('[ユーザー分類マーカートグル] グラフが未初期化');
-    return;
-  }
-  
-  console.log('[ユーザー分類マーカートグル] 実行開始', {
-    checked: checkbox.checked
-  });
-  
-  // 各データセットのマーカー表示を制御
-  chart.data.datasets.forEach((dataset, index) => {
-    if (!dataset.label) return;
-    
-    // セッションラインのポイント
-    if (dataset.showLine && dataset.pointRadius !== undefined) {
-      if (checkbox.checked) {
-        dataset.pointRadius = 0;
-        dataset.pointHoverRadius = 0;
-        console.log(`[ユーザー分類マーカートグル] データセット ${index} (${dataset.label}) を非表示`);
-      } else {
-        dataset.pointRadius = 3;
-        dataset.pointHoverRadius = 5;
-        console.log(`[ユーザー分類マーカートグル] データセット ${index} (${dataset.label}) を表示`);
-      }
-    }
-  });
-  
-  chart.update('none');
-  console.log('[ユーザー分類マーカートグル] グラフ更新完了');
 }
 
 function initializeAnalyticsCharts() {
