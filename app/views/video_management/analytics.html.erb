@@ -1365,6 +1365,11 @@
 
 // ERBテンプレートからのデータを準備（Turboキャッシュ対応：varで条件付き定義）
 console.log('[chartsData] 定義開始');
+
+// 問題数を保存（統計計算用）
+window.totalQuestions = <%= @questions.count %>;
+console.log('[動画情報] 問題数:', window.totalQuestions);
+
 if (typeof chartsData === 'undefined') {
   console.log('[chartsData] 初回定義');
   var chartsData = {
@@ -3254,6 +3259,44 @@ function updateClassificationStats() {
     const avgResponseTime = (groupResponses.reduce((sum, r) => sum + (r.response_time || 0), 0) / totalResponses / 1000).toFixed(1);
     const avgResponsesPerSession = (totalResponses / sessionIds.length).toFixed(1);
     
+    // 新規項目の計算
+    const totalQuestions = window.totalQuestions || 0;
+    const groupMemberCount = sessionIds.length;
+    
+    // デバッグログ
+    console.log(`[分類統計] グループ ${group} 計算詳細:`, {
+      正解数: correctResponses,
+      回答数: totalResponses,
+      問題数: totalQuestions,
+      グループ人数: groupMemberCount,
+      正解フィルタ確認: groupResponses.slice(0, 3).map(r => ({ correct: r.correct, is_correct: r.is_correct }))
+    });
+    
+    // 全体正答率 = 各セッションで得られた全ての回答をベースに計算
+    // = (グループ全体の正解数 ÷ グループが有すべき最大正解数) × 100%
+    // グループが有すべき最大正解数 = 問題数 × グループ人数
+    const overallAccuracyRate = totalQuestions > 0 && groupMemberCount > 0
+      ? ((correctResponses / (totalQuestions * groupMemberCount)) * 100).toFixed(1)
+      : 0;
+    
+    // 平均得点 = (正解数 × (100 ÷ 問題数)) ÷ グループ人数
+    // = グループメンバー1人当たりの平均点数
+    // 一問当たりの得点 = 100 ÷ 問題数
+    const scorePerQuestion = totalQuestions > 0 ? (100 / totalQuestions) : 0;
+    const averageScore = groupMemberCount > 0
+      ? ((correctResponses * scorePerQuestion) / groupMemberCount).toFixed(1)
+      : 0;
+    
+    console.log(`[分類統計] グループ ${group} 計算結果:`, {
+      '正解率（回答ベース）': correctRate + '%',
+      '全体正答率': overallAccuracyRate + '%',
+      '平均得点': averageScore + '点',
+      '計算式詳細': {
+        '全体正答率': `${correctResponses} / (${totalQuestions} × ${groupMemberCount}) × 100 = ${overallAccuracyRate}%`,
+        '平均得点': `(${correctResponses} × (100 / ${totalQuestions})) / ${groupMemberCount} = ${averageScore}点`
+      }
+    });
+    
     html += `
       <div class="col-md-6 col-lg-3 mb-3">
         <div class="card" style="border-left: 4px solid ${groupBgColors[group]}">
@@ -3270,6 +3313,10 @@ function updateClassificationStats() {
               <dd>${correctResponses}件</dd>
               <dt>正解率</dt>
               <dd><strong style="color: ${groupBgColors[group]}">${correctRate}%</strong></dd>
+              <dt>全体正答率</dt>
+              <dd><strong style="color: ${groupBgColors[group]}">${overallAccuracyRate}%</strong></dd>
+              <dt>平均得点</dt>
+              <dd><strong style="color: ${groupBgColors[group]}">${averageScore}点</strong></dd>
               <dt>平均回答時間</dt>
               <dd>${avgResponseTime}秒</dd>
             </dl>
