@@ -3072,6 +3072,25 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
         legend: {
           display: true,
           position: 'top'
+        },
+        zoom: {
+          zoom: {
+            wheel: {
+              enabled: true,
+            },
+            pinch: {
+              enabled: true
+            },
+            mode: 'xy',
+          },
+          pan: {
+            enabled: true,
+            mode: 'xy',
+          },
+          limits: {
+            x: {min: 'original', max: 'original'},
+            y: {min: 'original', max: 'original'}
+          }
         }
       }
     }
@@ -3079,11 +3098,31 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
   
   // クリックイベントを登録
   const canvasElement = ctx.canvas || document.getElementById('userClassificationChart');
+  
+  // ダブルクリック検出用
+  let lastClickTime = 0;
+  let doubleClickResetActive = false;
+  
   canvasElement.addEventListener('click', function(event) {
-    const points = chartInstances.userClassification.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
-    if (points.length > 0) {
-      classifyUserSession(points[0].datasetIndex);
+    const currentTime = new Date().getTime();
+    const timeDifference = currentTime - lastClickTime;
+    
+    // ダブルクリック判定（300ms以内）
+    if (timeDifference < 300) {
+      doubleClickResetActive = true;
+      // ズームをリセット
+      chartInstances.userClassification.resetZoom();
+      console.log('[ユーザー分類] ズームをリセット');
+    } else {
+      doubleClickResetActive = false;
+      // ダブルクリックではないので通常のセッション分類処理
+      const points = chartInstances.userClassification.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+      if (points.length > 0) {
+        classifyUserSession(points[0].datasetIndex);
+      }
     }
+    
+    lastClickTime = currentTime;
   });
 }
 
