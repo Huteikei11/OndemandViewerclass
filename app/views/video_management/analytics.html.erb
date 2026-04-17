@@ -3279,21 +3279,11 @@ function updateClassificationStats() {
       ? ((correctResponses / (totalQuestions * groupMemberCount)) * 100).toFixed(1)
       : 0;
     
-    // 平均得点 = (正解数 × (100 ÷ 問題数)) ÷ グループ人数
-    // = グループメンバー1人当たりの平均点数
-    // 一問当たりの得点 = 100 ÷ 問題数
-    const scorePerQuestion = totalQuestions > 0 ? (100 / totalQuestions) : 0;
-    const averageScore = groupMemberCount > 0
-      ? ((correctResponses * scorePerQuestion) / groupMemberCount).toFixed(1)
-      : 0;
-    
     console.log(`[分類統計] グループ ${group} 計算結果:`, {
       '正解率（回答ベース）': correctRate + '%',
       '全体正答率': overallAccuracyRate + '%',
-      '平均得点': averageScore + '点',
       '計算式詳細': {
-        '全体正答率': `${correctResponses} / (${totalQuestions} × ${groupMemberCount}) × 100 = ${overallAccuracyRate}%`,
-        '平均得点': `(${correctResponses} × (100 / ${totalQuestions})) / ${groupMemberCount} = ${averageScore}点`
+        '全体正答率': `${correctResponses} / (${totalQuestions} × ${groupMemberCount}) × 100 = ${overallAccuracyRate}%`
       }
     });
     
@@ -3315,8 +3305,6 @@ function updateClassificationStats() {
               <dd><strong style="color: ${groupBgColors[group]}">${correctRate}%</strong></dd>
               <dt>全体正答率</dt>
               <dd><strong style="color: ${groupBgColors[group]}">${overallAccuracyRate}%</strong></dd>
-              <dt>平均得点</dt>
-              <dd><strong style="color: ${groupBgColors[group]}">${averageScore}点</strong></dd>
               <dt>平均回答時間</dt>
               <dd>${avgResponseTime}秒</dd>
             </dl>
