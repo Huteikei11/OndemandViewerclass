@@ -513,6 +513,17 @@
                     </div>
                   </div>
 
+                  <!-- ユーザー数ベースでカウント -->
+                  <div class="mt-3 mb-3">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="countUniqueUsersToggle" onchange="updateClassificationStats()">
+                      <label class="form-check-label" for="countUniqueUsersToggle">
+                        <strong>ユーザー数でカウント（セッション数ではなく）</strong>
+                      </label>
+                      <small class="text-muted d-block ms-4">同じユーザーが複数セッションある場合、1人としてカウントします</small>
+                    </div>
+                  </div>
+
                   <!-- グラフ領域 -->
                   <div class="chart-container" style="position: relative; height: 800px; border: 2px dashed #ccc; padding: 10px; border-radius: 5px;">
                     <canvas id="userClassificationChart"></canvas>
@@ -3237,13 +3248,31 @@ function updateClassificationStats() {
       }))
     });
     
+    // ユーザー数ベースでカウントするかの確認
+    const useUniqueUsers = document.getElementById('countUniqueUsersToggle').checked;
+    let groupMemberCount;
+    let displayLabel;
+    
+    if (useUniqueUsers) {
+      // ユーザー数でカウント：セッションIDからユーザーIDを抽出してユニークカウント
+      const uniqueUserIds = new Set(
+        sessionIds.map(sessionId => window.sessionUserMap[sessionId]?.user_id).filter(uid => uid !== undefined)
+      );
+      groupMemberCount = uniqueUserIds.size;
+      displayLabel = `${groupMemberCount}名（ユーザー数）`;
+    } else {
+      // セッション数でカウント（デフォルト）
+      groupMemberCount = sessionIds.length;
+      displayLabel = `${groupMemberCount}件（セッション数）`;
+    }
+    
     if (groupResponses.length === 0) {
       html += `
         <div class="col-md-6 col-lg-3 mb-3">
           <div class="card" style="border-left: 4px solid ${groupBgColors[group]}">
             <div class="card-body">
               <h6 class="card-title">${groupLabels[group]}</h6>
-              <p class="text-muted">セッション数: ${sessionIds.length}</p>
+              <p class="text-muted">グループ人数: ${displayLabel}</p>
               <p class="text-muted">回答なし</p>
             </div>
           </div>
@@ -3261,7 +3290,6 @@ function updateClassificationStats() {
     
     // 新規項目の計算
     const totalQuestions = window.totalQuestions || 0;
-    const groupMemberCount = sessionIds.length;
     
     // デバッグログ
     console.log(`[分類統計] グループ ${group} 計算詳細:`, {
@@ -3269,6 +3297,7 @@ function updateClassificationStats() {
       回答数: totalResponses,
       問題数: totalQuestions,
       グループ人数: groupMemberCount,
+      カウント方式: useUniqueUsers ? 'ユーザー数' : 'セッション数',
       正解フィルタ確認: groupResponses.slice(0, 3).map(r => ({ correct: r.correct, is_correct: r.is_correct }))
     });
     
@@ -3293,8 +3322,8 @@ function updateClassificationStats() {
           <div class="card-body">
             <h6 class="card-title">${groupLabels[group]}</h6>
             <dl class="small mb-0">
-              <dt>セッション数</dt>
-              <dd>${sessionIds.length}件</dd>
+              <dt>グループ人数</dt>
+              <dd>${displayLabel}</dd>
               <dt>回答数</dt>
               <dd>${totalResponses}件</dd>
               <dt>平均回答数</dt>
