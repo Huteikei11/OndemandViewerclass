@@ -53,7 +53,7 @@
         <div class="col-md-3">
           <div class="card text-center">
             <div class="card-body">
-              <h5 class="card-title">正解数</h5>
+              <h5 class="card-title">正答数</h5>
               <h2 class="text-success"><%= @correct_responses %></h2>
             </div>
           </div>
@@ -83,7 +83,7 @@
                     <th>タイプ</th>
                     <th>時間位置</th>
                     <th>回答数</th>
-                    <th>正解数</th>
+                    <th>正答数</th>
                     <th>正答率</th>
                     <th>平均回答時間</th>
                   </tr>
@@ -774,9 +774,9 @@
                       <td><%= truncate(response.user_answer, length: 30) %></td>
                       <td>
                         <% if response.is_correct %>
-                          <span class="badge bg-success">正解</span>
+                          <span class="badge bg-success">正答</span>
                         <% else %>
-                          <span class="badge bg-danger">不正解</span>
+                          <span class="badge bg-danger">不正答</span>
                         <% end %>
                       </td>
                       <td>
@@ -3393,26 +3393,26 @@ function updateClassificationStats() {
     
     // デバッグログ
     console.log(`[分類統計] グループ ${group} 計算詳細:`, {
-      正解数: correctResponses,
+      正答数: correctResponses,
       回答数: totalResponses,
       問題数: totalQuestions,
       グループ人数: groupMemberCount,
       カウント方式: useUniqueUsers ? 'ユーザー数' : 'セッション数',
-      正解フィルタ確認: groupResponses.slice(0, 3).map(r => ({ correct: r.correct, is_correct: r.is_correct }))
+      正答フィルタ確認: groupResponses.slice(0, 3).map(r => ({ correct: r.correct, is_correct: r.is_correct }))
     });
     
-    // 全体正答率 = 各セッションで得られた全ての回答をベースに計算
-    // = (グループ全体の正解数 ÷ グループが有すべき最大正解数) × 100%
-    // グループが有すべき最大正解数 = 問題数 × グループ人数
+    // 全問正答率 = 各セッションで得られた全ての回答をベースに計算
+    // = (グループ全体の正答数 ÷ グループが有すべき最大正答数) × 100%
+    // グループが有すべき最大正答数 = 問題数 × グループ人数
     const overallAccuracyRate = totalQuestions > 0 && groupMemberCount > 0
       ? ((correctResponses / (totalQuestions * groupMemberCount)) * 100).toFixed(1)
       : 0;
     
     console.log(`[分類統計] グループ ${group} 計算結果:`, {
-      '正解率（回答ベース）': correctRate + '%',
-      '全体正答率': overallAccuracyRate + '%',
+      '正答率（回答ベース）': correctRate + '%',
+      '全問正答率': overallAccuracyRate + '%',
       '計算式詳細': {
-        '全体正答率': `${correctResponses} / (${totalQuestions} × ${groupMemberCount}) × 100 = ${overallAccuracyRate}%`
+        '全問正答率': `${correctResponses} / (${totalQuestions} × ${groupMemberCount}) × 100 = ${overallAccuracyRate}%`
       }
     });
     
@@ -3428,11 +3428,11 @@ function updateClassificationStats() {
               <dd>${totalResponses}件</dd>
               <dt>平均回答数</dt>
               <dd><strong>${avgResponsesPerSession}回/セッション</strong></dd>
-              <dt>正解数</dt>
+              <dt>正答数</dt>
               <dd>${correctResponses}件</dd>
-              <dt>正解率</dt>
+              <dt>正答率</dt>
               <dd><strong style="color: ${groupBgColors[group]}">${correctRate}%</strong></dd>
-              <dt>全体正答率</dt>
+              <dt>全問正答率</dt>
               <dd><strong style="color: ${groupBgColors[group]}">${overallAccuracyRate}%</strong></dd>
               <dt>平均回答時間</dt>
               <dd>${avgResponseTime}秒</dd>
