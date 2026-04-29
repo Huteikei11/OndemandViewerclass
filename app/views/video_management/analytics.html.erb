@@ -1507,6 +1507,10 @@ function initializeOtherCharts(chartsData) {
 if (typeof chartInstances === 'undefined') {
   var chartInstances = {};
 }
+// 動画IDをグローバル変数として保存
+if (typeof videoIdGlobal === 'undefined') {
+  var videoIdGlobal = <%= @video.id %>;
+}
 // 初期化フラグで重複実行を防ぐ (Turbo キャッシュ対応: 再宣言エラー防止)
 if (typeof isInitializingCharts === 'undefined') {
   var isInitializingCharts = false;
@@ -3124,6 +3128,53 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
     
     lastClickTime = currentTime;
   });
+  
+  // ローカルストレージから前回の分類データを読み込む
+  const storageKey = `userClassification_video_${videoIdGlobal}`;
+  const savedClassifications = localStorage.getItem(storageKey);
+  
+  if (savedClassifications) {
+    try {
+      const parsed = JSON.parse(savedClassifications);
+      console.log('[ユーザー分類] ローカルストレージから分類データを読み込み:', parsed);
+      
+      // 保存されたデータを復元
+      window.userClassifications = parsed;
+      
+      // グラフに反映
+      Object.keys(parsed).forEach(group => {
+        const sessionIds = parsed[group];
+        const groupColors = {
+          groupA: 'rgba(13, 110, 253, 0.8)',   // 青
+          groupB: 'rgba(40, 167, 69, 0.8)',    // 緑
+          groupC: 'rgba(255, 193, 7, 0.8)',    // 黄
+          groupD: 'rgba(220, 53, 69, 0.8)'     // 赤
+        };
+        
+        sessionIds.forEach(sessionId => {
+          const dataset = chartInstances.userClassification.data.datasets.find(
+            d => d.sessionId === sessionId
+          );
+          if (dataset) {
+            dataset.classification = group;
+            dataset.borderColor = groupColors[group];
+            dataset.borderWidth = 3;
+            dataset.pointBackgroundColor = groupColors[group];
+            dataset.pointBorderColor = groupColors[group];
+            dataset.pointRadius = 2;
+          }
+        });
+      });
+      
+      chartInstances.userClassification.update('none');
+      updateClassificationStats();
+      console.log('[ユーザー分類] グラフに分類データを反映完了');
+    } catch (error) {
+      console.error('[ユーザー分類] ローカルストレージの読み込みエラー:', error);
+    }
+  } else {
+    console.log('[ユーザー分類] 保存された分類データなし');
+  }
 }
 
 // ユーザーをグループに分類
@@ -3189,6 +3240,11 @@ function classifyUserSession(datasetIndex) {
   
   // 統計を表示
   updateClassificationStats();
+  
+  // ローカルストレージに分類データを保存
+  const storageKey = `userClassification_video_${videoIdGlobal}`;
+  localStorage.setItem(storageKey, JSON.stringify(window.userClassifications));
+  console.log('[ユーザー分類] ローカルストレージに分類データを保存:', window.userClassifications);
 }
 
 // 分類結果をリセット
@@ -3216,6 +3272,11 @@ function resetUserClassification() {
   });
   
   chartInstances.userClassification.update('none');
+  
+  // ローカルストレージから分類データを削除
+  const storageKey = `userClassification_video_${videoIdGlobal}`;
+  localStorage.removeItem(storageKey);
+  console.log('[ユーザー分類] ローカルストレージの分類データを削除');
   
   document.getElementById('classificationStats').innerHTML = '';
 }
