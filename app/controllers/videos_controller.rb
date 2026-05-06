@@ -20,10 +20,20 @@ class VideosController < ApplicationController
     @user_responses = current_user&.user_responses&.joins(:question)&.where(questions: { video_id: @video.id }) || []
 
     # 1. 最後に実際に動画を見たセッション（last_video_time > 0）を優先的に取得
-    resumable_sessions = current_user.learning_sessions
-      .where(video_id: @video.id)
-      .where("last_video_time > 0")  # 実際に視聴したセッション
-      .order(session_start_time: :desc)
+    # NOTE: last_video_time カラムが存在しない場合に備えて、存在確認してから使用
+    begin
+      resumable_sessions = current_user.learning_sessions
+        .where(video_id: @video.id)
+        .where("last_video_time > 0")  # 実際に視聴したセッション
+        .order(session_start_time: :desc)
+    rescue ActiveRecord::StatementInvalid => e
+      if e.message.include?("no such column: last_video_time")
+        Rails.logger.warn "⚠️ last_video_time カラムが存在しません。マイグレーションが未実行の可能性があります。"
+        resumable_sessions = []
+      else
+        raise
+      end
+    end
 
     @resume_session = resumable_sessions.first
 
@@ -35,7 +45,12 @@ class VideosController < ApplicationController
 
     # JavaScript側で復元するために、最新セッション情報をJSON化して渡す
     @latest_session_json = if @resume_session
-      @resume_session.to_json(only: [ :id, :last_video_time, :last_session_elapsed ], methods: [ :formatted_resume_time, :can_resume? ])
+      begin
+        @resume_session.to_json(only: [ :id, :last_video_time, :last_session_elapsed ], methods: [ :formatted_resume_time, :can_resume? ])
+      rescue => e
+        Rails.logger.warn "⚠️ セッション情報のJSON化に失敗（カラム不足の可能性）: #{e.message}"
+        {}.to_json
+      end
     else
       {}.to_json
     end

@@ -31,4 +31,8 @@ else
   bundle exec rake db:migrate RAILS_ENV=production
 fi
 
+# 常にマイグレーションを確実に実行（新しいカラムなどが追加されている場合に対応）
+echo "Ensuring all migrations are applied..."
+bundle exec rake db:migrate RAILS_ENV=production || true
+
 echo "=== Build Complete ==="

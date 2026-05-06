@@ -123,14 +123,27 @@ class LearningSession < ApplicationRecord
 
   # セッションが再開可能か判定（再生位置があるか）
   def can_resume?
-    last_video_time > 0
+    # last_video_time カラムが存在しない場合は false を返す
+    return false unless has_attribute?(:last_video_time)
+    begin
+      last_video_time.to_f > 0
+    rescue
+      false
+    end
   end
 
   # 再開時刻をフォーマット（MM:SS形式）
   def formatted_resume_time
-    minutes = (last_video_time / 60).floor
-    seconds = (last_video_time % 60).floor
-    "#{minutes.to_s.rjust(2, '0')}:#{seconds.to_s.rjust(2, '0')}"
+    # last_video_time カラムが存在しない場合は "00:00" を返す
+    return "00:00" unless has_attribute?(:last_video_time)
+    begin
+      video_time = last_video_time.to_f
+      minutes = (video_time / 60).floor
+      seconds = (video_time % 60).floor
+      "#{minutes.to_s.rjust(2, '0')}:#{seconds.to_s.rjust(2, '0')}"
+    rescue
+      "00:00"
+    end
   end
 
   # セッション開始からの経過時間をフォーマット（秒）
