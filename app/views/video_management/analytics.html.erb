@@ -930,6 +930,10 @@
       })
       .then(data => {
         console.log('セッションデータ:', data);
+        console.log('response_markers:', data.response_markers);
+        console.log('  - quick:', data.response_markers?.quick);
+        console.log('  - normal:', data.response_markers?.normal);
+        console.log('  - slow:', data.response_markers?.slow);
         renderChart(data);
         renderTimestampLog(data);
       })
@@ -950,6 +954,11 @@
     }
     
     console.log('グラフ描画開始:', data);
+    console.log('📊 response_markers の確認:');
+    console.log('  - 存在有無:', !!data.response_markers);
+    console.log('  - quick count:', data.response_markers?.quick?.length || 0);
+    console.log('  - normal count:', data.response_markers?.normal?.length || 0);
+    console.log('  - slow count:', data.response_markers?.slow?.length || 0);
     
     // データが空の場合
     if (!data.timeline || data.timeline.length === 0) {
@@ -1104,7 +1113,7 @@
           order: 1
         },
         {
-          label: '素早い回答',
+          label: '反応速度 - 素早い回答',
           data: quickResponseData,
           borderColor: '#ff65B2',
           backgroundColor: '#ff65B2',
@@ -1115,7 +1124,7 @@
           order: 0
         },
         {
-          label: '通常の回答',
+          label: '反応速度 - 通常の回答',
           data: normalResponseData,
           borderColor: '#ff007F',
           backgroundColor: '#ff007F',
@@ -1126,7 +1135,7 @@
           order: 0
         },
         {
-          label: '遅い回答',
+          label: '反応速度 - 遅い回答',
           data: slowResponseData,
           borderColor: '#98004c',
           backgroundColor: '#98004c',
@@ -2214,7 +2223,59 @@ function initializeAnalyticsCharts() {
       // このセッションに属するデータセットのインデックスを記録
       sessionDatasetGroups[session.session_id] = [lineDatasetIndex];
       
-      // 対応する動画操作マーカーをまとめて追加
+      // 対応する動画操作マーカーをまとめて追加（セッションデータから）
+      if (session.video_operations && (session.video_operations.skip?.length || session.video_operations.pause?.length || session.video_operations.other?.length)) {
+        console.log(`🔧 [操作マーカー] セッション ${session.session_id}:`, session.video_operations);
+        
+        const allOperations = [];
+        
+        // スキップ/シークマーカー（三角形、紫）
+        if (session.video_operations.skip && session.video_operations.skip.length > 0) {
+          console.log(`  ✓ skip: ${session.video_operations.skip.length}件`);
+          session.video_operations.skip.forEach(point => {
+            allOperations.push({ x: point.time, y: point.video_time || 0, style: 'triangle', type: 'スキップ', color: '#6f42c1' });
+          });
+        }
+        
+        // 一時停止マーカー（四角形、紫）
+        if (session.video_operations.pause && session.video_operations.pause.length > 0) {
+          console.log(`  ✓ pause: ${session.video_operations.pause.length}件`);
+          session.video_operations.pause.forEach(point => {
+            allOperations.push({ x: point.time, y: point.video_time || 0, style: 'rect', type: '一時停止', color: '#6f42c1' });
+          });
+        }
+        
+        // その他の操作マーカー（円形、紫）
+        if (session.video_operations.other && session.video_operations.other.length > 0) {
+          console.log(`  ✓ other: ${session.video_operations.other.length}件`);
+          session.video_operations.other.forEach(point => {
+            allOperations.push({ x: point.time, y: point.video_time || 0, style: 'circle', type: 'その他の操作', color: '#6f42c1' });
+          });
+        }
+        
+        // すべての操作を1つのデータセットとして追加
+        if (allOperations.length > 0) {
+          sessionDatasetGroups[session.session_id].push(datasets.length);
+          datasets.push({
+            label: `${session.label} - 操作マーカー（紫）`,
+            data: allOperations,
+            backgroundColor: allOperations.map(o => o.color),
+            borderColor: allOperations.map(o => o.color),
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            pointStyle: function(context) {
+              const point = context.raw;
+              if (!point) return 'circle';
+              return point.style || 'circle';
+            },
+            showLine: false,
+            order: 1,
+            sessionId: session.session_id
+          });
+        }
+      }
+      
+      // 対応する動画操作マーカーをまとめて追加（外部データから検索：後方互換性）
       const ops = videoOperationsMarkers.find(o => o.session_id === session.session_id);
       if (ops) {
         // すべての操作マーカーを1つの配列にまとめる
@@ -2263,7 +2324,59 @@ function initializeAnalyticsCharts() {
         }
       }
       
-      // 反応速度マーカーを追加
+      // 反応速度マーカーを追加（セッションデータに含まれる場合）
+      if (session.response_markers && (session.response_markers.quick?.length || session.response_markers.normal?.length || session.response_markers.slow?.length)) {
+        console.log(`📍 [反応速度マーカー] セッション ${session.session_id}:`, session.response_markers);
+        
+        const allResponses = [];
+        
+        // 素早い回答マーカー（上向き三角▲、ピンク）
+        if (session.response_markers.quick && session.response_markers.quick.length > 0) {
+          console.log(`  ✓ quick: ${session.response_markers.quick.length}件`);
+          session.response_markers.quick.forEach(point => {
+            allResponses.push({ x: point.time, y: point.video_time || 0, style: 'triangle', type: '素早い回答', color: '#ff65B2' });
+          });
+        }
+        
+        // 通常の回答速度マーカー（円形○、濃いピンク）
+        if (session.response_markers.normal && session.response_markers.normal.length > 0) {
+          console.log(`  ✓ normal: ${session.response_markers.normal.length}件`);
+          session.response_markers.normal.forEach(point => {
+            allResponses.push({ x: point.time, y: point.video_time || 0, style: 'circle', type: '回答速度普通', color: '#ff007F' });
+          });
+        }
+        
+        // 回答遅延マーカー（下向き三角▼、深い紫紅）
+        if (session.response_markers.slow && session.response_markers.slow.length > 0) {
+          console.log(`  ✓ slow: ${session.response_markers.slow.length}件`);
+          session.response_markers.slow.forEach(point => {
+            allResponses.push({ x: point.time, y: point.video_time || 0, style: 'rectRot', type: '回答遅延', color: '#98004c' });
+          });
+        }
+        
+        // 反応速度マーカーをデータセットに追加
+        if (allResponses.length > 0) {
+          sessionDatasetGroups[session.session_id].push(datasets.length);
+          datasets.push({
+            label: `${session.label} - 反応速度`,
+            data: allResponses,
+            backgroundColor: allResponses.map(r => r.color),
+            borderColor: allResponses.map(r => r.color),
+            pointRadius: 8,
+            pointHoverRadius: 10,
+            pointStyle: function(context) {
+              const point = context.raw;
+              if (!point) return 'circle';
+              return point.style || 'circle';
+            },
+            showLine: false,
+            order: 0,
+            sessionId: session.session_id
+          });
+        }
+      }
+      
+      // 反応速度マーカーを追加（外部データから検索：後方互換性）
       const resp = responseTimeMarkers.find(r => r.session_id === session.session_id);
       console.log(`[反応速度デバッグ] セッション ${session.session_id} のマーカー検索結果:`, resp);
       if (resp) {

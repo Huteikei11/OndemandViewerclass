@@ -210,6 +210,15 @@ class VideoManagementController < ApplicationController
     end.compact
   end
 
+  def session_detail
+    learning_session = @video.learning_sessions.find(params[:session_id])
+    events = learning_session.timestamp_events
+
+    chart_data = prepare_chart_data(events)
+    
+    render json: chart_data
+  end
+
   # AJAX: グラフデータを段階的に取得
   def get_chart_data
     @video = Video.find(params[:video_id])
@@ -256,7 +265,56 @@ class VideoManagementController < ApplicationController
           data: events.map { |e| { x: e.session_elapsed.round(1), y: e.concentration_score, video_time: e.video_time } },
           session_id: session.id,
           user_id: session.user_id,
-          user_email: session.user.email
+          user_email: session.user.email,
+          response_markers: {
+            quick: session.timestamp_events.where(event_type: "response_quick").map { |e|
+              {
+                time: e.session_elapsed,
+                video_time: e.video_time,
+                description: e.description
+              }
+            },
+            normal: session.timestamp_events.where(event_type: "response_normal").map { |e|
+              {
+                time: e.session_elapsed,
+                video_time: e.video_time,
+                description: e.description
+              }
+            },
+            slow: session.timestamp_events.where(event_type: "response_slow").map { |e|
+              {
+                time: e.session_elapsed,
+                video_time: e.video_time,
+                description: e.description
+              }
+            }
+          },
+          video_operations: {
+            skip: session.timestamp_events.where("event_type LIKE ?", "%skip%").or(session.timestamp_events.where("event_type LIKE ?", "%seek%")).map { |e|
+              {
+                time: e.session_elapsed,
+                video_time: e.video_time,
+                description: e.description,
+                operation: e.event_type
+              }
+            },
+            pause: session.timestamp_events.where("event_type LIKE ?", "%pause%").or(session.timestamp_events.where("event_type LIKE ?", "%stop%")).map { |e|
+              {
+                time: e.session_elapsed,
+                video_time: e.video_time,
+                description: e.description,
+                operation: e.event_type
+              }
+            },
+            other: session.timestamp_events.where("event_type LIKE ?", "%video%").where.not("event_type LIKE ? OR event_type LIKE ? OR event_type LIKE ? OR event_type LIKE ?", "%skip%", "%seek%", "%pause%", "%stop%").map { |e|
+              {
+                time: e.session_elapsed,
+                video_time: e.video_time,
+                description: e.description,
+                operation: e.event_type
+              }
+            }
+          }
         }
       end.compact
 
