@@ -19,26 +19,9 @@ class VideosController < ApplicationController
     @questions = @video.questions.order(:time_position)
     @user_responses = current_user&.user_responses&.joins(:question)&.where(questions: { video_id: @video.id }) || []
 
-    # 1. 最後に実際に動画を見たセッション（last_video_time > 0）を優先的に取得
-    # NOTE: last_video_time カラムが存在しない場合に備えて、存在確認してから使用
-    begin
-      resumable_sessions = current_user.learning_sessions
-        .where(video_id: @video.id)
-        .where("last_video_time > 0")  # 実際に視聴したセッション
-        .order(session_start_time: :desc)
-    rescue ActiveRecord::StatementInvalid => e
-      if e.message.include?("no such column: last_video_time")
-        Rails.logger.warn "⚠️ last_video_time カラムが存在しません。マイグレーションが未実行の可能性があります。"
-        resumable_sessions = []
-      else
-        raise
-      end
-    end
-
-    @resume_session = resumable_sessions.first
-
-    # 2. もし resumable session がなければ、最新のセッションを取得
-    @resume_session ||= current_user.learning_sessions
+    # セッション復元：最新のセッションを取得
+    # NOTE: last_video_time カラムがない環境対応のため、シンプルに最新セッション取得
+    @resume_session = current_user.learning_sessions
       .where(video_id: @video.id)
       .order(session_start_time: :desc)
       .first
@@ -46,9 +29,9 @@ class VideosController < ApplicationController
     # JavaScript側で復元するために、最新セッション情報をJSON化して渡す
     @latest_session_json = if @resume_session
       begin
-        @resume_session.to_json(only: [ :id, :last_video_time, :last_session_elapsed ], methods: [ :formatted_resume_time, :can_resume? ])
+        @resume_session.to_json(only: [ :id ], methods: [ :formatted_resume_time, :can_resume? ])
       rescue => e
-        Rails.logger.warn "⚠️ セッション情報のJSON化に失敗（カラム不足の可能性）: #{e.message}"
+        Rails.logger.warn "⚠️ セッション情報のJSON化に失敗: #{e.message}"
         {}.to_json
       end
     else
@@ -56,11 +39,9 @@ class VideosController < ApplicationController
     end
 
     Rails.logger.info "[再開機能] コントローラー実行 - ユーザー: #{current_user.id}, 動画: #{@video.id}"
-    Rails.logger.info "[再開機能] Resumable Sessions Count: #{resumable_sessions.count}"
     Rails.logger.info "[再開機能] @resume_session: #{@resume_session.present?}"
     if @resume_session
       Rails.logger.info "[再開機能] セッションID: #{@resume_session.id}"
-      Rails.logger.info "[再開機能] last_video_time: #{@resume_session.last_video_time}"
       Rails.logger.info "[再開機能] can_resume?: #{@resume_session.can_resume?}"
     end
 
@@ -75,7 +56,6 @@ class VideosController < ApplicationController
       rescue => e
         Rails.logger.error "❌ ActiveStorage path_for エラー: #{e.class} - #{e.message}"
         Rails.logger.error "Video ID: #{@video.id}, Blob key: #{@video.video_file.key}"
-        Rails.logger.error e.backtrace.join("\n")
       end
     end
     
