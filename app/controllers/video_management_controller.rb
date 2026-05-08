@@ -459,24 +459,37 @@ class VideoManagementController < ApplicationController
           last_session_elapsed = last_event["sessionElapsed"].to_f
         end
 
-        learning_session.update!(
+        # セッション更新：last_video_time カラムが存在する場合のみ設定
+        update_attrs = {
           session_end_time: Time.at(session_info["endTime"] / 1000),
           final_score: session_data["finalScore"],
           total_events: timestamp_log.length,
-          session_data: updated_session_data,
-          last_video_time: last_video_time,          # 再開機能のため、完了後も保存
-          last_session_elapsed: last_session_elapsed
-        )
+          session_data: updated_session_data
+        }
+        
+        # last_video_time カラムが存在する場合のみ設定
+        if learning_session.has_attribute?(:last_video_time)
+          update_attrs[:last_video_time] = last_video_time
+          update_attrs[:last_session_elapsed] = last_session_elapsed
+        end
+        
+        learning_session.update!(update_attrs)
       else
         # セッションがまだ進行中の場合、最後の動画時刻と経過時間を更新
         if timestamp_log.any?
           last_event = timestamp_log.last
-          learning_session.update!(
-            last_video_time: last_event["videoTime"].to_f,
-            last_session_elapsed: last_event["sessionElapsed"].to_f,
+          update_attrs = {
             is_active: true,
             total_events: timestamp_log.length
-          )
+          }
+          
+          # last_video_time カラムが存在する場合のみ設定
+          if learning_session.has_attribute?(:last_video_time)
+            update_attrs[:last_video_time] = last_event["videoTime"].to_f
+            update_attrs[:last_session_elapsed] = last_event["sessionElapsed"].to_f
+          end
+          
+          learning_session.update!(update_attrs)
         end
       end
 
