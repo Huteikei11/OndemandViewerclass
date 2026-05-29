@@ -100,7 +100,7 @@ class QuestionsController < ApplicationController
   def edit
     respond_to do |format|
       format.html { render layout: false } # モーダル用に部分的なHTMLを返す
-      format.json { render json: @question.as_json(include: :options) }
+      format.json { render json: @question.as_json(include: :options, only: [:id, :content, :answer, :question_type, :time_position, :show_answer, :explanation, :show_explanation]) }
     end
   end
 
@@ -115,6 +115,6 @@ class QuestionsController < ApplicationController
   end
 
   def question_params
-    params.require(:question).permit(:content, :answer, :question_type, :time_position, :show_answer)
+    params.require(:question).permit(:content, :answer, :question_type, :time_position, :show_answer, :explanation, :show_explanation)
   end
 end

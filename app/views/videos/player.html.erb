@@ -5392,6 +5392,13 @@ function initializeVideoPlayer() {
       }
     }
     
+    // HTMLエスケープ関数
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
     function showQuestion(question) {
       console.log('showQuestion関数開始:', question);
       
@@ -5756,13 +5763,38 @@ function initializeVideoPlayer() {
         
         resultMessage.textContent = resultText;
         
+        // 結果メッセージを表示階層の最初に配置
+        resultMessage.parentNode.insertBefore(resultMessage, resultMessage.parentNode.firstChild);
+        
+        // ✨ 解説を表示
+        if (data.explanation) {
+          // 既存の解説を削除（重複防止）
+          const existingExplanation = document.querySelector('.question-explanation');
+          if (existingExplanation) {
+            existingExplanation.remove();
+          }
+          
+          const explanationElement = document.createElement('div');
+          explanationElement.className = 'question-explanation';
+          explanationElement.innerHTML = `
+            <div class="explanation-header">📖 解説</div>
+            <div class="explanation-content">${escapeHtml(data.explanation)}</div>
+          `;
+          resultMessage.parentNode.insertBefore(explanationElement, resultMessage.nextSibling);
+          console.log('解説を表示しました');
+        }
+        
         // 送信済みフラグを立てる
         if (currentQuestion) {
           currentQuestion.submitted = true;
           currentQuestion.submitting = false;
         }
         
-        // Reset active question after 3 seconds and resume video
+        // 解説がある場合は表示時間を延長（5秒）、ない場合は3秒
+        const delayTime = data.explanation ? 5000 : 3000;
+        console.log(`問題表示を${delayTime}ms後に閉じます`);
+        
+        // Reset active question after delay and resume video
         questionCloseTimer = setTimeout(() => {
           console.log('✅ questionCloseTimer実行: 問題を閉じます');
           questionCloseTimer = null;
@@ -5779,10 +5811,17 @@ function initializeVideoPlayer() {
           
           // 問題表示と結果メッセージを非表示にする
           resultMessage.style.display = 'none';
+          
+          // 解説も非表示にする
+          const explanation = document.querySelector('.question-explanation');
+          if (explanation) {
+            explanation.style.display = 'none';
+          }
+          
           waitingMessage.style.display = 'block';
           questionDisplay.style.display = 'none';
           videoPlayer.play();
-        }, 3000);
+        }, delayTime);
       })
       .catch(error => {
         console.error('Error:', error);

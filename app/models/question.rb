@@ -12,4 +12,7 @@ class Question < ApplicationRecord
 
   # 〇×問題の場合、回答は○または×のみ有効
   validates :answer, inclusion: { in: %w[○ ×] }, if: -> { question_type == "true_false" }
+  
+  # 解説表示が有効な場合は解説が必須
+  validates :explanation, presence: true, if: -> { show_explanation }
 end

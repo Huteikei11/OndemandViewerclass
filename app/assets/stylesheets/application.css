@@ -199,3 +199,40 @@ body {
   background-color: #d1ecf1;
   border-color: #bee5eb;
 }
+
+/* 問題解説スタイル */
+.question-explanation {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #f0f8ff;
+  border-left: 4px solid #4a90e2;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.6;
+  animation: slideIn 0.3s ease-in-out;
+}
+
+.explanation-header {
+  font-weight: bold;
+  color: #4a90e2;
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+
+.explanation-content {
+  color: #333;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

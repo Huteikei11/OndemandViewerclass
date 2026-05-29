@@ -68,6 +68,11 @@ class UserResponsesController < ApplicationController
           response_data[:correct_answer] = @question.answer
         end
       end
+      
+      # 解説を表示する場合は解説を含める
+      if @question.show_explanation && @question.explanation.present?
+        response_data[:explanation] = @question.explanation
+      end
 
       respond_to do |format|
         format.html { redirect_to player_video_path(@question.video), notice: "Response recorded." }
