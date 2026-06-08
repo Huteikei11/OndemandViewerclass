@@ -15,21 +15,21 @@ class VideosController < ApplicationController
   # Player view for watching videos with questions
   def player
     Rails.logger.info "🎬 player アクション開始 - Video ID: #{@video.id}, User: #{current_user.id}"
-    
+
     @questions = @video.questions.order(:time_position)
     @user_responses = current_user&.user_responses&.joins(:question)&.where(questions: { video_id: @video.id }) || []
 
-    # セッション復元：最新のセッションを取得
-    # NOTE: last_video_time カラムがない環境対応のため、シンプルに最新セッション取得
+    # セッション復元：視聴実績がある最新セッションを取得
     @resume_session = current_user.learning_sessions
       .where(video_id: @video.id)
-      .order(session_start_time: :desc)
+      .where("last_video_time > 0")
+      .order(updated_at: :desc)
       .first
 
     # JavaScript側で復元するために、最新セッション情報をJSON化して渡す
     @latest_session_json = if @resume_session
       begin
-        @resume_session.to_json(only: [ :id ], methods: [ :formatted_resume_time, :can_resume? ])
+        @resume_session.to_json(only: [ :id, :last_session_elapsed, :last_video_time ], methods: [ :formatted_resume_time, :can_resume? ])
       rescue => e
         Rails.logger.warn "⚠️ セッション情報のJSON化に失敗: #{e.message}"
         {}.to_json
@@ -58,7 +58,7 @@ class VideosController < ApplicationController
         Rails.logger.error "Video ID: #{@video.id}, Blob key: #{@video.video_file.key}"
       end
     end
-    
+
     Rails.logger.info "🎬 player アクション完了 - テンプレート描画開始"
   rescue => e
     Rails.logger.error "❌ player アクションでエラー発生: #{e.class} - #{e.message}"

@@ -115,8 +115,8 @@ class LearningSession < ApplicationRecord
   def deactivate!(video_time = nil, session_elapsed = nil)
     update(
       is_active: false,
-      last_video_time: video_time || last_video_time,
-      last_session_elapsed: session_elapsed || last_session_elapsed,
+      last_video_time: (video_time && video_time > 0) ? video_time : last_video_time,
+      last_session_elapsed: (session_elapsed && session_elapsed > 0) ? session_elapsed : last_session_elapsed,
       paused_at: Time.current
     )
   end

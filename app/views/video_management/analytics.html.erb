@@ -2623,6 +2623,7 @@ function initializeAnalyticsCharts() {
         chartInstances.scoreTimeline.resetZoom();
       };
     }
+    isInitializingCharts = false;
     })  // fetch の .then() コールバック終了
     .catch(error => {
       // AbortError（キャンセル）の場合はログを少なめに
@@ -2983,8 +2984,7 @@ function initializeAnalyticsCharts() {
     };
   }
   
-  // 初期化完了フラグをセット
-  isInitializingCharts = false;
+  // 初期化完了フラグをセット（isInitializingChartsはscoreTimeline AJAXの完了後にリセット）
   chartsInitialized = true;
   console.log('[グラフ初期化] すべてのチャート初期化完了');
   
@@ -3572,21 +3572,8 @@ document.addEventListener('shown.bs.tab', function(e) {
   }
 });
 
-// 初回読み込みとTurbo遷移の両方で実行
-// DOMContentLoadedは通常のページ読み込み用
-document.addEventListener('DOMContentLoaded', function() {
-  // ページが完全に読み込まれるまで少し待機
-  setTimeout(initializeAnalyticsCharts, 50);
-});
-
-// turbo:loadはTurbo遷移時用
+// turbo:loadは通常ページ読み込みとTurbo遷移の両方で発火する
 document.addEventListener('turbo:load', function() {
-  // Turbo遷移後も少し待機してからチャートを初期化
-  setTimeout(initializeAnalyticsCharts, 50);
-});
-
-// turbo:renderはTurbo遷移のレンダリング完了時用（より確実）
-document.addEventListener('turbo:render', function() {
   setTimeout(initializeAnalyticsCharts, 50);
 });
 

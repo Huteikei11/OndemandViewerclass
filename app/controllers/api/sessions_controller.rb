@@ -28,18 +28,17 @@ module Api
         return
       end
 
-      # JSONペイロード、またはparams から動画時刻と経過時間を取得
-      video_time = (params[:video_time] || request.raw_post).to_f
-      session_elapsed = (params[:session_elapsed] || 0).to_f
+      # sendBeaconはtext/plainで送信するため、content-typeに関わらずJSONパースを試みる
+      video_time = params[:video_time].to_f
+      session_elapsed = params[:session_elapsed].to_f
 
-      # JSONペイロードの場合、parse
-      if request.content_type&.include?("application/json") && request.raw_post.present?
+      if request.raw_post.present?
         begin
           json_data = JSON.parse(request.raw_post)
-          video_time = json_data[:video_time]&.to_f || video_time
-          session_elapsed = json_data[:session_elapsed]&.to_f || session_elapsed
+          video_time = json_data["video_time"].to_f if json_data["video_time"]
+          session_elapsed = json_data["session_elapsed"].to_f if json_data["session_elapsed"]
         rescue JSON::ParserError
-          # JSONパースエラーの場合はスキップ
+          # JSONパースエラーの場合はparamsの値を使用
         end
       end
 
