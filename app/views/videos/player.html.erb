@@ -4967,6 +4967,9 @@ function initializeVideoPlayer() {
     console.log('新しいタブID:', currentTabId);
   }
   
+  // サーバーから取得した回答済み問題のIDセット（ページリロード後も再出題しないため）
+  const answeredQuestionIds = new Set(<%= raw @user_responses.map(&:question_id).to_json %>);
+
   // セッションストレージからshownフラグを取得
   let shownQuestions = {};
   try {
@@ -4980,7 +4983,10 @@ function initializeVideoPlayer() {
   } catch (e) {
     console.warn('shownフラグの読み込みに失敗:', e);
   }
-  
+
+  // サーバーの回答済み問題をshownフラグに反映（再読み込み後も再出題しない）
+  answeredQuestionIds.forEach(id => { shownQuestions[id] = true; });
+
   const questions = (rawQuestionData || []).map(q => ({
     ...q,
     shown: shownQuestions[q.id] || false
