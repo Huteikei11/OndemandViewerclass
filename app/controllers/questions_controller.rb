@@ -4,7 +4,7 @@ class QuestionsController < ApplicationController
 
   def create
     @question = @video.questions.new(question_params)
-    
+
     # Render環境対応：新しい属性がない場合は削除
     unless @question.has_attribute?(:explanation)
       @question.explanation = nil
@@ -51,7 +51,7 @@ class QuestionsController < ApplicationController
 
   def update
     question_attributes = question_params.dup
-    
+
     # Render環境対応：新しい属性がない場合は削除
     unless @question.has_attribute?(:explanation)
       question_attributes.delete(:explanation)
@@ -119,7 +119,7 @@ class QuestionsController < ApplicationController
       format.json do
         # Render環境対応：カラムが存在しない場合に対応
         json_data = @question.as_json(include: :options)
-        
+
         # 新しい属性がある場合のみ追加
         if @question.has_attribute?(:explanation)
           json_data[:explanation] = @question.explanation
@@ -127,7 +127,7 @@ class QuestionsController < ApplicationController
         if @question.has_attribute?(:show_explanation)
           json_data[:show_explanation] = @question.show_explanation
         end
-        
+
         render json: json_data
       end
     end

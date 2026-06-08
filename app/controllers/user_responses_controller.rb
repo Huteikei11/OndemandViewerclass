@@ -68,7 +68,7 @@ class UserResponsesController < ApplicationController
           response_data[:correct_answer] = @question.answer
         end
       end
-      
+
       # 解説を表示する場合は解説を含める（Render環境対応：カラムが存在する場合のみ）
       if @question.has_attribute?(:show_explanation) && @question.has_attribute?(:explanation) &&
          @question.show_explanation && @question.explanation.present?
