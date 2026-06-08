@@ -69,8 +69,9 @@ class UserResponsesController < ApplicationController
         end
       end
       
-      # 解説を表示する場合は解説を含める
-      if @question.show_explanation && @question.explanation.present?
+      # 解説を表示する場合は解説を含める（Render環境対応：カラムが存在する場合のみ）
+      if @question.has_attribute?(:show_explanation) && @question.has_attribute?(:explanation) &&
+         @question.show_explanation && @question.explanation.present?
         response_data[:explanation] = @question.explanation
       end
 

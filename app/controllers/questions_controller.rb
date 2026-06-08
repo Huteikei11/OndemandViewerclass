@@ -4,6 +4,14 @@ class QuestionsController < ApplicationController
 
   def create
     @question = @video.questions.new(question_params)
+    
+    # Render環境対応：新しい属性がない場合は削除
+    unless @question.has_attribute?(:explanation)
+      @question.explanation = nil
+    end
+    unless @question.has_attribute?(:show_explanation)
+      @question.show_explanation = false
+    end
 
     # 問題タイプに応じた回答の処理
     case @question.question_type
@@ -43,6 +51,14 @@ class QuestionsController < ApplicationController
 
   def update
     question_attributes = question_params.dup
+    
+    # Render環境対応：新しい属性がない場合は削除
+    unless @question.has_attribute?(:explanation)
+      question_attributes.delete(:explanation)
+    end
+    unless @question.has_attribute?(:show_explanation)
+      question_attributes.delete(:show_explanation)
+    end
 
     # 問題タイプに応じた回答の処理
     case @question.question_type # 既存の問題タイプを使用
@@ -100,7 +116,20 @@ class QuestionsController < ApplicationController
   def edit
     respond_to do |format|
       format.html { render layout: false } # モーダル用に部分的なHTMLを返す
-      format.json { render json: @question.as_json(include: :options, only: [:id, :content, :answer, :question_type, :time_position, :show_answer, :explanation, :show_explanation]) }
+      format.json do
+        # Render環境対応：カラムが存在しない場合に対応
+        json_data = @question.as_json(include: :options)
+        
+        # 新しい属性がある場合のみ追加
+        if @question.has_attribute?(:explanation)
+          json_data[:explanation] = @question.explanation
+        end
+        if @question.has_attribute?(:show_explanation)
+          json_data[:show_explanation] = @question.show_explanation
+        end
+        
+        render json: json_data
+      end
     end
   end
 
