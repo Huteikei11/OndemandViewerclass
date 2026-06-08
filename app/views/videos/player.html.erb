@@ -3,8 +3,9 @@
     <% if @video.video_file.attached? %>
       <div class="question-indicator" id="question-indicator" style="display: none;">問題あり！</div>
       
-      <!-- デバッグ情報パネル -->
-      <div class="debug-panel" id="debug-panel" style="display: none;">
+      <% if current_user&.admin? %>
+        <!-- デバッグ情報パネル -->
+        <div class="debug-panel" id="debug-panel" style="display: none;">
         <div class="debug-header">
           目線追跡デバッグ情報
           <button class="btn btn-sm btn-outline-light ms-2" id="toggle-camera-preview">カメラ</button>
@@ -278,6 +279,7 @@
           </div>
         </div>
       </div>
+      <% end %>
       
       <video id="video-player" controls
              data-session-id="<%= @resume_session&.id %>"
@@ -335,7 +337,9 @@
         <div class="concentration-gauge" id="concentration-gauge">
           <div class="gauge-header">
             <span>集中度</span>
-            <button class="btn btn-sm btn-outline-light" id="toggle-debug-info">デバッグ</button>
+            <% if current_user&.admin? %>
+              <button class="btn btn-sm btn-outline-light" id="toggle-debug-info">デバッグ</button>
+            <% end %>
           </div>
           <div class="gauge-bar">
             <div class="gauge-level gauge-green" id="gauge-green"></div>
@@ -1237,6 +1241,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
 <script>
+// 管理者権限フラグ
+const isAdmin = <%= current_user&.admin? ? 'true' : 'false' %>;
+console.log('管理者権限:', isAdmin);
+
 // 初回アクセス時のみ自動リロード
 if (!sessionStorage.getItem('videoPageLoaded')) {
   sessionStorage.setItem('videoPageLoaded', 'true');
@@ -1663,6 +1671,13 @@ function initializeVideoPlayer() {
     }
     
     initializeDebugPanel(retryCount = 0) {
+      // 管理者権限がない場合はスキップ
+      if (!isAdmin) {
+        console.log('デバッグパネルは管理者のみが使用可能です');
+        this.debugPanelInitialized = true; // フラグを立てて再実行を防ぐ
+        return;
+      }
+      
       // 既に初期化済みの場合はスキップ
       if (this.debugPanelInitialized) {
         console.log('デバッグパネルは既に初期化済みです');
