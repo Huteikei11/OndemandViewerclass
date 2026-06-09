@@ -4125,13 +4125,19 @@ function initializeVideoPlayer() {
         this.videoElement.dataset.sessionId = savedSessionId;
         isRestoredSession = true;
         
-        // サーバーから前回の累積経過時間を取得してオフセットとして設定
+        // 前回の累積経過時間を復元（サーバー優先、localStorageをフォールバック）
         try {
           const latestSessionData = JSON.parse(this.videoElement.dataset.latestSession || '{}');
           const serverLastElapsed = parseFloat(latestSessionData.last_session_elapsed || 0);
-          if (serverLastElapsed > 0) {
-            this.elapsedOffset = serverLastElapsed;
-            previousSessionElapsed = serverLastElapsed;
+          const pathParts = window.location.pathname.split('/');
+          const videoId = pathParts[pathParts.length - 2];
+          const localLastElapsed = parseFloat(localStorage.getItem(`session_elapsed_${videoId}`) || 0);
+          const lastElapsed = serverLastElapsed > 0 ? serverLastElapsed : localLastElapsed;
+          if (lastElapsed > 0) {
+            this.elapsedOffset = lastElapsed;
+            previousSessionElapsed = lastElapsed;
+            console.log('[セッション復元] elapsedOffset 設定:', lastElapsed.toFixed(1) + '秒',
+              serverLastElapsed > 0 ? '(サーバー)' : '(localStorage)');
           }
         } catch (e) {
           console.warn('[セッション復元エラー] latestSession解析失敗:', e);
@@ -4434,12 +4440,16 @@ function initializeVideoPlayer() {
           // 正しい動画IDの取得
           const pathParts = window.location.pathname.split('/');
           const videoId = pathParts[pathParts.length - 2];
-          
+
+          // 累積経過時間をlocalStorageに保存（サーバー未保存時のフォールバック用）
+          const finalElapsed = (Date.now() - this.sessionStartTime) / 1000 + this.elapsedOffset;
+          localStorage.setItem(`session_elapsed_${videoId}`, finalElapsed.toString());
+
           const backupData = {
             sessionStartTime: this.sessionStartTime,
             sessionEndTime: Date.now(),
             timestampLog: this.timestampLog,
-            finalScore: this.displayScore, // 新しい集中度システムのスコアを使用
+            finalScore: this.displayScore,
             videoId: videoId,
             saved: false // サーバー保存成功フラグ
           };
@@ -6229,6 +6239,14 @@ function setupResumeHandlers() {
     function doAutoResume() {
       videoPlayer.currentTime = resumeTime;
       videoPlayer.dataset.sessionId = sessionId;
+
+      // ConcentrationTrackerの累積経過時間をresumePanelの値で更新
+      const resumeElapsed = parseFloat(resumePanel.dataset.resumeElapsed || 0);
+      if (resumeElapsed > 0 && window.concentrationTracker) {
+        window.concentrationTracker.elapsedOffset = resumeElapsed;
+        console.log('[再開機能] concentrationTracker.elapsedOffset 更新:', resumeElapsed.toFixed(1) + '秒');
+      }
+
       activateSession(sessionId);
       console.log('[再開機能] 自動シーク完了:', resumeTime);
 
