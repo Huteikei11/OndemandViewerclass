@@ -3,7 +3,7 @@ services:
     name: ondemand-viewer
     runtime: ruby
     buildCommand: "bash ./bin/render-build.sh"
-    startCommand: "bundle exec puma -C config/puma.rb"
+    startCommand: "bundle exec rails db:migrate RAILS_ENV=production && bundle exec puma -C config/puma.rb"
     envVars:
       - key: DATABASE_URL
         value: sqlite3:storage/production.sqlite3

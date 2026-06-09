@@ -20,11 +20,19 @@ class VideosController < ApplicationController
     @user_responses = current_user&.user_responses&.joins(:question)&.where(questions: { video_id: @video.id }) || []
 
     # セッション復元：視聴実績がある最新セッションを取得
-    @resume_session = current_user.learning_sessions
-      .where(video_id: @video.id)
-      .where("last_video_time > 0")
-      .order(updated_at: :desc)
-      .first
+    begin
+      @resume_session = current_user.learning_sessions
+        .where(video_id: @video.id)
+        .where("last_video_time > 0")
+        .order(updated_at: :desc)
+        .first
+    rescue ActiveRecord::StatementInvalid => e
+      Rails.logger.warn "⚠️ last_video_time カラムが存在しません（マイグレーション未適用の可能性）: #{e.message}"
+      @resume_session = current_user.learning_sessions
+        .where(video_id: @video.id)
+        .order(updated_at: :desc)
+        .first
+    end
 
     # JavaScript側で復元するために、最新セッション情報をJSON化して渡す
     @latest_session_json = if @resume_session
