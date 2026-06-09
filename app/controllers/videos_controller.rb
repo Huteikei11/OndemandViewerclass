@@ -27,17 +27,26 @@ class VideosController < ApplicationController
         .order(updated_at: :desc)
         .first
     rescue ActiveRecord::StatementInvalid => e
-      Rails.logger.warn "⚠️ last_video_time カラムが存在しません（マイグレーション未適用の可能性）: #{e.message}"
+      Rails.logger.warn "⚠️ last_video_time カラムが存在しません（session_dataから検索）: #{e.message}"
+      # カラム未存在時は session_data の last_video_time をチェック
       @resume_session = current_user.learning_sessions
         .where(video_id: @video.id)
         .order(updated_at: :desc)
-        .first
+        .limit(20)
+        .to_a
+        .find { |s| s.can_resume? }
     end
 
     # JavaScript側で復元するために、最新セッション情報をJSON化して渡す
     @latest_session_json = if @resume_session
       begin
-        @resume_session.to_json(only: [ :id, :last_session_elapsed, :last_video_time ], methods: [ :formatted_resume_time, :can_resume? ])
+        {
+          id: @resume_session.id,
+          last_video_time: @resume_session.last_video_time_value,
+          last_session_elapsed: @resume_session.last_session_elapsed_value,
+          formatted_resume_time: @resume_session.formatted_resume_time,
+          "can_resume?" => @resume_session.can_resume?
+        }.to_json
       rescue => e
         Rails.logger.warn "⚠️ セッション情報のJSON化に失敗: #{e.message}"
         {}.to_json

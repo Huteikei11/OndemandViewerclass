@@ -283,7 +283,7 @@
       
       <video id="video-player" controls
              data-session-id="<%= @resume_session&.id %>"
-             data-resume-time="<%= (@resume_session&.last_video_time || 0) rescue 0 %>"
+             data-resume-time="<%= @resume_session&.last_video_time_value || 0 %>"
              data-can-resume="<%= @resume_session&.can_resume? || false %>"
              data-latest-session="<%= @latest_session_json %>">
         <source src="<%= url_for(@video.video_file) %>" type="<%= @video.video_file.content_type %>">
@@ -306,8 +306,8 @@
       <% if @resume_session && @resume_session.can_resume? %>
         <div class="resume-panel" id="resume-panel"
              data-session-id="<%= @resume_session.id %>"
-             data-resume-time="<%= @resume_session.last_video_time %>"
-             data-resume-elapsed="<%= @resume_session.last_session_elapsed %>"
+             data-resume-time="<%= @resume_session.last_video_time_value %>"
+             data-resume-elapsed="<%= @resume_session.last_session_elapsed_value %>"
              data-formatted-time="<%= @resume_session.formatted_resume_time %>">
           <div class="resume-content">
             <div class="resume-icon">▶</div>
@@ -4042,14 +4042,18 @@ function initializeVideoPlayer() {
           console.warn('[セッション] DBに存在しないセッションID。localStorageをクリアして再送します');
           localStorage.removeItem(sessionKey);
           this.videoElement.dataset.sessionId = '';
-          // session_id なしで再送
+          // session_id を含まない新しいペイロードで再送
+          const retryPayload = JSON.stringify({
+            session_data: JSON.stringify(data),
+            session_id: null
+          });
           return fetch(`/videos/${videoId}/management/save_session`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
             },
-            body: payload
+            body: retryPayload
           }).then(r => r.json());
         }
         return response.json();

@@ -531,6 +531,16 @@ class VideoManagementController < ApplicationController
           update_attrs[:last_session_elapsed] = last_session_elapsed
         end
 
+        # カラム存在に関わらず session_data にも保存（フォールバック用）
+        if last_video_time > 0
+          update_attrs[:session_data] = updated_session_data.merge(
+            "last_video_time" => last_video_time,
+            "last_session_elapsed" => last_session_elapsed
+          )
+        else
+          update_attrs[:session_data] = updated_session_data
+        end
+
         learning_session.update!(update_attrs)
       else
         # セッションがまだ進行中の場合、最後の動画時刻と経過時間を更新

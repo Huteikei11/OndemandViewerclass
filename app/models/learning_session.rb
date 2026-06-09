@@ -106,59 +106,83 @@ class LearningSession < ApplicationRecord
 
   # ====== 再開機能関連メソッド ======
 
+  # last_video_time の値を取得（カラム未存在時は session_data をフォールバックに使用）
+  def last_video_time_value
+    if has_attribute?(:last_video_time)
+      last_video_time.to_f
+    else
+      sd = session_data.is_a?(Hash) ? session_data : {}
+      sd["last_video_time"].to_f
+    end
+  rescue
+    0.0
+  end
+
+  # last_session_elapsed の値を取得（カラム未存在時は session_data をフォールバックに使用）
+  def last_session_elapsed_value
+    if has_attribute?(:last_session_elapsed)
+      last_session_elapsed.to_f
+    else
+      sd = session_data.is_a?(Hash) ? session_data : {}
+      sd["last_session_elapsed"].to_f
+    end
+  rescue
+    0.0
+  end
+
   # セッションをアクティブ化（再生開始）
   def activate!
-    update(is_active: true, paused_at: nil)
+    attrs = { paused_at: nil }
+    attrs[:is_active] = true if has_attribute?(:is_active)
+    update(attrs)
   end
 
   # セッションを非アクティブ化（一時停止）
   def deactivate!(video_time = nil, session_elapsed = nil)
-    update(
-      is_active: false,
-      last_video_time: (video_time && video_time > 0) ? video_time : last_video_time,
-      last_session_elapsed: (session_elapsed && session_elapsed > 0) ? session_elapsed : last_session_elapsed,
-      paused_at: Time.current
-    )
+    attrs = { paused_at: Time.current }
+    attrs[:is_active] = false if has_attribute?(:is_active)
+    if has_attribute?(:last_video_time)
+      attrs[:last_video_time] = (video_time && video_time > 0) ? video_time : last_video_time
+      attrs[:last_session_elapsed] = (session_elapsed && session_elapsed > 0) ? session_elapsed : last_session_elapsed
+    elsif video_time && video_time > 0
+      sd = (session_data.is_a?(Hash) ? session_data : {}).merge(
+        "last_video_time" => video_time,
+        "last_session_elapsed" => session_elapsed.to_f
+      )
+      attrs[:session_data] = sd
+    end
+    update(attrs)
   end
 
   # セッションが再開可能か判定（再生位置があるか）
   def can_resume?
-    # last_video_time カラムが存在しない場合は false を返す
-    return false unless has_attribute?(:last_video_time)
-    begin
-      last_video_time.to_f > 0
-    rescue
-      false
-    end
+    last_video_time_value > 0
   end
 
   # 再開時刻をフォーマット（MM:SS形式）
   def formatted_resume_time
-    # last_video_time カラムが存在しない場合は "00:00" を返す
-    return "00:00" unless has_attribute?(:last_video_time)
-    begin
-      video_time = last_video_time.to_f
-      minutes = (video_time / 60).floor
-      seconds = (video_time % 60).floor
-      "#{minutes.to_s.rjust(2, '0')}:#{seconds.to_s.rjust(2, '0')}"
-    rescue
-      "00:00"
-    end
+    video_time = last_video_time_value
+    return "00:00" if video_time <= 0
+    minutes = (video_time / 60).floor
+    seconds = (video_time % 60).floor
+    "#{minutes.to_s.rjust(2, '0')}:#{seconds.to_s.rjust(2, '0')}"
+  rescue
+    "00:00"
   end
 
   # セッション開始からの経過時間をフォーマット（秒）
   def formatted_resume_session_elapsed
-    (last_session_elapsed).floor
+    last_session_elapsed_value.floor
   end
 
   # 再開情報を取得
   def resume_info
     {
-      video_time: last_video_time,
-      session_elapsed: last_session_elapsed,
+      video_time: last_video_time_value,
+      session_elapsed: last_session_elapsed_value,
       formatted_time: formatted_resume_time,
-      paused_at: paused_at,
-      is_active: is_active
+      paused_at: has_attribute?(:paused_at) ? paused_at : nil,
+      is_active: has_attribute?(:is_active) ? is_active : false
     }
   end
 end
