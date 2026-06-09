@@ -536,10 +536,8 @@ class VideoManagementController < ApplicationController
         # セッションがまだ進行中の場合、最後の動画時刻と経過時間を更新
         if timestamp_log.any?
           last_event = timestamp_log.last
-          update_attrs = {
-            is_active: true,
-            total_events: timestamp_log.length
-          }
+          update_attrs = { total_events: timestamp_log.length }
+          update_attrs[:is_active] = true if learning_session.has_attribute?(:is_active)
 
           # last_video_time カラムが存在する場合のみ設定
           if learning_session.has_attribute?(:last_video_time)

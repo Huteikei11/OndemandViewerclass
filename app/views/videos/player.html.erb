@@ -6100,10 +6100,11 @@ function startSessionTracking() {
 
   console.log('[セッション記録] 開始');
   
-  // セッション情報を取得する関数（resumePanel が更新される可能性があるため）
+  // セッション情報を取得する関数（resumePanel → video要素の順で確認）
   const getSessionId = () => {
     const resumePanel = document.getElementById('resume-panel');
-    return resumePanel ? resumePanel.dataset.sessionId : null;
+    if (resumePanel?.dataset?.sessionId) return resumePanel.dataset.sessionId;
+    return videoPlayer?.dataset?.sessionId || null;
   };
 
   const sessionStartTime = new Date();
