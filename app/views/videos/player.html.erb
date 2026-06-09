@@ -283,7 +283,7 @@
       
       <video id="video-player" controls
              data-session-id="<%= @resume_session&.id %>"
-             data-resume-time="<%= @resume_session&.last_video_time || 0 %>"
+             data-resume-time="<%= (@resume_session&.last_video_time || 0) rescue 0 %>"
              data-can-resume="<%= @resume_session&.can_resume? || false %>"
              data-latest-session="<%= @latest_session_json %>">
         <source src="<%= url_for(@video.video_file) %>" type="<%= @video.video_file.content_type %>">
