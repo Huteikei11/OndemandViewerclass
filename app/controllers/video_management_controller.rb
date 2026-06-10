@@ -486,9 +486,9 @@ class VideoManagementController < ApplicationController
       session_info = session_data["sessionInfo"]
       timestamp_log = session_data["timestampLog"]
 
-      # セッションIDが提供されている場合は、既存セッションを使用
+      # セッションIDが提供されている場合は、現在のユーザーのセッションを使用
       if params[:session_id].present?
-        learning_session = LearningSession.find(params[:session_id])
+        learning_session = current_user.learning_sessions.find(params[:session_id])
         Rails.logger.info "既存セッションを使用: #{learning_session.id}"
       else
         # セッションIDが提供されていない場合は、find_or_create_byで新規作成
