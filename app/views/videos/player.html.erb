@@ -4041,7 +4041,10 @@ function initializeVideoPlayer() {
           const sessionKey = `active_session_${videoId}`;
           console.warn('[セッション] DBに存在しないセッションID。localStorageをクリアして再送します');
           localStorage.removeItem(sessionKey);
+          localStorage.removeItem(`session_elapsed_${videoId}`);
           this.videoElement.dataset.sessionId = '';
+          this.elapsedOffset = 0;
+          this.sessionStartTime = Date.now();
           // session_id を含まない新しいペイロードで再送
           const retryPayload = JSON.stringify({
             session_data: JSON.stringify(data),
@@ -4135,7 +4138,7 @@ function initializeVideoPlayer() {
           const serverLastElapsed = parseFloat(latestSessionData.last_session_elapsed || 0);
           const pathParts = window.location.pathname.split('/');
           const videoId = pathParts[pathParts.length - 2];
-          const localLastElapsed = parseFloat(localStorage.getItem(`session_elapsed_${videoId}`) || 0);
+          const localLastElapsed = parseFloat(localStorage.getItem(`session_elapsed_${videoId}_${savedSessionId}`) || 0);
           const lastElapsed = serverLastElapsed > 0 ? serverLastElapsed : localLastElapsed;
           if (lastElapsed > 0) {
             this.elapsedOffset = lastElapsed;
@@ -4447,7 +4450,11 @@ function initializeVideoPlayer() {
 
           // 累積経過時間をlocalStorageに保存（サーバー未保存時のフォールバック用）
           const finalElapsed = (Date.now() - this.sessionStartTime) / 1000 + this.elapsedOffset;
-          localStorage.setItem(`session_elapsed_${videoId}`, finalElapsed.toString());
+          const currentSessionId = this.videoElement?.dataset?.sessionId;
+          if (currentSessionId) {
+            localStorage.setItem(`session_elapsed_${videoId}_${currentSessionId}`, finalElapsed.toString());
+          }
+          localStorage.removeItem(`session_elapsed_${videoId}`); // 旧フォーマットキーを削除
 
           const backupData = {
             sessionStartTime: this.sessionStartTime,
