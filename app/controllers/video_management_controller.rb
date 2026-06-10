@@ -508,11 +508,11 @@ class VideoManagementController < ApplicationController
         updated_session_data = learning_session.session_data || {}
         updated_session_data["last_video_position"] = session_info["last_video_position"] if session_info["last_video_position"]
 
-        # 最後のイベントから動画時刻を取得
+        # 最後のイベントから動画時刻を取得（session_end のアイドル時間を除外）
         last_video_time = 0.0
         last_session_elapsed = 0.0
         if timestamp_log.any?
-          last_event = timestamp_log.last
+          last_event = timestamp_log.reject { |e| e["eventType"] == "session_end" }.last || timestamp_log.last
           last_video_time = last_event["videoTime"].to_f
           last_session_elapsed = last_event["sessionElapsed"].to_f
         end
@@ -545,7 +545,7 @@ class VideoManagementController < ApplicationController
       else
         # セッションがまだ進行中の場合、最後の動画時刻と経過時間を更新
         if timestamp_log.any?
-          last_event = timestamp_log.last
+          last_event = timestamp_log.reject { |e| e["eventType"] == "session_end" }.last || timestamp_log.last
           update_attrs = { total_events: timestamp_log.length }
           update_attrs[:is_active] = true if learning_session.has_attribute?(:is_active)
 

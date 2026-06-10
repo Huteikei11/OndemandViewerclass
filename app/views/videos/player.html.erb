@@ -1410,6 +1410,7 @@ function initializeVideoPlayer() {
       this.timestampLog = [];
       this.sessionStartTime = Date.now();
       this.elapsedOffset = 0; // 前回セッションからの累積経過時間オフセット（再開時に設定）
+      this.lastActiveElapsed = 0; // 最後のアクティブイベント時点の経過時間（session_end のアイドル時間を除外するため）
       this.videoElement = null;
       this.lastVideoTime = 0;
       this.videoState = 'stopped'; // stopped, playing, paused
@@ -3793,7 +3794,12 @@ function initializeVideoPlayer() {
       };
       
       this.timestampLog.push(timestampEntry);
-      
+
+      // session_end 以外のイベントで lastActiveElapsed を更新
+      if (eventType !== 'session_end') {
+        this.lastActiveElapsed = sessionElapsed;
+      }
+
       // デバッグログを追加
       console.log(`[タイムスタンプ追加] ${eventType}: ${description}`, {
         totalEvents: this.timestampLog.length,
@@ -4448,8 +4454,10 @@ function initializeVideoPlayer() {
           const pathParts = window.location.pathname.split('/');
           const videoId = pathParts[pathParts.length - 2];
 
-          // 累積経過時間をlocalStorageに保存（サーバー未保存時のフォールバック用）
-          const finalElapsed = (Date.now() - this.sessionStartTime) / 1000 + this.elapsedOffset;
+          // 累積経過時間をlocalStorageに保存（session_end 時のアイドル時間を除外）
+          const finalElapsed = this.lastActiveElapsed > 0 ?
+            this.lastActiveElapsed :
+            (Date.now() - this.sessionStartTime) / 1000 + this.elapsedOffset;
           const currentSessionId = this.videoElement?.dataset?.sessionId;
           if (currentSessionId) {
             localStorage.setItem(`session_elapsed_${videoId}_${currentSessionId}`, finalElapsed.toString());
