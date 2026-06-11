@@ -3764,13 +3764,14 @@ function initializeVideoPlayer() {
       const currentTime = Date.now();
       const sessionElapsed = (currentTime - this.sessionStartTime) / 1000 + this.elapsedOffset; // 秒（累積）
       
-      // videoElementが未設定の場合は再取得を試みる
+      // 常にDOMから最新要素を取得（キャッシュ参照が古い場合にvideo_time=0になるのを防ぐ）
+      const currentVideoElement = document.getElementById('video-player') || this.videoElement;
       if (!this.videoElement) {
-        this.videoElement = document.getElementById('video-player');
-        console.log('videoElement再取得:', this.videoElement ? 'Success' : 'Failed');
+        this.videoElement = currentVideoElement;
+        console.log('videoElement初回取得:', this.videoElement ? 'Success' : 'Failed');
       }
-      
-      const videoTime = this.videoElement ? this.videoElement.currentTime : 0;
+
+      const videoTime = currentVideoElement ? currentVideoElement.currentTime : 0;
       
       // デバッグログ：特にメモ入力時のvideo_timeを確認
       if (eventType.includes('note') || eventType.includes('interaction')) {
@@ -4046,11 +4047,16 @@ function initializeVideoPlayer() {
           const videoId = pathParts[pathParts.length - 2];
           const sessionKey = `active_session_${videoId}`;
           console.warn('[セッション] DBに存在しないセッションID。localStorageをクリアして再送します');
+          const staleSessionId = this.videoElement?.dataset?.sessionId;
           localStorage.removeItem(sessionKey);
           localStorage.removeItem(`session_elapsed_${videoId}`);
+          if (staleSessionId) {
+            localStorage.removeItem(`session_elapsed_${videoId}_${staleSessionId}`);
+          }
           this.videoElement.dataset.sessionId = '';
           this.elapsedOffset = 0;
           this.sessionStartTime = Date.now();
+          this.lastActiveElapsed = 0;
           // session_id を含まない新しいペイロードで再送
           const retryPayload = JSON.stringify({
             session_data: JSON.stringify(data),
@@ -6184,6 +6190,15 @@ function startSessionTracking() {
 
 function setupResumeHandlers() {
   const videoPlayer = document.getElementById('video-player');
+  if (!videoPlayer) return;
+
+  // 二重初期化を防止
+  if (videoPlayer.dataset.resumeHandlersInitialized === 'true') {
+    console.log('[再開機能] setupResumeHandlers は既に初期化済み。スキップします');
+    return;
+  }
+  videoPlayer.dataset.resumeHandlersInitialized = 'true';
+
   const resumeButton = document.getElementById('resume-button');
   let resumePanel = document.getElementById('resume-panel');
 
