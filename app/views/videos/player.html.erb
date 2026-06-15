@@ -3943,9 +3943,8 @@ function initializeVideoPlayer() {
     }
     
     prepareSessionData() {
-      // 正しい動画IDの取得
-      const pathParts = window.location.pathname.split('/');
-      const videoId = pathParts[pathParts.length - 2]; // '/videos/{id}/player' から {id} を取得
+      // 初期化時に固定したvideoIdを使用（Turboナビゲーション後のURL参照混入を防ぐ）
+      const videoId = this.videoId;
       
       return {
         sessionInfo: {
@@ -3973,12 +3972,9 @@ function initializeVideoPlayer() {
       const data = this.prepareSessionData();
       console.log('準備されたセッションデータ:', data);
       
-      // 正しい動画IDの取得（URLパスから）
-      const pathParts = window.location.pathname.split('/');
-      const videoId = pathParts[pathParts.length - 2]; // '/videos/{id}/player' から {id} を取得
-      console.log('URL pathname:', window.location.pathname);
-      console.log('pathParts:', pathParts);
-      console.log('videoId:', videoId);
+      // 初期化時に固定したvideoIdを使用（Turboナビゲーション後のURL参照混入を防ぐ）
+      const videoId = this.videoId;
+      console.log('videoId (固定):', videoId);
       
       // videoIdが空または不正な場合は処理を中止
       if (!videoId || videoId.trim() === '' || videoId === 'player') {
@@ -4043,8 +4039,7 @@ function initializeVideoPlayer() {
       .then(response => {
         if (response.status === 422) {
           // セッションがDBに存在しない場合、localStorageをクリアして新規セッションで再保存
-          const pathParts = window.location.pathname.split('/');
-          const videoId = pathParts[pathParts.length - 2];
+          const videoId = this.videoId;
           const sessionKey = `active_session_${videoId}`;
           console.warn('[セッション] DBに存在しないセッションID。localStorageをクリアして再送します');
           const staleSessionId = this.videoElement?.dataset?.sessionId;
@@ -4078,9 +4073,7 @@ function initializeVideoPlayer() {
           console.log(`セッションデータを保存しました (${this.timestampLog.length - this.lastSaveEventCount}件):`, result.session_id);
           // 保存成功時にセッションIDを更新
           if (result.session_id) {
-            const pathParts = window.location.pathname.split('/');
-            const videoId = pathParts[pathParts.length - 2];
-            localStorage.setItem(`active_session_${videoId}`, result.session_id);
+            localStorage.setItem(`active_session_${this.videoId}`, result.session_id);
             this.videoElement.dataset.sessionId = result.session_id;
           }
           this.lastSaveTime = Date.now();
@@ -4101,9 +4094,7 @@ function initializeVideoPlayer() {
     
     saveToLocalStorageBackup(data) {
       try {
-        // 正しい動画IDの取得
-        const pathParts = window.location.pathname.split('/');
-        const videoId = pathParts[pathParts.length - 2];
+        const videoId = this.videoId;
         
         const backupData = {
           ...data,
@@ -4134,9 +4125,10 @@ function initializeVideoPlayer() {
       this.videoState = 'stopped';
       this.lastPlaybackRate = 1.0;
 
-      // ページロード時に localStorage から保存されたセッションIDを確認
+      // 動画IDをこのトラッカーインスタンスに固定（Turboナビゲーション後もURLが変わっても正しい動画に保存される）
       const pathParts = window.location.pathname.split('/');
       const videoId = pathParts[pathParts.length - 2];
+      this.videoId = videoId; // 固定する
       const sessionKey = `active_session_${videoId}`;
       const savedSessionId = localStorage.getItem(sessionKey);
       
@@ -4160,9 +4152,7 @@ function initializeVideoPlayer() {
         try {
           const latestSessionData = JSON.parse(this.videoElement.dataset.latestSession || '{}');
           const serverLastElapsed = parseFloat(latestSessionData.last_session_elapsed || 0);
-          const pathParts = window.location.pathname.split('/');
-          const videoId = pathParts[pathParts.length - 2];
-          const localLastElapsed = parseFloat(localStorage.getItem(`session_elapsed_${videoId}_${savedSessionId}`) || 0);
+          const localLastElapsed = parseFloat(localStorage.getItem(`session_elapsed_${this.videoId}_${savedSessionId}`) || 0);
           const lastElapsed = serverLastElapsed > 0 ? serverLastElapsed : localLastElapsed;
           if (lastElapsed > 0) {
             this.elapsedOffset = lastElapsed;
@@ -4234,7 +4224,7 @@ function initializeVideoPlayer() {
       });
       
       // 定期的な動画時刻更新
-      setInterval(() => {
+      this.videoTimeInterval = setInterval(() => {
         if (this.videoElement && this.videoState === 'playing') {
           this.lastVideoTime = this.videoElement.currentTime;
         }
@@ -4288,7 +4278,7 @@ function initializeVideoPlayer() {
       }
       
       // 統計の定期更新
-      setInterval(() => {
+      this.statsUpdateInterval = setInterval(() => {
         this.updateTimestampStats();
       }, 1000);
     }
@@ -4314,7 +4304,7 @@ function initializeVideoPlayer() {
     
     setupBatchSaving() {
       // 条件ベースの賢い保存システム
-      setInterval(() => {
+      this.batchSaveInterval = setInterval(() => {
         this.checkAndSave();
       }, 15000); // 15秒間隔でチェック
       
@@ -4393,7 +4383,7 @@ function initializeVideoPlayer() {
     
     setupMemoryCleanup() {
       // 10分ごとにメモリクリーンアップを実行
-      setInterval(() => {
+      this.memoryCleanupInterval = setInterval(() => {
         const now = Date.now();
         
         console.log('🧹 メモリクリーンアップを実行中...');
@@ -4468,9 +4458,7 @@ function initializeVideoPlayer() {
         
         // localStorageにもバックアップ保存
         try {
-          // 正しい動画IDの取得
-          const pathParts = window.location.pathname.split('/');
-          const videoId = pathParts[pathParts.length - 2];
+          const videoId = this.videoId;
 
           // 累積経過時間をlocalStorageに保存（session_end 時のアイドル時間を除外）
           const finalElapsed = this.lastActiveElapsed > 0 ?
@@ -4514,18 +4502,41 @@ function initializeVideoPlayer() {
       });
       
       // 定期的な「生存確認」保存
-      setInterval(() => {
+      this.keepAliveInterval = setInterval(() => {
         this.saveSessionToServer();
       }, 30000); // 30秒間隔
+    }
+
+    destroy() {
+      if (this.destroyed) return;
+      this.destroyed = true;
+
+      // 全インターバルを停止
+      clearInterval(this.trackingInterval);
+      clearInterval(this.gazeOverlayInterval);
+      clearInterval(this.videoTimeInterval);
+      clearInterval(this.statsUpdateInterval);
+      clearInterval(this.batchSaveInterval);
+      clearInterval(this.memoryCleanupInterval);
+      clearInterval(this.keepAliveInterval);
+
+      // カメラ・MediaPipeを停止
+      try { if (this.camera) this.camera.stop(); } catch (e) {}
+      try { if (this.faceMesh) this.faceMesh.close(); } catch (e) {}
+
+      // セッション終了を記録して保存
+      this.addTimestamp('session_end', '学習セッション終了（ページ遷移）');
+      this.saveSessionToServer(true);
+      this.saveSessionToServerSync();
+
+      console.log(`[destroy] tracker for videoId=${this.videoId} を破棄しました`);
     }
     
     saveSessionToServerSync() {
       // 同期的なXHR要求（ページ離脱時用）
       try {
         const data = this.prepareSessionData();
-        // 正しい動画IDの取得
-        const pathParts = window.location.pathname.split('/');
-        const videoId = pathParts[pathParts.length - 2];
+        const videoId = this.videoId;
         
         // 再開セッションのIDを取得（あれば）
         const videoPlayer = document.getElementById('video-player');
@@ -6034,9 +6045,16 @@ document.addEventListener('turbo:before-cache', function() {
   };
 });
 
-// ページ遷移開始時に初期化を停止
+// ページ遷移開始時に古いトラッカーを破棄してからナビゲーション
 document.addEventListener('turbo:before-visit', function() {
-  console.log('turbo:before-visit - 初期化を停止');
+  console.log('turbo:before-visit - 古いトラッカーを破棄');
+
+  // 旧トラッカーを destroy（セッション保存 + 全インターバル停止）
+  if (window.concentrationTracker && !window.concentrationTracker.destroyed) {
+    window.concentrationTracker.destroy();
+    window.concentrationTracker = null;
+  }
+
   if (window.videoPlayerInitState) {
     window.videoPlayerInitState.shouldStop = true;
   }
