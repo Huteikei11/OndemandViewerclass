@@ -4121,7 +4121,19 @@ function initializeVideoPlayer() {
     initializeVideoTracking() {
       this.videoElement = document.getElementById('video-player');
       if (!this.videoElement) return;
-      
+
+      // 動画が切り替わった場合に前の動画のセッションデータが混入しないようリセット
+      this.timestampLog = [];
+      this.lastSaveEventCount = 0;
+      this.lastSaveTime = Date.now();
+      this.saveInProgress = false;
+      this.elapsedOffset = 0;
+      this.lastActiveElapsed = 0;
+      this.sessionStartTime = Date.now();
+      this.lastVideoTime = 0;
+      this.videoState = 'stopped';
+      this.lastPlaybackRate = 1.0;
+
       // ページロード時に localStorage から保存されたセッションIDを確認
       const pathParts = window.location.pathname.split('/');
       const videoId = pathParts[pathParts.length - 2];
