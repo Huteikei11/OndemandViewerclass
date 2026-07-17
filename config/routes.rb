@@ -65,6 +65,9 @@ Rails.application.routes.draw do
     # CSV export routes
     get "management/export_summary", to: "video_management#export_summary", as: "management_export_summary"
     get "management/export_questions", to: "video_management#export_questions", as: "management_export_questions"
+    get "management/export_sessions", to: "video_management#export_sessions", as: "management_export_sessions"
+    get "management/export_events", to: "video_management#export_events", as: "management_export_events"
+    get "management/export_pauses", to: "video_management#export_pauses", as: "management_export_pauses"
     get "management/export_session_detail/:session_id", to: "video_management#export_session_detail", as: "management_export_session_detail"
     get "management/export_session_events/:session_id", to: "video_management#export_session_events", as: "management_export_session_events"
   end

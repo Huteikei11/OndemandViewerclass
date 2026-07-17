@@ -1359,6 +1359,64 @@ class VideoManagementController < ApplicationController
     send_data csv_data, filename: "events_timeline_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
   end
 
+  def export_pauses
+    require "csv"
+
+    learning_sessions = @video.learning_sessions.includes(:user, :timestamp_events).order(:session_start_time)
+
+    csv_data = "﻿" + CSV.generate(headers: true, encoding: "UTF-8") do |csv|
+      csv << [
+        "セッションID", "ユーザー名", "セッション開始日時",
+        "動画位置(秒)", "動画位置(mm:ss)",
+        "停止時間(秒)", "停止カテゴリ",
+        "停止開始_セッション経過(秒)", "再生再開_セッション経過(秒)"
+      ]
+
+      learning_sessions.each do |session|
+        pause_play = session.timestamp_events
+          .select { |e| e.event_type == "video_pause" || e.event_type == "video_play" }
+          .sort_by { |e| e.session_elapsed.to_f }
+
+        last_pause = nil
+        pause_play.each do |event|
+          if event.event_type == "video_pause"
+            last_pause = event
+          elsif event.event_type == "video_play" && last_pause
+            dur = event.session_elapsed.to_f - last_pause.session_elapsed.to_f
+            next if dur < 3 || dur > 600
+
+            vt = last_pause.video_time.to_f
+            mm = vt.to_i / 60
+            ss = (vt.to_i % 60).to_s.rjust(2, "0")
+            category = case dur
+            when 3...15   then "短い停止(3-15秒)"
+            when 15...30  then "書き取り開始(15-30秒)"
+            when 30...60  then "書き取り中(30-60秒)"
+            when 60...120 then "長い書き取り(1-2分)"
+            when 120...300 then "非常に長い停止(2-5分)"
+            else               "超長停止(5-10分)"
+            end
+
+            csv << [
+              session.id,
+              session.user.email,
+              session.session_start_time.strftime("%Y-%m-%d %H:%M:%S"),
+              vt.round(1),
+              "#{mm}:#{ss}",
+              dur.round(1),
+              category,
+              last_pause.session_elapsed.to_f.round(1),
+              event.session_elapsed.to_f.round(1)
+            ]
+            last_pause = nil
+          end
+        end
+      end
+    end
+
+    send_data csv_data, filename: "pause_analysis_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
+  end
+
   def export_questions
     require "csv"
 

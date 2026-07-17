@@ -14,15 +14,39 @@
       <div class="card mb-4">
         <div class="card-body">
           <h5 class="card-title">📊 データエクスポート</h5>
-          <p class="text-muted mb-3">分析データをCSV形式でダウンロードできます（個別セッションは学習セッション履歴から）</p>
-          <div class="row">
-            <div class="col-md-6 mb-2">
+          <p class="text-muted mb-2">分析データをCSV形式でダウンロードできます。Excel で開いて自由に分析できます。</p>
+
+          <p class="fw-semibold mb-1 mt-3 small text-muted">全セッション一括エクスポート</p>
+          <div class="row g-2 mb-3">
+            <div class="col-md-4">
+              <%= link_to video_management_export_sessions_path(video_id: @video, format: :csv), class: "btn btn-primary w-100", data: { turbo: false } do %>
+                <i class="bi bi-file-earmark-spreadsheet"></i> セッション一覧
+              <% end %>
+              <small class="text-muted d-block mt-1">全セッションの概要（1行1セッション）一時停止・スキップ回数・スコアなど</small>
+            </div>
+            <div class="col-md-4">
+              <%= link_to video_management_export_events_path(video_id: @video, format: :csv), class: "btn btn-primary w-100", data: { turbo: false } do %>
+                <i class="bi bi-file-earmark-spreadsheet"></i> 全イベントログ
+              <% end %>
+              <small class="text-muted d-block mt-1">全セッションの操作ログ（1行1イベント）ピボットテーブル分析向け</small>
+            </div>
+            <div class="col-md-4">
+              <%= link_to video_management_export_pauses_path(video_id: @video, format: :csv), class: "btn btn-primary w-100", data: { turbo: false } do %>
+                <i class="bi bi-file-earmark-spreadsheet"></i> 一時停止分析
+              <% end %>
+              <small class="text-muted d-block mt-1">停止位置・停止時間を1行1停止で出力。書き取り時間分析向け</small>
+            </div>
+          </div>
+
+          <p class="fw-semibold mb-1 mt-3 small text-muted">統計サマリー</p>
+          <div class="row g-2">
+            <div class="col-md-6">
               <%= link_to video_management_export_summary_path(video_id: @video, format: :csv), class: "btn btn-success w-100", data: { turbo: false } do %>
                 <i class="bi bi-file-earmark-spreadsheet"></i> 全体サマリー
               <% end %>
-              <small class="text-muted d-block mt-1">動画全体の統計情報</small>
+              <small class="text-muted d-block mt-1">動画全体の集計統計</small>
             </div>
-            <div class="col-md-6 mb-2">
+            <div class="col-md-6">
               <%= link_to video_management_export_questions_path(video_id: @video, format: :csv), class: "btn btn-success w-100", data: { turbo: false } do %>
                 <i class="bi bi-file-earmark-spreadsheet"></i> 問題別統計
               <% end %>
