@@ -137,6 +137,60 @@ class VideoManagementController < ApplicationController
       }
     end.sort_by { |d| d[:x] }
 
+    # 一時停止ヒートマップ: video_pause→video_play ペアから区間ごとの停止時間を算出
+    pause_bucket_size = 30
+    pause_buckets = Hash.new { |h, k| h[k] = { count: 0, total_seconds: 0.0 } }
+    pause_durations_list = []
+    raw_pauses = []  # フロントエンドでのリビン用に生データも保持
+
+    all_events.group_by(&:learning_session_id).each_value do |session_events|
+      pause_play = session_events
+        .select { |e| e.event_type == "video_pause" || e.event_type == "video_play" }
+        .sort_by { |e| e.session_elapsed.to_f }
+
+      last_pause = nil
+      pause_play.each do |event|
+        if event.event_type == "video_pause"
+          last_pause = event
+        elsif event.event_type == "video_play" && last_pause
+          dur = event.session_elapsed.to_f - last_pause.session_elapsed.to_f
+          if dur >= 3 && dur <= 600
+            bucket_key = (last_pause.video_time.to_f / pause_bucket_size).floor * pause_bucket_size
+            pause_buckets[bucket_key][:count] += 1
+            pause_buckets[bucket_key][:total_seconds] += dur
+            pause_durations_list << dur
+            raw_pauses << { vt: last_pause.video_time.to_f.round(1), dur: dur.round(1) }
+          end
+          last_pause = nil
+        end
+      end
+    end
+
+    histogram_defs = [
+      [ "3〜15秒", 3, 15 ], [ "15〜30秒", 15, 30 ], [ "30〜60秒", 30, 60 ],
+      [ "1〜2分", 60, 120 ], [ "2〜5分", 120, 300 ], [ "5〜10分", 300, 600 ]
+    ]
+    @pause_heatmap_data = {
+      heatmap: pause_buckets.map do |time, data|
+        minutes = time / 60
+        seconds = (time % 60).to_s.rjust(2, "0")
+        {
+          time: time,
+          label: "#{minutes}:#{seconds}",
+          pause_count: data[:count],
+          total_duration: data[:total_seconds].round(1),
+          avg_duration: data[:count] > 0 ? (data[:total_seconds] / data[:count]).round(1) : 0
+        }
+      end.sort_by { |d| d[:time] },
+      histogram: {
+        labels: histogram_defs.map { |label, _min, _max| label },
+        values: histogram_defs.map { |_label, min, max| pause_durations_list.count { |d| d >= min && d < max } }
+      },
+      total_pauses: pause_durations_list.size,
+      total_pause_time: pause_durations_list.sum.round(1),
+      raw_pauses: raw_pauses
+    }
+
     # 動画操作マップデータ（一時停止・スキップの位置）- 全体
     video_operations = all_events.select { |e|
       e.video_time && e.video_time > 0 &&
