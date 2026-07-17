@@ -57,6 +57,8 @@ Rails.application.routes.draw do
     get "management/add_manager", to: "video_management#add_manager", as: "management_add_manager"
     post "management/add_manager", to: "video_management#add_manager"
     get "management/session/:session_id", to: "video_management#session_detail", as: "management_session_detail"
+    get "management/session/:session_id/events", to: "video_management#session_events_page", as: "management_session_events"
+    delete "management/session/:session_id/events", to: "video_management#destroy_events", as: "management_destroy_events"
     post "management/save_session", to: "video_management#save_session_data", as: "management_save_session"
     delete "management/session/:session_id", to: "video_management#destroy_session", as: "management_destroy_session"
 

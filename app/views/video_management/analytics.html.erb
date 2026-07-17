@@ -711,12 +711,17 @@
                         </button>
                       </td>
                       <td>
-                        <%= button_to "削除", 
-                            video_management_destroy_session_path(video_id: @video, session_id: session.id), 
-                            method: :delete, 
+                        <%= link_to "イベント編集",
+                            video_management_session_events_path(video_id: @video, session_id: session.id),
+                            class: "btn btn-sm btn-warning" %>
+                      </td>
+                      <td>
+                        <%= button_to "削除",
+                            video_management_destroy_session_path(video_id: @video, session_id: session.id),
+                            method: :delete,
                             class: "btn btn-sm btn-danger",
-                            data: { 
-                              turbo_confirm: "本当にこのセッション（#{session.user.name}、#{session.session_start_time.strftime('%Y/%m/%d %H:%M')}）を削除しますか？関連するすべてのイベントデータも削除されます。" 
+                            data: {
+                              turbo_confirm: "本当にこのセッション（#{session.user.name}、#{session.session_start_time.strftime('%Y/%m/%d %H:%M')}）を削除しますか？関連するすべてのイベントデータも削除されます。"
                             },
                             form: { style: "display: inline-block;" } %>
                       </td>

@@ -1460,6 +1460,27 @@ class VideoManagementController < ApplicationController
     render json: { success: false, error: e.message }, status: :internal_server_error
   end
 
+  def session_events_page
+    @session = @video.learning_sessions.includes(:user).find(params[:session_id])
+    @events  = @session.timestamp_events.order(:session_elapsed)
+  end
+
+  def destroy_events
+    @session = @video.learning_sessions.find(params[:session_id])
+    event_ids = Array(params[:event_ids]).map(&:to_i).select(&:positive?)
+
+    if event_ids.blank?
+      redirect_to video_management_session_events_path(video_id: @video, session_id: @session),
+        alert: "削除するイベントを選択してください。"
+      return
+    end
+
+    deleted_count = @session.timestamp_events.where(id: event_ids).destroy_all.count
+
+    redirect_to video_management_session_events_path(video_id: @video, session_id: @session),
+      notice: "#{deleted_count}件のイベントを削除しました。"
+  end
+
   private
 
   def set_video

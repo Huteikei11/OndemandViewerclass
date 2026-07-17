@@ -1,0 +1,88 @@
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <%= link_to "← 分析画面に戻る", video_management_analytics_path(video_id: @video), class: "btn btn-outline-secondary btn-sm" %>
+    <h4 class="mb-0">セッション #<%= @session.id %> のイベント編集</h4>
+  </div>
+
+  <!-- セッション概要 -->
+  <div class="card mb-4">
+    <div class="card-body py-2 d-flex flex-wrap gap-4">
+      <div><span class="text-muted small">ユーザー</span><br><strong><%= @session.user&.name || @session.user&.email || "(不明)" %></strong></div>
+      <div><span class="text-muted small">開始</span><br><strong><%= @session.session_start_time&.strftime("%Y-%m-%d %H:%M:%S") || "-" %></strong></div>
+      <div><span class="text-muted small">終了</span><br><strong><%= @session.session_end_time&.strftime("%Y-%m-%d %H:%M:%S") || "進行中" %></strong></div>
+      <div><span class="text-muted small">総イベント数</span><br><strong><%= @events.size %>件</strong></div>
+    </div>
+  </div>
+
+  <!-- 注意書き -->
+  <div class="alert alert-info py-2 mb-3">
+    <strong>操作方法:</strong>
+    汚染イベントは通常セッションの<strong>先頭付近</strong>に集中しています。
+    削除後も <code>session_elapsed</code> はシフトされません（ギャップはそのまま残ります）。
+  </div>
+
+  <% if notice %>
+    <div class="alert alert-success py-2"><%= notice %></div>
+  <% end %>
+  <% if alert %>
+    <div class="alert alert-warning py-2"><%= alert %></div>
+  <% end %>
+
+  <%= form_with url: video_management_destroy_events_path(video_id: @video, session_id: @session),
+                method: :delete,
+                id: "events-form" do %>
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="select-all">全選択</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="deselect-all">全解除</button>
+        </div>
+        <button type="submit"
+                class="btn btn-danger btn-sm"
+                onclick="return confirm('選択したイベントを削除しますか？この操作は取り消せません。')">
+          選択したイベントを削除
+        </button>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+          <thead class="table-light">
+            <tr>
+              <th style="width:2.5rem;"></th>
+              <th style="width:5rem;">経過(s)</th>
+              <th style="width:5rem;">動画時刻(s)</th>
+              <th style="width:12rem;">イベント種別</th>
+              <th>説明</th>
+              <th style="width:5rem;">スコア</th>
+              <th style="width:10rem;">記録日時</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @events.each_with_index do |event, i| %>
+              <tr class="<%= i.zero? ? 'table-warning' : '' %>">
+                <td class="text-center">
+                  <%= check_box_tag "event_ids[]", event.id, false, class: "event-checkbox form-check-input" %>
+                </td>
+                <td class="font-monospace"><%= event.session_elapsed&.round(1) || "-" %></td>
+                <td class="font-monospace"><%= event.video_time&.round(1) || "-" %></td>
+                <td><code style="font-size:0.78rem;"><%= event.event_type %></code></td>
+                <td><%= truncate(event.description, length: 80) %></td>
+                <td class="text-end"><%= event.concentration_score&.round(1) || "-" %></td>
+                <td class="text-muted"><%= event.timestamp&.strftime("%H:%M:%S.%L") || "-" %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<script>
+  document.getElementById('select-all').addEventListener('click', () => {
+    document.querySelectorAll('.event-checkbox').forEach(cb => cb.checked = true);
+  });
+  document.getElementById('deselect-all').addEventListener('click', () => {
+    document.querySelectorAll('.event-checkbox').forEach(cb => cb.checked = false);
+  });
+</script>
