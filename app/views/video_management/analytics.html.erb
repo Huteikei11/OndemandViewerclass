@@ -195,6 +195,11 @@
                   一時停止ヒートマップ
                 </button>
               </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="skip-heatmap-tab" data-bs-toggle="tab" data-bs-target="#skip-heatmap" type="button">
+                  スキップ分析
+                </button>
+              </li>
             </ul>
 
             <!-- グラフコンテンツ -->
@@ -825,6 +830,226 @@
         scales: {
           x: { title: { display: true, text: '動画内位置（分:秒）' } },
           y: { title: { display: true, text: '停止回数' }, beginAtZero: true, ticks: { stepSize: 1 } }
+        }
+      }
+    });
+  });
+</script>
+
+              <!-- 10. スキップ分析 -->
+              <div class="tab-pane fade" id="skip-heatmap" role="tabpanel">
+                <% sd = @skip_heatmap_data %>
+                <% if sd[:total_forward_skips] > 0 || sd[:total_backward_seeks] > 0 %>
+                  <div class="alert alert-light border mb-3 py-2">
+                    前進スキップ <strong><%= sd[:total_forward_skips] %></strong> 回（合計 <strong><%= sd[:total_skipped_seconds] %></strong> 秒分スキップ）／
+                    巻き戻し <strong><%= sd[:total_backward_seeks] %></strong> 回
+                  </div>
+                <% else %>
+                  <div class="alert alert-secondary mb-3 py-2">スキップデータがまだありません。</div>
+                <% end %>
+
+                <!-- 集計間隔スライダー -->
+                <div class="mb-4">
+                  <label class="form-label">集計間隔: <strong><span id="skipBucketSizeValue">30</span>秒</strong></label>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small">5秒</span>
+                    <input type="range" class="form-range" id="skipBucketSize" min="5" max="300" value="30" step="5" style="max-width: 320px;">
+                    <span class="text-muted small">5分</span>
+                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="updateSkipHeatmapBins()">更新</button>
+                  </div>
+                  <small class="text-muted">動画を何秒単位で区切って集計するかを調整できます。</small>
+                </div>
+
+                <div class="mb-4">
+                  <h6 class="mb-1">スキップされた区間マップ</h6>
+                  <p class="text-muted small mb-2">前進スキップによって「飛ばされた」回数が多いほど赤くなります。棒が高い箇所はよく飛ばされる区間です。</p>
+                  <div style="position: relative; height: 280px;">
+                    <canvas id="skippedOverChart"></canvas>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <h6 class="mb-1">スキップ開始位置</h6>
+                    <p class="text-muted small mb-2">ここからスキップが多く発生した位置です。</p>
+                    <div style="position: relative; height: 220px;">
+                      <canvas id="skipSourceChart"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <h6 class="mb-1">スキップ着地位置</h6>
+                    <p class="text-muted small mb-2">スキップ後に再生が再開された位置です。</p>
+                    <div style="position: relative; height: 220px;">
+                      <canvas id="skipDestChart"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <h6 class="mb-1">巻き戻し着地位置</h6>
+                    <p class="text-muted small mb-2">後退シーク（見直し）が多い箇所です。</p>
+                    <div style="position: relative; height: 220px;">
+                      <canvas id="backwardSeekChart"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <h6 class="mb-1">スキップ距離の分布</h6>
+                    <p class="text-muted small mb-2">一度にどのくらいの長さをスキップするかの分布です。</p>
+                    <div style="position: relative; height: 220px;">
+                      <canvas id="skipHistogramChart"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+<script>
+  // スキップデータを指定バケットサイズで再集計
+  function rebinSkipData(rawSkips, bucketSize, type) {
+    var buckets = {};
+    rawSkips.forEach(function(s) {
+      if (type === 'skipped_over' && s.dir === 'forward') {
+        var fb = Math.floor(s.from / bucketSize) * bucketSize;
+        var tb = Math.floor(s.to   / bucketSize) * bucketSize;
+        for (var b = fb; b <= tb; b += bucketSize) {
+          buckets[b] = (buckets[b] || 0) + 1;
+        }
+      } else if (type === 'source' && s.dir === 'forward') {
+        var k = Math.floor(s.from / bucketSize) * bucketSize;
+        buckets[k] = (buckets[k] || 0) + 1;
+      } else if (type === 'dest' && s.dir === 'forward') {
+        var k = Math.floor(s.to / bucketSize) * bucketSize;
+        buckets[k] = (buckets[k] || 0) + 1;
+      } else if (type === 'backward' && s.dir === 'backward') {
+        var k = Math.floor(s.to / bucketSize) * bucketSize;
+        buckets[k] = (buckets[k] || 0) + 1;
+      }
+    });
+    return Object.keys(buckets).map(function(k) {
+      var t = parseInt(k);
+      return { time: t, label: Math.floor(t/60) + ':' + String(t%60).padStart(2,'0'), count: buckets[k] };
+    }).sort(function(a,b){ return a.time - b.time; });
+  }
+
+  function skipColorScale(items, color) {
+    var max = Math.max.apply(null, items.map(function(d){ return d.count; }).concat([1]));
+    return items.map(function(d) {
+      var r = color[0], g = color[1], b = color[2];
+      var ratio = d.count / max;
+      if (color === 'red') {
+        r = Math.round(54  + (220 - 54)  * ratio);
+        g = Math.round(130 * (1 - ratio * 0.9));
+        b = Math.round(235 * (1 - ratio));
+      }
+      return 'rgba(' + r + ',' + g + ',' + b + ',0.85)';
+    });
+  }
+
+  window.updateSkipHeatmapBins = function() {
+    var bs = parseInt(document.getElementById('skipBucketSize').value) || 30;
+    var data = chartsData && chartsData.skip_heatmap_data;
+    if (!data || !data.raw_skips) return;
+
+    var specs = [
+      { key: 'skippedOver', type: 'skipped_over', chartKey: 'skippedOver' },
+      { key: 'skipSource',  type: 'source',        chartKey: 'skipSource' },
+      { key: 'skipDest',    type: 'dest',           chartKey: 'skipDest' },
+      { key: 'backwardSeek', type: 'backward',      chartKey: 'backwardSeek' }
+    ];
+    specs.forEach(function(spec) {
+      var chart = chartInstances[spec.chartKey];
+      if (!chart) return;
+      var rebinned = rebinSkipData(data.raw_skips, bs, spec.type);
+      var max = Math.max.apply(null, rebinned.map(function(d){ return d.count; }).concat([1]));
+      var colors = rebinned.map(function(d) {
+        var ratio = d.count / max;
+        var r = Math.round(54  + (220 - 54)  * ratio);
+        var g = Math.round(130 * (1 - ratio * 0.9));
+        var b = Math.round(235 * (1 - ratio));
+        return 'rgba(' + r + ',' + g + ',' + b + ',0.85)';
+      });
+      chart.data.labels = rebinned.map(function(d){ return d.label; });
+      chart.data.datasets[0].data            = rebinned.map(function(d){ return d.count; });
+      chart.data.datasets[0].backgroundColor = colors;
+      chart.data.datasets[0].borderColor     = colors;
+      chart.update('none');
+    });
+  };
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var sl = document.getElementById('skipBucketSize');
+    var dv = document.getElementById('skipBucketSizeValue');
+    if (sl && dv) sl.addEventListener('input', function(){ dv.textContent = this.value; });
+  });
+
+  document.getElementById('skip-heatmap-tab')?.addEventListener('shown.bs.tab', function() {
+    ['skippedOver','skipSource','skipDest','backwardSeek'].forEach(function(k) {
+      if (chartInstances[k]) { chartInstances[k].destroy(); chartInstances[k] = null; }
+    });
+
+    var data = chartsData && chartsData.skip_heatmap_data;
+    var noData = !data || !data.raw_skips || data.raw_skips.length === 0;
+    if (noData) {
+      ['skippedOverChart','skipSourceChart','skipDestChart','backwardSeekChart','skipHistogramChart'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.parentElement.innerHTML = '<p class="text-muted text-center py-4">スキップデータがありません</p>';
+      });
+      return;
+    }
+
+    // スライダーをデフォルト値にリセット
+    var sl = document.getElementById('skipBucketSize');
+    var dv = document.getElementById('skipBucketSizeValue');
+    if (sl) sl.value = 30;
+    if (dv) dv.textContent = '30';
+
+    function makeColors(items) {
+      var max = Math.max.apply(null, items.map(function(d){ return d.count; }).concat([1]));
+      return items.map(function(d) {
+        var ratio = d.count / max;
+        var r = Math.round(54  + (220 - 54)  * ratio);
+        var g = Math.round(130 * (1 - ratio * 0.9));
+        var b = Math.round(235 * (1 - ratio));
+        return 'rgba(' + r + ',' + g + ',' + b + ',0.85)';
+      });
+    }
+
+    function makeBarChart(canvasId, items, yLabel, tooltipLabel) {
+      var colors = makeColors(items);
+      return new Chart(document.getElementById(canvasId), {
+        type: 'bar',
+        data: {
+          labels: items.map(function(d){ return d.label; }),
+          datasets: [{ label: tooltipLabel, data: items.map(function(d){ return d.count; }),
+            backgroundColor: colors, borderColor: colors, borderWidth: 1 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { title: { display: true, text: '動画内位置（分:秒）' } },
+            y: { title: { display: true, text: yLabel }, beginAtZero: true, ticks: { stepSize: 1 } }
+          }
+        }
+      });
+    }
+
+    chartInstances.skippedOver  = makeBarChart('skippedOverChart',  data.skipped_over,      '通過回数', 'スキップ通過回数');
+    chartInstances.skipSource   = makeBarChart('skipSourceChart',   data.skip_sources,      '回数',     'スキップ開始回数');
+    chartInstances.skipDest     = makeBarChart('skipDestChart',     data.skip_destinations, '回数',     'スキップ着地回数');
+    chartInstances.backwardSeek = makeBarChart('backwardSeekChart', data.backward_seeks,    '回数',     '巻き戻し着地回数');
+
+    // ヒストグラム（スキップ距離）
+    chartInstances.skipHistogram = new Chart(document.getElementById('skipHistogramChart'), {
+      type: 'bar',
+      data: {
+        labels: data.histogram.labels,
+        datasets: [{ label: 'スキップ回数', data: data.histogram.values,
+          backgroundColor: 'rgba(108, 117, 125, 0.75)', borderColor: 'rgba(108, 117, 125, 1)', borderWidth: 1 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { title: { display: true, text: 'スキップ距離' } },
+          y: { title: { display: true, text: '回数' }, beginAtZero: true, ticks: { stepSize: 1 } }
         }
       }
     });
@@ -1696,7 +1921,8 @@ if (typeof chartsData === 'undefined') {
     hourly_activity_data: <%= raw @hourly_activity_data.to_json %>,
     user_score_data: <%= raw @user_score_data.to_json %>,
     video_time_density_data: <%= raw @video_time_density_data.to_json %>,
-    pause_heatmap_data: <%= raw @pause_heatmap_data.to_json %>
+    pause_heatmap_data: <%= raw @pause_heatmap_data.to_json %>,
+    skip_heatmap_data: <%= raw @skip_heatmap_data.to_json %>
   };
   console.log('[chartsData] 定義完了:', chartsData);
 } else {
@@ -1705,7 +1931,8 @@ if (typeof chartsData === 'undefined') {
     hourly_activity_data: <%= raw @hourly_activity_data.to_json %>,
     user_score_data: <%= raw @user_score_data.to_json %>,
     video_time_density_data: <%= raw @video_time_density_data.to_json %>,
-    pause_heatmap_data: <%= raw @pause_heatmap_data.to_json %>
+    pause_heatmap_data: <%= raw @pause_heatmap_data.to_json %>,
+    skip_heatmap_data: <%= raw @skip_heatmap_data.to_json %>
   };
   console.log('[chartsData] 再定義完了:', chartsData);
 }

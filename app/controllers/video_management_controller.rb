@@ -191,6 +191,68 @@ class VideoManagementController < ApplicationController
       raw_pauses: raw_pauses
     }
 
+    # スキップ分析: video_skip/video_seek の additional_data から from/to を取得
+    skip_bucket_size = 30
+    skipped_over_buckets = Hash.new(0)
+    skip_dest_buckets    = Hash.new(0)
+    skip_source_buckets  = Hash.new(0)
+    backward_buckets     = Hash.new(0)
+    raw_skips            = []
+    total_skipped_video_time = 0.0
+
+    all_events.select { |e| e.event_type == "video_skip" || e.event_type == "video_seek" }.each do |event|
+      additional = event.additional_data
+      additional = JSON.parse(additional) rescue nil if additional.is_a?(String)
+      next unless additional.is_a?(Hash)
+
+      from = additional["from"].to_f
+      to   = additional["to"].to_f
+      next if from == to
+
+      if to > from
+        amt = (to - from).round(1)
+        fb = (from / skip_bucket_size).floor * skip_bucket_size
+        tb = (to   / skip_bucket_size).floor * skip_bucket_size
+        fb.step(tb, skip_bucket_size) { |b| skipped_over_buckets[b] += 1 }
+        skip_source_buckets[fb] += 1
+        skip_dest_buckets[tb]   += 1
+        total_skipped_video_time += amt
+        raw_skips << { from: from.round(1), to: to.round(1), amt: amt, dir: "forward" }
+      else
+        amt = (from - to).round(1)
+        backward_buckets[(to / skip_bucket_size).floor * skip_bucket_size] += 1
+        raw_skips << { from: from.round(1), to: to.round(1), amt: amt, dir: "backward" }
+      end
+    end
+
+    skip_hist_defs = [
+      [ "〜5秒", 0, 5 ], [ "5〜15秒", 5, 15 ], [ "15〜30秒", 15, 30 ],
+      [ "30〜60秒", 30, 60 ], [ "1〜2分", 60, 120 ], [ "2分〜", 120, Float::INFINITY ]
+    ]
+    forward_skips = raw_skips.select { |s| s[:dir] == "forward" }
+
+    build_skip_buckets = lambda do |hash|
+      hash.map do |time, count|
+        min = time / 60; sec = (time % 60).to_s.rjust(2, "0")
+        { time: time, label: "#{min}:#{sec}", count: count }
+      end.sort_by { |d| d[:time] }
+    end
+
+    @skip_heatmap_data = {
+      skipped_over:      build_skip_buckets.call(skipped_over_buckets),
+      skip_sources:      build_skip_buckets.call(skip_source_buckets),
+      skip_destinations: build_skip_buckets.call(skip_dest_buckets),
+      backward_seeks:    build_skip_buckets.call(backward_buckets),
+      histogram: {
+        labels: skip_hist_defs.map { |l, _min, _max| l },
+        values: skip_hist_defs.map { |_l, min, max| forward_skips.count { |s| s[:amt] >= min && s[:amt] < max } }
+      },
+      raw_skips: raw_skips,
+      total_forward_skips:   forward_skips.size,
+      total_backward_seeks:  raw_skips.count { |s| s[:dir] == "backward" },
+      total_skipped_seconds: total_skipped_video_time.round(1)
+    }
+
     # 動画操作マップデータ（一時停止・スキップの位置）- 全体
     video_operations = all_events.select { |e|
       e.video_time && e.video_time > 0 &&
