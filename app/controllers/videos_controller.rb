@@ -1,8 +1,8 @@
 class VideosController < ApplicationController
   before_action :authenticate_user!
-  before_action :set_video, only: [ :show, :player, :edit, :update, :destroy ]
+  before_action :set_video, only: [ :show, :player, :edit, :update, :destroy, :duplicate ]
   before_action :check_video_access, only: [ :player ]
-  before_action :check_video_management, only: [ :edit, :update, :destroy ]
+  before_action :check_video_management, only: [ :edit, :update, :destroy, :duplicate ]
 
   def index
     redirect_to root_path
@@ -133,6 +133,148 @@ class VideosController < ApplicationController
   def destroy
     @video.destroy
     redirect_to root_path, notice: "動画が正常に削除されました。"
+  end
+
+  def duplicate
+    new_video = nil
+
+    ActiveRecord::Base.transaction do
+      # ── 動画本体（video_file presence バリデーションを回避するため
+      #    先にレコードを作成し、その後ファイルをアタッチする） ────
+      new_video = Video.new(
+        title:           "#{@video.title}のコピー",
+        description:     @video.description,
+        is_private:      @video.is_private,
+        password_digest: @video.password_digest,
+        creator:         current_user
+      )
+      new_video.save!(validate: false)
+
+      # ── ファイル（同一blobを参照） ─────────────────────────
+      new_video.video_file.attach(@video.video_file.blob) if @video.video_file.attached?
+      new_video.pdf_file.attach(@video.pdf_file.blob)     if @video.pdf_file.attached?
+
+      # ── 問題・選択肢（IDマッピングを構築） ───────────────────
+      # 複製データなのでバリデーションをスキップして保存
+      question_id_map = {}
+      option_id_map   = {}
+
+      @video.questions.includes(:options).order(:time_position).each do |q|
+        new_q = Question.new(
+          video_id:         new_video.id,
+          content:          q.content,
+          answer:           q.answer,
+          question_type:    q.question_type,
+          time_position:    q.time_position,
+          show_answer:      q.show_answer,
+          explanation:      q.explanation,
+          show_explanation: q.show_explanation
+        )
+        new_q.save!(validate: false)
+        question_id_map[q.id] = new_q.id
+
+        q.options.each do |opt|
+          new_opt = Option.new(question_id: new_q.id, content: opt.content, is_correct: opt.is_correct)
+          new_opt.save!(validate: false)
+          option_id_map[opt.id] = new_opt.id
+        end
+      end
+
+      # ── 学習セッション（IDマッピングを構築） ──────────────────
+      session_id_map = {}
+      now = Time.current
+
+      @video.learning_sessions.each do |ls|
+        new_ls = LearningSession.new(
+          user_id:              ls.user_id,
+          video_id:             new_video.id,
+          session_start_time:   ls.session_start_time,
+          session_end_time:     ls.session_end_time,
+          final_score:          ls.final_score,
+          total_events:         ls.total_events,
+          session_data:         ls.session_data,
+          is_active:            false,
+          last_video_time:      ls.last_video_time,
+          last_session_elapsed: ls.last_session_elapsed,
+          paused_at:            ls.paused_at
+        )
+        new_ls.save!(validate: false)
+        session_id_map[ls.id] = new_ls.id
+      end
+
+      # ── タイムスタンプイベント（insert_all で一括） ───────────
+      if session_id_map.any?
+        events_data = TimestampEvent
+          .where(learning_session_id: session_id_map.keys)
+          .map do |e|
+            {
+              learning_session_id: session_id_map[e.learning_session_id],
+              timestamp:           e.timestamp,
+              session_elapsed:     e.session_elapsed,
+              video_time:          e.video_time,
+              event_type:          e.event_type,
+              description:         e.description,
+              concentration_score: e.concentration_score,
+              video_state:         e.video_state,
+              playback_rate:       e.playback_rate,
+              additional_data:     e.additional_data,
+              created_at:          now,
+              updated_at:          now
+            }
+          end
+        TimestampEvent.insert_all(events_data) if events_data.any?
+      end
+
+      # ── 解答記録（insert_all で一括） ─────────────────────────
+      responses_data = UserResponse
+        .joins(:question)
+        .where(questions: { video_id: @video.id })
+        .filter_map do |ur|
+          new_qid = question_id_map[ur.question_id]
+          next unless new_qid
+
+          {
+            question_id:        new_qid,
+            user_id:            ur.user_id,
+            user_answer:        ur.user_answer,
+            is_correct:         ur.is_correct,
+            response_time:      ur.response_time,
+            selected_option_id: ur.selected_option_id ? option_id_map[ur.selected_option_id] : nil,
+            created_at:         now,
+            updated_at:         now
+          }
+        end
+      UserResponse.insert_all(responses_data) if responses_data.any?
+
+      # ── メモ（insert_all で一括） ──────────────────────────
+      notes_data = Note.where(video_id: @video.id).map do |note|
+        {
+          video_id:      new_video.id,
+          user_id:       note.user_id,
+          content:       note.content,
+          time_position: note.time_position,
+          created_at:    now,
+          updated_at:    now
+        }
+      end
+      Note.insert_all(notes_data) if notes_data.any?
+
+      # ── 管理者・アクセス権（insert_all で一括） ───────────────
+      managers_data = @video.video_managers.map do |vm|
+        { video_id: new_video.id, user_id: vm.user_id, created_at: now, updated_at: now }
+      end
+      VideoManager.insert_all(managers_data) if managers_data.any?
+
+      accesses_data = @video.video_accesses.map do |va|
+        { video_id: new_video.id, user_id: va.user_id, created_at: now, updated_at: now }
+      end
+      VideoAccess.insert_all(accesses_data) if accesses_data.any?
+    end
+
+    redirect_to edit_video_path(new_video), notice: "「#{@video.title}」を複製しました。"
+  rescue => e
+    Rails.logger.error "動画複製エラー: #{e.class} - #{e.message}\n#{e.backtrace.first(5).join("\n")}"
+    redirect_to @video, alert: "複製中にエラーが発生しました: #{e.message}"
   end
 
   private

@@ -48,6 +48,7 @@ Rails.application.routes.draw do
     # Custom routes for player view
     member do
       get "player"
+      post "duplicate"
     end
 
     # Video management routes (nested under videos)

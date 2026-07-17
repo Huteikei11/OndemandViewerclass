@@ -10,8 +10,9 @@ class Video < ApplicationRecord
   has_many :user_responses, through: :questions
   has_many :learning_sessions, dependent: :destroy
 
-  has_one_attached :video_file
-  has_one_attached :pdf_file
+  # dependent: false で自動purgeを無効化し、before_destroyで共有状態を確認して安全に削除する
+  has_one_attached :video_file, dependent: false
+  has_one_attached :pdf_file, dependent: false
 
   # Password authentication for private videos
   has_secure_password validations: false
@@ -24,7 +25,30 @@ class Video < ApplicationRecord
   # 限定公開がfalseの場合、パスワードをクリア
   before_save :clear_password_if_not_private
 
+  # 削除前に共有blobを安全に処理（複製動画と同じblobを参照している場合はファイルを残す）
+  before_destroy :purge_or_detach_files
+
   private
+
+  def purge_or_detach_files
+    [ :video_file, :pdf_file ].each do |name|
+      attached = public_send(name)
+      next unless attached.attached?
+
+      blob = attached.blob
+      # 他のレコードが同じblobを参照しているか確認
+      shared = ActiveStorage::Attachment
+        .where(blob_id: blob.id)
+        .where.not(record_type: self.class.name, record_id: id)
+        .exists?
+
+      if shared
+        attached.detach       # attachmentレコードだけ削除、blob・ファイルは残す
+      else
+        attached.purge_later  # 他に参照がなければblob・ファイルも削除
+      end
+    end
+  end
 
   def clear_password_if_not_private
     # 限定公開がfalseの場合、パスワードダイジェストをクリア

@@ -3,6 +3,12 @@
     <h1><%= @video.title %>の編集</h1>
     <div class="header-actions">
       <%= link_to '詳細', @video, class: "btn btn-info" %>
+      <% if current_user&.can_manage_video?(@video) %>
+        <%= button_to '複製', duplicate_video_path(@video),
+                      method: :post,
+                      form: { data: { turbo_confirm: "「#{@video.title}」を複製しますか？\n（動画・問題・視聴記録がすべてコピーされます）" } },
+                      class: "btn btn-secondary" %>
+      <% end %>
       <%= link_to '戻る', videos_path, class: "btn btn-secondary" %>
     </div>
   </div>
