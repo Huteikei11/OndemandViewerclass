@@ -14,6 +14,26 @@
     </div>
   </div>
 
+  <!-- タイムライングラフ -->
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold">タイムライン</span>
+      <small class="text-muted">ポイントをクリック → テーブルのチェックボックスを選択／解除</small>
+    </div>
+    <div class="card-body">
+      <div style="position: relative; height: 340px;">
+        <canvas id="sessionTimelineChart"></canvas>
+      </div>
+      <div class="mt-2 d-flex flex-wrap gap-3" style="font-size: 0.8rem;">
+        <span><span class="badge" style="background:#3B82F6;">●</span> 集中度スコア</span>
+        <span><span class="badge" style="background:#F59E0B;">■</span> 一時停止</span>
+        <span><span class="badge" style="background:#10B981;">▲</span> 再生</span>
+        <span><span class="badge" style="background:#8B5CF6;">◆</span> スキップ</span>
+        <span><span class="badge" style="background:#6B7280;">●</span> その他</span>
+      </div>
+    </div>
+  </div>
+
   <!-- 注意書き -->
   <div class="alert alert-info py-2 mb-3">
     <strong>操作方法:</strong>
@@ -59,9 +79,11 @@
           </thead>
           <tbody>
             <% @events.each_with_index do |event, i| %>
-              <tr class="<%= i.zero? ? 'table-warning' : '' %>">
+              <tr id="event-row-<%= event.id %>" class="<%= i.zero? ? 'table-warning' : '' %>">
                 <td class="text-center">
-                  <%= check_box_tag "event_ids[]", event.id, false, class: "event-checkbox form-check-input" %>
+                  <%= check_box_tag "event_ids[]", event.id, false,
+                      id: "cb-#{event.id}",
+                      class: "event-checkbox form-check-input" %>
                 </td>
                 <td class="font-monospace"><%= event.session_elapsed&.round(1) || "-" %></td>
                 <td class="font-monospace"><%= event.video_time&.round(1) || "-" %></td>
@@ -78,11 +100,159 @@
   <% end %>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  document.getElementById('select-all').addEventListener('click', () => {
-    document.querySelectorAll('.event-checkbox').forEach(cb => cb.checked = true);
+(function() {
+  // イベントデータをRubyから渡す
+  var eventsData = <%= raw @events.map { |e|
+    {
+      id:      e.id,
+      x:       e.session_elapsed&.round(2) || 0,
+      y:       e.video_time&.round(2) || 0,
+      type:    e.event_type,
+      score:   e.concentration_score&.round(1),
+      desc:    e.description&.slice(0, 60),
+      elapsed: e.session_elapsed&.round(1) || 0,
+      vt:      e.video_time&.round(1) || 0
+    }
+  }.to_json %>;
+
+  // イベントタイプ別の見た目設定
+  var typeConfig = {
+    'concentration_5sec': { color: '#3B82F6', style: 'circle',   radius: 4,  label: '集中度スコア' },
+    'video_pause':        { color: '#F59E0B', style: 'rect',     radius: 7,  label: '一時停止' },
+    'video_play':         { color: '#10B981', style: 'triangle', radius: 7,  label: '再生' },
+    'video_skip':         { color: '#8B5CF6', style: 'rectRot',  radius: 8,  label: 'スキップ' },
+    'video_seek':         { color: '#8B5CF6', style: 'rectRot',  radius: 8,  label: 'シーク' },
+    'session_start':      { color: '#1F2937', style: 'star',     radius: 8,  label: 'セッション開始' },
+    'session_end':        { color: '#1F2937', style: 'star',     radius: 8,  label: 'セッション終了' }
+  };
+  function cfgFor(type) {
+    return typeConfig[type] || { color: '#9CA3AF', style: 'circle', radius: 4, label: type };
+  }
+
+  // 軌跡ライン（全イベントを session_elapsed 順で結ぶ）
+  var sorted = eventsData.slice().sort(function(a, b) { return a.x - b.x; });
+
+  // 種別ごとのデータセットを作成
+  var groups = {};
+  eventsData.forEach(function(e) {
+    var key = e.type;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(e);
   });
-  document.getElementById('deselect-all').addEventListener('click', () => {
-    document.querySelectorAll('.event-checkbox').forEach(cb => cb.checked = false);
+
+  var datasets = [];
+
+  // 1. 軌跡の線（薄いグレー、マーカーなし）
+  datasets.push({
+    label: '軌跡',
+    data: sorted.map(function(e) { return { x: e.x, y: e.y }; }),
+    type: 'line',
+    showLine: true,
+    tension: 0,
+    borderColor: 'rgba(156,163,175,0.5)',
+    borderWidth: 1.5,
+    pointRadius: 0,
+    fill: false,
+    order: 10
   });
+
+  // 2. イベント種別ごとの散布点
+  Object.keys(groups).forEach(function(type) {
+    var cfg = cfgFor(type);
+    datasets.push({
+      label: cfg.label,
+      data: groups[type].map(function(e) { return e; }),  // x/y/id/desc etc. all attached
+      backgroundColor: cfg.color,
+      borderColor: cfg.color,
+      pointStyle: cfg.style,
+      pointRadius: cfg.radius,
+      pointHoverRadius: cfg.radius + 3,
+      showLine: false,
+      order: 1
+    });
+  });
+
+  var ctx = document.getElementById('sessionTimelineChart');
+  var chart = new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: function(evt, elements) {
+        if (!elements || elements.length === 0) return;
+        var el = elements[0];
+        var ds = chart.data.datasets[el.datasetIndex];
+        var point = ds.data[el.index];
+        if (!point || !point.id) return;
+
+        // テーブル行のチェックボックスをトグル
+        var cb = document.getElementById('cb-' + point.id);
+        if (cb) {
+          cb.checked = !cb.checked;
+          // テーブル行にハイライトを当てスクロール
+          var row = document.getElementById('event-row-' + point.id);
+          if (row) {
+            row.style.transition = 'background 0.2s';
+            row.style.background = cb.checked ? '#fef9c3' : '';
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      },
+      plugins: {
+        legend: { display: true, position: 'top', labels: { usePointStyle: true, boxWidth: 10, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: function(ctx) {
+              var p = ctx[0].raw;
+              var em = Math.floor(p.elapsed / 60);
+              var es = (p.elapsed % 60).toFixed(1);
+              var vm = Math.floor(p.vt / 60);
+              var vs = (p.vt % 60).toFixed(1);
+              return '経過 ' + em + ':' + String(Math.floor(p.elapsed % 60)).padStart(2,'0') + '  動画 ' + vm + ':' + String(Math.floor(p.vt % 60)).padStart(2,'0');
+            },
+            label: function(ctx) {
+              var p = ctx.raw;
+              var lines = ['種別: ' + (p.type || '')];
+              if (p.score != null) lines.push('スコア: ' + p.score);
+              if (p.desc)  lines.push(p.desc);
+              lines.push('ID: ' + p.id + '（クリックで選択）');
+              return lines;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          title: { display: true, text: 'セッション経過時間（秒）' },
+          ticks: {
+            callback: function(v) {
+              return Math.floor(v/60) + ':' + String(Math.floor(v%60)).padStart(2,'0');
+            }
+          }
+        },
+        y: {
+          type: 'linear',
+          title: { display: true, text: '動画再生位置（秒）' },
+          ticks: {
+            callback: function(v) {
+              return Math.floor(v/60) + ':' + String(Math.floor(v%60)).padStart(2,'0');
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // テーブル操作
+  document.getElementById('select-all').addEventListener('click', function() {
+    document.querySelectorAll('.event-checkbox').forEach(function(cb) { cb.checked = true; });
+  });
+  document.getElementById('deselect-all').addEventListener('click', function() {
+    document.querySelectorAll('.event-checkbox').forEach(function(cb) { cb.checked = false; });
+  });
+})();
 </script>
