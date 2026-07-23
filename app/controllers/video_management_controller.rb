@@ -118,6 +118,7 @@ class VideoManagementController < ApplicationController
     # グラフ初期化用データを準備
     limited_sessions = @video.learning_sessions.limit(500).includes(:timestamp_events)
     all_events = limited_sessions.flat_map(&:timestamp_events)
+    session_group_map = limited_sessions.each_with_object({}) { |s, h| h[s.id] = s.session_group }
 
     # 時間帯別活動量データ（初期ロード時に計算）
     hourly_events = all_events.group_by { |e| e.timestamp.hour rescue 0 }
@@ -159,7 +160,7 @@ class VideoManagementController < ApplicationController
             pause_buckets[bucket_key][:count] += 1
             pause_buckets[bucket_key][:total_seconds] += dur
             pause_durations_list << dur
-            raw_pauses << { vt: last_pause.video_time.to_f.round(1), dur: dur.round(1) }
+            raw_pauses << { vt: last_pause.video_time.to_f.round(1), dur: dur.round(1), g: session_group_map[last_pause.learning_session_id] }
           end
           last_pause = nil
         end
@@ -217,11 +218,11 @@ class VideoManagementController < ApplicationController
         skip_source_buckets[fb] += 1
         skip_dest_buckets[tb]   += 1
         total_skipped_video_time += amt
-        raw_skips << { from: from.round(1), to: to.round(1), amt: amt, dir: "forward" }
+        raw_skips << { from: from.round(1), to: to.round(1), amt: amt, dir: "forward", g: session_group_map[event.learning_session_id] }
       else
         amt = (from - to).round(1)
         backward_buckets[(to / skip_bucket_size).floor * skip_bucket_size] += 1
-        raw_skips << { from: from.round(1), to: to.round(1), amt: amt, dir: "backward" }
+        raw_skips << { from: from.round(1), to: to.round(1), amt: amt, dir: "backward", g: session_group_map[event.learning_session_id] }
       end
     end
 
@@ -1509,6 +1510,20 @@ class VideoManagementController < ApplicationController
     end
 
     send_data csv_data, filename: "questions_stats_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
+  end
+
+  def update_session_group
+    @session = @video.learning_sessions.find(params[:session_id])
+    group = params[:session_group].presence
+    allowed = LearningSession::SESSION_GROUPS.keys + [ nil ]
+    unless allowed.include?(group)
+      render json: { ok: false, error: "不正なグループ値です" }, status: :unprocessable_entity
+      return
+    end
+    @session.update!(session_group: group)
+    render json: { ok: true, label: @session.session_group_label }
+  rescue ActiveRecord::RecordNotFound
+    render json: { ok: false, error: "セッションが見つかりません" }, status: :not_found
   end
 
   def destroy_session

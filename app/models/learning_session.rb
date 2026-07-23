@@ -3,9 +3,24 @@ class LearningSession < ApplicationRecord
   belongs_to :video
   has_many :timestamp_events, dependent: :destroy
 
+  # セッショングループ
+  SESSION_GROUPS = {
+    "normal"       => "等倍",
+    "fast_speed"   => "倍速",
+    "skip_heavy"   => "飛ばしが多い",
+    "fast_and_skip"=> "倍速と飛ばしの混在",
+    "too_short"    => "異様に視聴が短い",
+    "too_long"     => "視聴が超長い（その他）"
+  }.freeze
+
+  def session_group_label
+    SESSION_GROUPS[session_group] || "未分類"
+  end
+
   # スコープ
   scope :active, -> { where(is_active: true) }
   scope :inactive, -> { where(is_active: false) }
+  scope :by_group, ->(g) { where(session_group: g) }
 
   # ユーザーが特定の動画で進行中のセッションを取得
   scope :active_for, ->(user_id, video_id) do

@@ -59,6 +59,7 @@ Rails.application.routes.draw do
     get "management/session/:session_id", to: "video_management#session_detail", as: "management_session_detail"
     get "management/session/:session_id/events", to: "video_management#session_events_page", as: "management_session_events"
     delete "management/session/:session_id/events", to: "video_management#destroy_events", as: "management_destroy_events"
+    patch  "management/session/:session_id/group",  to: "video_management#update_session_group", as: "management_update_session_group"
     post "management/save_session", to: "video_management#save_session_data", as: "management_save_session"
     delete "management/session/:session_id", to: "video_management#destroy_session", as: "management_destroy_session"
 
