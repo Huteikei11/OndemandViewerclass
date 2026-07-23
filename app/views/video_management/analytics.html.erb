@@ -609,6 +609,58 @@
                     </div>
                   </div>
 
+                  <!-- K-means 自動分類 -->
+                  <div class="border rounded p-3 mb-3" style="background:#f8fafc;">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                      <span class="fw-semibold">🤖 自動分類（K-meansクラスタリング）</span>
+                      <div class="d-flex align-items-center gap-2">
+                        <label class="small mb-0 text-muted">クラスター数 k =</label>
+                        <input type="number" id="kmeansK" min="2" max="8" value="6"
+                               class="form-control form-control-sm" style="width:60px;">
+                        <button class="btn btn-sm btn-outline-primary" onclick="runKmeans()">実行</button>
+                      </div>
+                    </div>
+                    <small class="text-muted d-block mb-2">
+                      有効再生速度・スキップカバレッジ・期間比の3軸でセッションを自動グループ分けします。
+                      実行後にチャートでプレビューし、グループ名を確認してから保存できます。
+                    </small>
+
+                    <div id="kmeans-loading" class="text-muted small" style="display:none;">
+                      <span class="spinner-border spinner-border-sm me-1"></span>クラスタリング実行中…
+                    </div>
+
+                    <div id="kmeans-result" style="display:none;">
+                      <div class="table-responsive mb-3">
+                        <table class="table table-sm table-bordered mb-0" style="font-size:0.82rem;">
+                          <thead class="table-light">
+                            <tr>
+                              <th>色</th>
+                              <th>件数</th>
+                              <th title="動画時間 ÷ 経過時間">有効速度</th>
+                              <th title="スキップした動画時間の割合">スキップ率</th>
+                              <th title="経過時間 ÷ 動画長">期間比</th>
+                              <th>自動推定</th>
+                              <th>グループ名（確定）</th>
+                            </tr>
+                          </thead>
+                          <tbody id="kmeans-cluster-tbody"></tbody>
+                        </table>
+                      </div>
+                      <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-sm btn-secondary" onclick="previewKmeansClusters()">
+                          チャートにプレビュー
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="saveKmeansClusters()">
+                          このグループ分けで保存（未分類のみ）
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="saveKmeansClusters(true)">
+                          全セッションに上書き保存
+                        </button>
+                      </div>
+                      <div id="kmeans-save-msg" class="mt-2 small"></div>
+                    </div>
+                  </div>
+
                   <!-- グラフ領域 -->
                   <div class="chart-container" style="position: relative; height: 800px; border: 2px dashed #ccc; padding: 10px; border-radius: 5px;">
                     <canvas id="userClassificationChart"></canvas>
@@ -4140,6 +4192,145 @@ function updateDbClassificationStats() {
   });
   if (unset > 0) html += `<span class="badge rounded-pill bg-secondary" style="font-size:0.78rem;">未分類: ${unset}件</span>`;
   container.innerHTML = html;
+}
+
+// ===== K-means 自動分類 =====
+
+const KMEANS_CLUSTER_COLORS = [
+  'rgba(59,130,246,0.85)',   // blue
+  'rgba(239,68,68,0.85)',    // red
+  'rgba(34,197,94,0.85)',    // green
+  'rgba(234,179,8,0.85)',    // yellow
+  'rgba(168,85,247,0.85)',   // purple
+  'rgba(249,115,22,0.85)',   // orange
+  'rgba(20,184,166,0.85)',   // teal
+  'rgba(236,72,153,0.85)'    // pink
+];
+
+const SESSION_GROUP_LABELS_JS = <%= raw LearningSession::SESSION_GROUPS.to_json %>;
+
+// クラスタリング実行
+function runKmeans() {
+  var k = parseInt(document.getElementById('kmeansK').value) || 6;
+  var loadingEl = document.getElementById('kmeans-loading');
+  var resultEl  = document.getElementById('kmeans-result');
+  var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+  loadingEl.style.display = 'block';
+  resultEl.style.display  = 'none';
+  document.getElementById('kmeans-save-msg').textContent = '';
+
+  var url = '<%= video_management_cluster_sessions_path(video_id: @video) %>?k=' + k;
+  fetch(url, { headers: { 'X-CSRF-Token': csrfToken } })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      loadingEl.style.display = 'none';
+      if (!data.ok) { alert('エラー: ' + (data.error || '不明')); return; }
+      window.kmeansResult = data;
+      renderKmeansTable(data.clusters);
+      resultEl.style.display = 'block';
+      previewKmeansClusters();
+    })
+    .catch(function() {
+      loadingEl.style.display = 'none';
+      alert('通信エラーが発生しました');
+    });
+}
+
+// クラスターテーブルを描画
+function renderKmeansTable(clusters) {
+  var tbody = document.getElementById('kmeans-cluster-tbody');
+  tbody.innerHTML = '';
+  clusters.forEach(function(c) {
+    var color = KMEANS_CLUSTER_COLORS[c.cluster_id % KMEANS_CLUSTER_COLORS.length];
+    var sugLabel = SESSION_GROUP_LABELS_JS[c.suggested_group] || '未分類';
+    var options = '<option value="">未分類</option>';
+    Object.entries(SESSION_GROUP_LABELS_JS).forEach(function([key, label]) {
+      var sel = key === c.suggested_group ? ' selected' : '';
+      options += '<option value="' + key + '"' + sel + '>' + label + '</option>';
+    });
+    tbody.innerHTML += '<tr>' +
+      '<td><span style="display:inline-block;width:16px;height:16px;border-radius:3px;background:' + color + ';"></span></td>' +
+      '<td class="text-center">' + c.count + '件</td>' +
+      '<td class="text-end">' + c.centroid.effective_speed.toFixed(2) + 'x</td>' +
+      '<td class="text-end">' + (c.centroid.skip_coverage * 100).toFixed(1) + '%</td>' +
+      '<td class="text-end">' + c.centroid.duration_ratio.toFixed(2) + '</td>' +
+      '<td><span class="badge bg-secondary" style="font-size:0.75rem;">' + sugLabel + '</span></td>' +
+      '<td><select class="form-select form-select-sm cluster-group-select" data-cluster-id="' + c.cluster_id + '"' +
+        ' onchange="previewKmeansClusters()">' + options + '</select></td>' +
+      '</tr>';
+  });
+}
+
+// クラスター色をチャートにプレビュー
+function previewKmeansClusters() {
+  if (!window.kmeansResult || !chartInstances.userClassification) return;
+  var assignments = {};
+  window.kmeansResult.session_assignments.forEach(function(a) {
+    assignments[a.session_id] = a.cluster_id;
+  });
+  chartInstances.userClassification.data.datasets.forEach(function(dataset) {
+    var cid = assignments[dataset.sessionId];
+    if (cid === undefined) return;
+    var color = KMEANS_CLUSTER_COLORS[cid % KMEANS_CLUSTER_COLORS.length];
+    dataset.borderColor          = color;
+    dataset.borderWidth          = 3;
+    dataset.pointBackgroundColor = color;
+    dataset.pointBorderColor     = color;
+    dataset.pointRadius          = 3;
+  });
+  chartInstances.userClassification.update('none');
+}
+
+// クラスター→グループ名マッピングを取得
+function getClusterGroupMap() {
+  var map = {};
+  document.querySelectorAll('.cluster-group-select').forEach(function(sel) {
+    map[parseInt(sel.dataset.clusterId)] = sel.value || null;
+  });
+  return map;
+}
+
+// DB に保存
+function saveKmeansClusters(overwrite) {
+  if (!window.kmeansResult) return;
+  var clusterGroupMap = getClusterGroupMap();
+  var assignments = {};
+  window.kmeansResult.session_assignments.forEach(function(a) {
+    var group = clusterGroupMap[a.cluster_id];
+    if (!overwrite && a.current_group) return; // 未分類のみモード
+    assignments[a.session_id] = group;
+  });
+
+  if (Object.keys(assignments).length === 0) {
+    document.getElementById('kmeans-save-msg').textContent = '保存対象がありません（すべて分類済みです）';
+    return;
+  }
+
+  var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  var url = '<%= video_management_bulk_update_groups_path(video_id: @video) %>';
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify({ assignments: assignments })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.ok) {
+      // sessionGroupData を更新して DB カラー適用
+      Object.assign(window.sessionGroupData, assignments);
+      window.kmeansResult.session_assignments.forEach(function(a) {
+        if (assignments[a.session_id] !== undefined) a.current_group = assignments[a.session_id];
+      });
+      var msg = document.getElementById('kmeans-save-msg');
+      msg.textContent = data.updated + '件を保存しました';
+      msg.className = 'mt-2 small text-success';
+      if (window.classificationMode === 'db') loadInitialDbGroups();
+    } else {
+      alert('保存失敗: ' + (data.error || '不明'));
+    }
+  })
+  .catch(function() { alert('通信エラーが発生しました'); });
 }
 
 // モード切り替え：ライン色を再描画

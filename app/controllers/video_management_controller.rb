@@ -1512,6 +1512,118 @@ class VideoManagementController < ApplicationController
     send_data csv_data, filename: "questions_stats_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
   end
 
+  # ============================================================
+  # K-meansクラスタリング
+  # ============================================================
+  def cluster_sessions
+    k = (params[:k] || 6).to_i.clamp(2, 8)
+
+    sessions = @video.learning_sessions
+                     .where("last_session_elapsed > 0")
+                     .includes(:timestamp_events)
+
+    return render json: { ok: false, error: "セッションが不足しています" } if sessions.size < 2
+
+    # 動画長の推定（全セッションの last_video_time の上位 10% 平均）
+    all_vt = sessions.map(&:last_video_time).sort
+    top_n  = [ (all_vt.size * 0.1).ceil, 1 ].max
+    video_length = [ all_vt.last(top_n).sum.to_f / top_n, 1.0 ].max
+
+    # セッションごとの特徴量を計算
+    session_features = sessions.filter_map do |session|
+      elapsed    = session.last_session_elapsed.to_f
+      video_time = session.last_video_time.to_f
+      next if elapsed <= 0
+
+      skip_count  = 0
+      skip_amount = 0.0
+      session.timestamp_events.each do |e|
+        next unless e.event_type == "video_skip" || e.event_type == "video_seek"
+        add = e.additional_data
+        add = JSON.parse(add) rescue nil if add.is_a?(String)
+        next unless add.is_a?(Hash)
+        from_pos = add["from"].to_f
+        to_pos   = add["to"].to_f
+        if to_pos > from_pos
+          skip_count  += 1
+          skip_amount += (to_pos - from_pos)
+        end
+      end
+
+      {
+        session_id:      session.id,
+        current_group:   session.session_group,
+        raw: {
+          effective_speed:  (video_time / elapsed).round(3),
+          skip_coverage:    (skip_amount / video_length).round(3),
+          duration_ratio:   (elapsed / video_length).round(3),
+          skip_rate:        (skip_count / [ elapsed / 60.0, 0.1 ].max).round(3)
+        }
+      }
+    end
+
+    feature_keys = %i[effective_speed skip_coverage duration_ratio skip_rate]
+    raw_matrix   = session_features.map { |sf| feature_keys.map { |k| sf[:raw][k] } }
+
+    # min-max 正規化
+    mins = feature_keys.size.times.map { |d| raw_matrix.map { |r| r[d] }.min }
+    maxs = feature_keys.size.times.map { |d| raw_matrix.map { |r| r[d] }.max }
+    norm_matrix = raw_matrix.map { |row|
+      row.each_with_index.map { |v, d|
+        range = maxs[d] - mins[d]; range > 0 ? (v - mins[d]) / range : 0.0
+      }
+    }
+
+    result    = kmeans_cluster(norm_matrix, [ k, session_features.size ].min)
+    n_cluster = result[:centroids].size
+
+    clusters = n_cluster.times.map do |ci|
+      idxs  = result[:assignments].each_index.select { |i| result[:assignments][i] == ci }
+      sfs   = idxs.map { |i| session_features[i] }
+      cent  = result[:centroids][ci]
+
+      # 重心を逆正規化して人間が読める値に
+      cent_display = feature_keys.each_with_index.map { |fk, d|
+        range = maxs[d] - mins[d]
+        v = range > 0 ? cent[d] * range + mins[d] : mins[d]
+        [ fk, v.round(3) ]
+      }.to_h
+
+      { cluster_id:      ci,
+        session_ids:     sfs.map { |s| s[:session_id] },
+        count:           sfs.size,
+        centroid:        cent_display,
+        suggested_group: suggest_group_from_centroid(cent_display) }
+    end.sort_by { |c| -c[:count] }
+
+    render json: {
+      ok:               true,
+      clusters:         clusters,
+      session_assignments: session_features.map.with_index { |sf, i|
+        { session_id: sf[:session_id], cluster_id: result[:assignments][i],
+          current_group: sf[:current_group] }
+      },
+      video_length: video_length.round(1)
+    }
+  end
+
+  def bulk_update_groups
+    assignments = params[:assignments]
+    return render json: { ok: false, error: "データなし" }, status: :bad_request unless assignments
+
+    allowed = LearningSession::SESSION_GROUPS.keys + [ nil, "" ]
+    updated = 0
+    assignments.each do |session_id, group|
+      group = group.presence
+      next unless allowed.include?(group)
+      session = @video.learning_sessions.find_by(id: session_id.to_i)
+      next unless session
+      session.update!(session_group: group)
+      updated += 1
+    end
+    render json: { ok: true, updated: updated }
+  end
+
   def update_session_group
     @session = @video.learning_sessions.find(params[:session_id])
     group = params[:session_group].presence
@@ -1680,5 +1792,65 @@ class VideoManagementController < ApplicationController
     unless current_user.can_manage_video?(@video)
       redirect_to root_path, alert: "この動画を管理する権限がありません。"
     end
+  end
+
+  # ---- K-means クラスタリング ----
+
+  # k-means++ 初期化付き k-means
+  # points: [[Float]] (正規化済み)
+  # 戻り値: { assignments: [Integer], centroids: [[Float]] }
+  def kmeans_cluster(points, k, max_iterations: 60)
+    n    = points.size
+    dims = points[0].size
+    return { assignments: Array.new(n, 0), centroids: [ points[0].dup ] } if n <= 1
+
+    srand(42) # 再現性のために固定シード
+
+    # k-means++ 初期化
+    centroids = [ points.sample.dup ]
+    (k - 1).times do
+      dists = points.map { |p| centroids.map { |c| euclidean_sq(p, c) }.min }
+      total = dists.sum
+      break if total == 0
+      r = rand * total
+      cumsum = 0
+      chosen = dists.each_with_index.find { |d, _| (cumsum += d) >= r }&.last || 0
+      centroids << points[chosen].dup
+    end
+
+    assignments = Array.new(n, 0)
+    max_iterations.times do
+      new_assignments = points.map { |p|
+        centroids.each_with_index.min_by { |c, _| euclidean_sq(p, c) }&.last || 0
+      }
+      break if new_assignments == assignments
+      assignments = new_assignments
+
+      k.times do |ki|
+        pts = assignments.each_with_index.filter_map { |a, i| points[i] if a == ki }
+        next if pts.empty?
+        centroids[ki] = dims.times.map { |d| pts.sum { |p| p[d] } / pts.size.to_f }
+      end
+    end
+
+    { assignments: assignments, centroids: centroids }
+  end
+
+  def euclidean_sq(a, b)
+    a.zip(b).sum { |x, y| (x - y)**2 }
+  end
+
+  # 重心の特徴量からグループ名を自動推定
+  def suggest_group_from_centroid(c)
+    speed     = c[:effective_speed]
+    skip_cov  = c[:skip_coverage]
+    dur_ratio = c[:duration_ratio]
+
+    return "too_short"     if dur_ratio < 0.15
+    return "too_long"      if dur_ratio > 3.0
+    return "fast_and_skip" if speed > 1.3 && skip_cov > 0.12
+    return "fast_speed"    if speed > 1.3
+    return "skip_heavy"    if skip_cov > 0.12
+    "normal"
   end
 end
