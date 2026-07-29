@@ -255,9 +255,24 @@
                 </div>
                 <div class="chart-container" style="position: relative; height: 800px;">
                   <canvas id="scoreTimelineChart"></canvas>
+                  <!-- セッション選択ポップアップ -->
+                  <div id="scoreTimelinePopup" style="display:none; position:absolute; z-index:200;
+                       background:#fff; border:1px solid #dee2e6; border-radius:8px;
+                       padding:10px 12px; box-shadow:0 4px 16px rgba(0,0,0,0.15); min-width:220px;">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                      <strong id="stPopupLabel" style="font-size:0.82rem; word-break:break-all;"></strong>
+                      <button type="button"
+                              onclick="document.getElementById('scoreTimelinePopup').style.display='none'"
+                              class="btn-close ms-2" style="font-size:0.65rem; flex-shrink:0;"></button>
+                    </div>
+                    <div id="stPopupInfo" class="text-muted mb-2" style="font-size:0.76rem;"></div>
+                    <a id="stPopupEditLink" href="#" class="btn btn-warning btn-sm w-100">
+                      ✏️ イベント編集画面へ
+                    </a>
+                  </div>
                 </div>
                 <p class="text-muted mt-2 text-center">
-                  <small>各セッションの集中スコアの時間的推移を表示します。セッション経過時間（秒）に対するスコアの変化を確認できます。</small>
+                  <small>各セッションの集中スコアの時間的推移を表示します。線をクリックするとイベント編集画面へ移動できます。</small>
                 </p>
               </div>
 
@@ -3338,6 +3353,65 @@ function initializeAnalyticsCharts() {
       scoreTimelineCtx.ondblclick = function() {
         chartInstances.scoreTimeline.resetZoom();
       };
+
+      // シングルクリックでセッション選択ポップアップ
+      (function() {
+        var popup   = document.getElementById('scoreTimelinePopup');
+        var lastClickTime = 0;
+
+        scoreTimelineCtx.addEventListener('click', function(event) {
+          // ダブルクリック判定（300ms以内の2回目クリックは無視）
+          var now = Date.now();
+          if (now - lastClickTime < 300) { lastClickTime = 0; return; }
+          lastClickTime = now;
+
+          var chart = chartInstances.scoreTimeline;
+          if (!chart) return;
+
+          // クリック座標に最も近いデータセットを取得
+          var elements = chart.getElementsAtEventForMode(event, 'nearest', { intersect: false }, true);
+          if (!elements.length) { popup.style.display = 'none'; return; }
+
+          var ds = chart.data.datasets[elements[0].datasetIndex];
+          if (!ds || !ds.sessionId) return;
+
+          var sessionId = ds.sessionId;
+
+          // セッション情報（scoreTimelineData から補足）
+          var sessionInfo = (window.scoreTimelineData || []).find(function(s) {
+            return s.session_id === sessionId;
+          });
+
+          document.getElementById('stPopupLabel').textContent = ds.label || ('セッション ' + sessionId);
+          document.getElementById('stPopupInfo').textContent  =
+            sessionInfo && sessionInfo.user_email
+              ? sessionInfo.user_email + ' (ID: ' + sessionId + ')'
+              : 'セッションID: ' + sessionId;
+          document.getElementById('stPopupEditLink').href =
+            '/videos/' + videoIdGlobal + '/management/session/' + sessionId + '/events';
+
+          // ポップアップ位置をクリック点に合わせる
+          var container = scoreTimelineCtx.parentElement;
+          var canvasRect    = scoreTimelineCtx.getBoundingClientRect();
+          var containerRect = container.getBoundingClientRect();
+          var x = event.clientX - containerRect.left + 12;
+          var y = event.clientY - containerRect.top  + 12;
+          // 右端・下端からはみ出す場合に補正
+          if (x + 240 > container.offsetWidth)  x = container.offsetWidth  - 244;
+          if (y + 110 > container.offsetHeight) y = event.clientY - containerRect.top - 120;
+
+          popup.style.left    = x + 'px';
+          popup.style.top     = y + 'px';
+          popup.style.display = 'block';
+        });
+
+        // チャートの外をクリックしたらポップアップを閉じる
+        document.addEventListener('click', function(e) {
+          if (!popup.contains(e.target) && e.target !== scoreTimelineCtx) {
+            popup.style.display = 'none';
+          }
+        }, { capture: true });
+      })();
     }
     isInitializingCharts = false;
     })  // fetch の .then() コールバック終了
