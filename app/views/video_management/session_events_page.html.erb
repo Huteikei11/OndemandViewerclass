@@ -38,7 +38,8 @@
   <div class="alert alert-info py-2 mb-3">
     <strong>操作方法:</strong>
     汚染イベントは通常セッションの<strong>先頭付近</strong>に集中しています。
-    削除後も <code>session_elapsed</code> はシフトされません（ギャップはそのまま残ります）。
+    削除後も <code>session_elapsed</code> はシフトされません（ギャップはそのまま残ります）。<br>
+    <strong>範囲選択:</strong>「範囲選択」ボタンを押してグラフ上で始点→終点をクリック、またはテーブルで1行クリック後に <kbd>Shift</kbd>+クリックで範囲を選択できます。
   </div>
 
   <% if notice %>
@@ -53,9 +54,11 @@
                 id: "events-form" do %>
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap align-items-center">
           <button type="button" class="btn btn-outline-secondary btn-sm" id="select-all">全選択</button>
           <button type="button" class="btn btn-outline-secondary btn-sm" id="deselect-all">全解除</button>
+          <button type="button" class="btn btn-outline-warning btn-sm" id="range-mode-btn">範囲選択</button>
+          <span id="range-status" class="text-muted small"></span>
         </div>
         <button type="submit"
                 class="btn btn-danger btn-sm"
@@ -103,7 +106,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (function() {
-  // イベントデータをRubyから渡す
   var eventsData = <%= raw @events.map { |e|
     {
       id:      e.id,
@@ -117,34 +119,27 @@
     }
   }.to_json %>;
 
-  // イベントタイプ別の見た目設定
   var typeConfig = {
-    'concentration_5sec': { color: '#3B82F6', style: 'circle',   radius: 4,  label: '集中度スコア' },
-    'video_pause':        { color: '#F59E0B', style: 'rect',     radius: 7,  label: '一時停止' },
-    'video_play':         { color: '#10B981', style: 'triangle', radius: 7,  label: '再生' },
-    'video_skip':         { color: '#8B5CF6', style: 'rectRot',  radius: 8,  label: 'スキップ' },
-    'video_seek':         { color: '#8B5CF6', style: 'rectRot',  radius: 8,  label: 'シーク' },
-    'session_start':      { color: '#1F2937', style: 'star',     radius: 8,  label: 'セッション開始' },
-    'session_end':        { color: '#1F2937', style: 'star',     radius: 8,  label: 'セッション終了' }
+    'concentration_5sec': { color: '#3B82F6', style: 'circle',   radius: 4, label: '集中度スコア' },
+    'video_pause':        { color: '#F59E0B', style: 'rect',     radius: 7, label: '一時停止' },
+    'video_play':         { color: '#10B981', style: 'triangle', radius: 7, label: '再生' },
+    'video_skip':         { color: '#8B5CF6', style: 'rectRot',  radius: 8, label: 'スキップ' },
+    'video_seek':         { color: '#8B5CF6', style: 'rectRot',  radius: 8, label: 'シーク' },
+    'session_start':      { color: '#1F2937', style: 'star',     radius: 8, label: 'セッション開始' },
+    'session_end':        { color: '#1F2937', style: 'star',     radius: 8, label: 'セッション終了' }
   };
   function cfgFor(type) {
     return typeConfig[type] || { color: '#9CA3AF', style: 'circle', radius: 4, label: type };
   }
 
-  // 軌跡ライン（全イベントを session_elapsed 順で結ぶ）
   var sorted = eventsData.slice().sort(function(a, b) { return a.x - b.x; });
-
-  // 種別ごとのデータセットを作成
   var groups = {};
   eventsData.forEach(function(e) {
-    var key = e.type;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(e);
+    if (!groups[e.type]) groups[e.type] = [];
+    groups[e.type].push(e);
   });
 
   var datasets = [];
-
-  // 1. 軌跡の線（薄いグレー、マーカーなし）
   datasets.push({
     label: '軌跡',
     data: sorted.map(function(e) { return { x: e.x, y: e.y }; }),
@@ -157,13 +152,11 @@
     fill: false,
     order: 10
   });
-
-  // 2. イベント種別ごとの散布点
   Object.keys(groups).forEach(function(type) {
     var cfg = cfgFor(type);
     datasets.push({
       label: cfg.label,
-      data: groups[type].map(function(e) { return e; }),  // x/y/id/desc etc. all attached
+      data: groups[type].map(function(e) { return e; }),
       backgroundColor: cfg.color,
       borderColor: cfg.color,
       pointStyle: cfg.style,
@@ -174,7 +167,59 @@
     });
   });
 
-  var ctx = document.getElementById('sessionTimelineChart');
+  // ===== 範囲選択モード =====
+  var rangeMode = false;
+  var rangeAnchorId    = null;
+  var rangeAnchorIndex = -1;
+  var statusEl = document.getElementById('range-status');
+
+  function fmtSec(s) {
+    return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  }
+
+  function updateRangeStatus() {
+    if (!rangeMode) { statusEl.textContent = ''; return; }
+    if (rangeAnchorId === null) {
+      statusEl.textContent = '始点をグラフまたはテーブルでクリック';
+    } else {
+      var anchor = eventsData[rangeAnchorIndex];
+      statusEl.textContent =
+        '始点: 経過 ' + fmtSec(anchor.elapsed) + ' (ID:' + rangeAnchorId + ')　→　終点をクリック';
+    }
+  }
+
+  function applyRange(endIndex) {
+    var lo = Math.min(rangeAnchorIndex, endIndex);
+    var hi = Math.max(rangeAnchorIndex, endIndex);
+    eventsData.slice(lo, hi + 1).forEach(function(e) {
+      var cb  = document.getElementById('cb-' + e.id);
+      var row = document.getElementById('event-row-' + e.id);
+      if (cb)  cb.checked = true;
+      if (row) row.style.background = '#fef9c3';
+    });
+    rangeAnchorId    = null;
+    rangeAnchorIndex = -1;
+    updateRangeStatus();
+  }
+
+  document.getElementById('range-mode-btn').addEventListener('click', function() {
+    rangeMode = !rangeMode;
+    rangeAnchorId    = null;
+    rangeAnchorIndex = -1;
+    if (rangeMode) {
+      this.classList.remove('btn-outline-warning');
+      this.classList.add('btn-warning');
+      this.textContent = '範囲選択中';
+    } else {
+      this.classList.remove('btn-warning');
+      this.classList.add('btn-outline-warning');
+      this.textContent = '範囲選択';
+    }
+    updateRangeStatus();
+  });
+
+  // ===== チャート =====
+  var ctx   = document.getElementById('sessionTimelineChart');
   var chart = new Chart(ctx, {
     type: 'scatter',
     data: { datasets: datasets },
@@ -183,16 +228,27 @@
       maintainAspectRatio: false,
       onClick: function(evt, elements) {
         if (!elements || elements.length === 0) return;
-        var el = elements[0];
-        var ds = chart.data.datasets[el.datasetIndex];
+        var el    = elements[0];
+        var ds    = chart.data.datasets[el.datasetIndex];
         var point = ds.data[el.index];
         if (!point || !point.id) return;
 
-        // テーブル行のチェックボックスをトグル
+        if (rangeMode) {
+          var idx = eventsData.findIndex(function(e) { return e.id === point.id; });
+          if (rangeAnchorId === null) {
+            rangeAnchorId    = point.id;
+            rangeAnchorIndex = idx;
+            updateRangeStatus();
+          } else {
+            applyRange(idx);
+          }
+          return;
+        }
+
+        // 通常モード: チェックボックストグル
         var cb = document.getElementById('cb-' + point.id);
         if (cb) {
           cb.checked = !cb.checked;
-          // テーブル行にハイライトを当てスクロール
           var row = document.getElementById('event-row-' + point.id);
           if (row) {
             row.style.transition = 'background 0.2s';
@@ -207,18 +263,14 @@
           callbacks: {
             title: function(ctx) {
               var p = ctx[0].raw;
-              var em = Math.floor(p.elapsed / 60);
-              var es = (p.elapsed % 60).toFixed(1);
-              var vm = Math.floor(p.vt / 60);
-              var vs = (p.vt % 60).toFixed(1);
-              return '経過 ' + em + ':' + String(Math.floor(p.elapsed % 60)).padStart(2,'0') + '  動画 ' + vm + ':' + String(Math.floor(p.vt % 60)).padStart(2,'0');
+              return '経過 ' + fmtSec(p.elapsed) + '  動画 ' + fmtSec(p.vt);
             },
             label: function(ctx) {
               var p = ctx.raw;
               var lines = ['種別: ' + (p.type || '')];
               if (p.score != null) lines.push('スコア: ' + p.score);
               if (p.desc)  lines.push(p.desc);
-              lines.push('ID: ' + p.id + '（クリックで選択）');
+              lines.push('ID: ' + p.id);
               return lines;
             }
           }
@@ -228,31 +280,64 @@
         x: {
           type: 'linear',
           title: { display: true, text: 'セッション経過時間（秒）' },
-          ticks: {
-            callback: function(v) {
-              return Math.floor(v/60) + ':' + String(Math.floor(v%60)).padStart(2,'0');
-            }
-          }
+          ticks: { callback: function(v) { return fmtSec(v); } }
         },
         y: {
           type: 'linear',
           title: { display: true, text: '動画再生位置（秒）' },
-          ticks: {
-            callback: function(v) {
-              return Math.floor(v/60) + ':' + String(Math.floor(v%60)).padStart(2,'0');
-            }
-          }
+          ticks: { callback: function(v) { return fmtSec(v); } }
         }
       }
     }
   });
 
-  // テーブル操作
+  // ===== テーブル操作 =====
   document.getElementById('select-all').addEventListener('click', function() {
     document.querySelectorAll('.event-checkbox').forEach(function(cb) { cb.checked = true; });
   });
   document.getElementById('deselect-all').addEventListener('click', function() {
     document.querySelectorAll('.event-checkbox').forEach(function(cb) { cb.checked = false; });
+  });
+
+  // Shift+クリックで範囲選択 & 範囲選択モードのテーブル側サポート
+  var allCheckboxes  = Array.from(document.querySelectorAll('.event-checkbox'));
+  var lastClickedIdx = -1;
+
+  allCheckboxes.forEach(function(cb, i) {
+    cb.addEventListener('click', function(e) {
+      var eventId = parseInt(cb.value, 10);
+      var dataIdx = eventsData.findIndex(function(ev) { return ev.id === eventId; });
+
+      // 範囲選択モード
+      if (rangeMode) {
+        e.preventDefault();
+        if (rangeAnchorId === null) {
+          rangeAnchorId    = eventId;
+          rangeAnchorIndex = dataIdx;
+          updateRangeStatus();
+        } else {
+          applyRange(dataIdx);
+        }
+        return;
+      }
+
+      // Shift+クリックで連続選択（テーブル行インデックス基準）
+      if (e.shiftKey && lastClickedIdx >= 0 && lastClickedIdx !== i) {
+        var lo    = Math.min(lastClickedIdx, i);
+        var hi    = Math.max(lastClickedIdx, i);
+        var state = cb.checked;
+        allCheckboxes.slice(lo, hi + 1).forEach(function(other) {
+          other.checked = state;
+          var row = document.getElementById('event-row-' + other.value);
+          if (row) row.style.background = state ? '#fef9c3' : '';
+        });
+      } else {
+        var row = document.getElementById('event-row-' + cb.value);
+        if (row) row.style.background = cb.checked ? '#fef9c3' : '';
+      }
+
+      lastClickedIdx = i;
+    });
   });
 })();
 </script>
