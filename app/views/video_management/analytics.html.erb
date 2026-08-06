@@ -266,9 +266,12 @@
                               class="btn-close ms-2" style="font-size:0.65rem; flex-shrink:0;"></button>
                     </div>
                     <div id="stPopupInfo" class="text-muted mb-2" style="font-size:0.76rem;"></div>
-                    <a id="stPopupEditLink" href="#" class="btn btn-warning btn-sm w-100">
+                    <a id="stPopupEditLink" href="#" class="btn btn-warning btn-sm w-100 mb-1">
                       ✏️ イベント編集画面へ
                     </a>
+                    <button id="stPopupDeleteBtn" type="button" class="btn btn-outline-danger btn-sm w-100">
+                      🗑️ このセッションを削除
+                    </button>
                   </div>
                 </div>
                 <p class="text-muted mt-2 text-center">
@@ -3389,6 +3392,7 @@ function initializeAnalyticsCharts() {
               : 'セッションID: ' + sessionId;
           document.getElementById('stPopupEditLink').href =
             '/videos/' + videoIdGlobal + '/management/session/' + sessionId + '/events';
+          document.getElementById('stPopupDeleteBtn').dataset.sessionId = sessionId;
 
           // ポップアップ位置をクリック点に合わせる
           var container = scoreTimelineCtx.parentElement;
@@ -3403,6 +3407,33 @@ function initializeAnalyticsCharts() {
           popup.style.left    = x + 'px';
           popup.style.top     = y + 'px';
           popup.style.display = 'block';
+        });
+
+        // セッション削除ボタン
+        document.getElementById('stPopupDeleteBtn').addEventListener('click', function() {
+          var sid = this.dataset.sessionId;
+          if (!sid) return;
+          if (!confirm('セッション ID:' + sid + ' を削除してもよろしいですか？\nこの操作は取り消せません。')) return;
+
+          var url  = '/videos/' + videoIdGlobal + '/management/session/' + sid;
+          var csrf = document.querySelector('meta[name="csrf-token"]');
+          fetch(url, {
+            method: 'DELETE',
+            headers: {
+              'X-CSRF-Token': csrf ? csrf.content : '',
+              'Accept': 'application/json'
+            }
+          }).then(function(res) {
+            return res.json().then(function(body) {
+              if (res.ok && body.success) {
+                window.location.href = '<%= video_management_analytics_path(video_id: @video) %>';
+              } else {
+                alert('削除に失敗しました: ' + (body.error || res.status));
+              }
+            });
+          }).catch(function() {
+            alert('削除リクエストの送信に失敗しました。');
+          });
         });
 
         // チャートの外をクリックしたらポップアップを閉じる

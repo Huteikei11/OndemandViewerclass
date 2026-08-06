@@ -1641,12 +1641,17 @@ class VideoManagementController < ApplicationController
   def destroy_session
     @session = LearningSession.find(params[:session_id])
 
-    # セッションが存在し、管理権限があることを確認
     if @session && @session.video_id == @video.id
       @session.destroy
-      redirect_to video_management_analytics_path(video_id: @video), notice: "学習セッションを削除しました。"
+      respond_to do |format|
+        format.json { render json: { success: true } }
+        format.html { redirect_to video_management_analytics_path(video_id: @video), notice: "学習セッションを削除しました。" }
+      end
     else
-      redirect_to video_management_analytics_path(video_id: @video), alert: "セッションの削除に失敗しました。"
+      respond_to do |format|
+        format.json { render json: { success: false, error: "セッションの削除に失敗しました。" }, status: :unprocessable_entity }
+        format.html { redirect_to video_management_analytics_path(video_id: @video), alert: "セッションの削除に失敗しました。" }
+      end
     end
   end
 
