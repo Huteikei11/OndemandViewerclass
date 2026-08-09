@@ -1767,8 +1767,9 @@ class VideoManagementController < ApplicationController
   end
 
   def session_events_page
-    @session = @video.learning_sessions.includes(:user).find(params[:session_id])
-    @events  = @session.timestamp_events.order(:session_elapsed)
+    @session   = @video.learning_sessions.includes(:user).find(params[:session_id])
+    @events    = @session.timestamp_events.order(:session_elapsed)
+    @responses = @session.associated_user_responses.includes(:question).order(:created_at)
   end
 
   def destroy_events

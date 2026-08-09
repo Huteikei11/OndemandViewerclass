@@ -30,6 +30,8 @@
         <span><span class="badge" style="background:#10B981;">▲</span> 再生</span>
         <span><span class="badge" style="background:#8B5CF6;">◆</span> スキップ</span>
         <span><span class="badge" style="background:#6B7280;">●</span> その他</span>
+        <span><span class="badge" style="background:#10B981;">✕</span> 正解</span>
+        <span><span class="badge" style="background:#EF4444;">✕</span> 不正解</span>
       </div>
     </div>
   </div>
@@ -121,6 +123,20 @@
     }
   }.to_json %>;
 
+  var responsesData = <%= raw @responses.map { |r|
+    elapsed = @session.session_start_time ? (r.created_at - @session.session_start_time).to_f.round(2) : 0
+    vt      = r.question&.time_position.to_f
+    {
+      x:          elapsed,
+      y:          vt,
+      elapsed:    elapsed.round(1),
+      vt:         vt.round(1),
+      is_correct: r.is_correct,
+      question:   r.question&.content&.slice(0, 60) || "",
+      answer:     r.user_answer&.slice(0, 40) || ""
+    }
+  }.to_json %>;
+
   var typeConfig = {
     'concentration_5sec': { color: '#3B82F6', style: 'circle',   radius: 4, label: '集中度スコア' },
     'video_pause':        { color: '#F59E0B', style: 'rect',     radius: 7, label: '一時停止' },
@@ -168,6 +184,38 @@
       order: 1
     });
   });
+
+  // 解答データ（正解／不正解で2データセット）
+  var correctResponses   = responsesData.filter(function(r) { return r.is_correct; });
+  var incorrectResponses = responsesData.filter(function(r) { return !r.is_correct; });
+  if (correctResponses.length) {
+    datasets.push({
+      label: '正解',
+      data: correctResponses,
+      backgroundColor: 'rgba(16,185,129,0.85)',
+      borderColor:     '#059669',
+      borderWidth:     2,
+      pointStyle:      'crossRot',
+      pointRadius:     10,
+      pointHoverRadius: 13,
+      showLine: false,
+      order: 0
+    });
+  }
+  if (incorrectResponses.length) {
+    datasets.push({
+      label: '不正解',
+      data: incorrectResponses,
+      backgroundColor: 'rgba(239,68,68,0.85)',
+      borderColor:     '#dc2626',
+      borderWidth:     2,
+      pointStyle:      'crossRot',
+      pointRadius:     10,
+      pointHoverRadius: 13,
+      showLine: false,
+      order: 0
+    });
+  }
 
   // ===== 範囲選択モード =====
   var rangeMode = false;
@@ -280,6 +328,14 @@
             },
             label: function(ctx) {
               var p = ctx.raw;
+              // 解答データ（question フィールドがある）
+              if (p.question !== undefined) {
+                var lines = [p.is_correct ? '✅ 正解' : '❌ 不正解'];
+                if (p.question) lines.push('問題: ' + p.question);
+                if (p.answer)   lines.push('回答: ' + p.answer);
+                return lines;
+              }
+              // イベントデータ
               var lines = ['種別: ' + (p.type || '')];
               if (p.score != null) lines.push('スコア: ' + p.score);
               if (p.desc)  lines.push(p.desc);
