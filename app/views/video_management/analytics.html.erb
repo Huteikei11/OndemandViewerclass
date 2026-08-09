@@ -1350,7 +1350,10 @@
               <table class="table table-striped" id="sessionTable">
                 <thead>
                   <tr>
-                    <th>受講者</th>
+                    <th id="th-name" style="cursor:pointer; user-select:none; white-space:nowrap;"
+                        onclick="sortSessionsByName()" title="クリックで名前順ソート">
+                      受講者 <span id="name-sort-icon" style="font-size:0.8em; color:#6c757d;">↕</span>
+                    </th>
                     <th>開始時刻</th>
                     <th>終了時刻</th>
                     <th>学習時間</th>
@@ -1367,9 +1370,11 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <% @learning_sessions.each do |session| %>
+                  <% @learning_sessions.each_with_index do |session, idx| %>
                     <% operation_stats = session.video_operation_stats %>
-                    <tr data-group="<%= session.session_group || '__unset__' %>">
+                    <tr data-group="<%= session.session_group || '__unset__' %>"
+                        data-name="<%= session.user.name %>"
+                        data-idx="<%= idx %>">
                       <td>
                         <%= session.user.name %>
                         <br><small class="text-muted"><%= session.user.email %></small>
@@ -4783,5 +4788,33 @@ document.addEventListener('turbo:before-cache', function() {
       });
     });
   }
+
+  // 名前ソート
+  var nameSortState = 0; // 0=元の順, 1=昇順, 2=降順
+  window.sortSessionsByName = function() {
+    var tbody = document.querySelector('#sessionTable tbody');
+    if (!tbody) return;
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+    nameSortState = (nameSortState + 1) % 3;
+
+    if (nameSortState === 1) {
+      rows.sort(function(a, b) {
+        return (a.dataset.name || '').localeCompare(b.dataset.name || '', 'ja');
+      });
+    } else if (nameSortState === 2) {
+      rows.sort(function(a, b) {
+        return (b.dataset.name || '').localeCompare(a.dataset.name || '', 'ja');
+      });
+    } else {
+      rows.sort(function(a, b) {
+        return parseInt(a.dataset.idx, 10) - parseInt(b.dataset.idx, 10);
+      });
+    }
+
+    var icon = document.getElementById('name-sort-icon');
+    if (icon) icon.textContent = ['↕', '↑', '↓'][nameSortState];
+
+    rows.forEach(function(row) { tbody.appendChild(row); });
+  };
 })();
 </script>
