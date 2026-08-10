@@ -655,9 +655,37 @@
                       </div>
                     </div>
                     <small class="text-muted d-block mb-2">
-                      有効再生速度・スキップカバレッジ・期間比の3軸でセッションを自動グループ分けします。
+                      有効再生速度・スキップカバレッジ・期間比・スキップ率の4軸でセッションを自動グループ分けします。
                       実行後にチャートでプレビューし、グループ名を確認してから保存できます。
                     </small>
+                    <details class="mb-2">
+                      <summary class="small text-primary" style="cursor:pointer;">📐 使用する指標の定義</summary>
+                      <div class="mt-2 ps-2 border-start border-2" style="font-size:0.8rem; line-height:1.7;">
+                        <dl class="mb-0">
+                          <dt>有効再生速度（effective speed）</dt>
+                          <dd class="text-muted mb-2">
+                            <code>動画の視聴済み時間 ÷ セッション経過時間</code><br>
+                            セッション中に実際に進んだ動画時間を、かかった実時間で割った値。<br>
+                            1.0 = 等倍視聴、1.5 = 動画を1.5倍速で進んだペース（高速再生・飛ばしが多い）、0.5 = 一時停止や繰り返しが多い。
+                          </dd>
+                          <dt>スキップカバレッジ（skip coverage）</dt>
+                          <dd class="text-muted mb-2">
+                            <code>前進スキップで飛ばした動画時間の合計 ÷ 動画の総時間</code><br>
+                            動画全体のうち何割をスキップしたかを示す。0.1 なら動画の10%を飛ばした。
+                          </dd>
+                          <dt>期間比（duration ratio）</dt>
+                          <dd class="text-muted mb-2">
+                            <code>セッション経過時間 ÷ 動画の総時間</code><br>
+                            動画の長さに対してどれだけの時間をかけて視聴したか。1.0 が動画と同じ長さ、0.1 なら非常に短い視聴。
+                          </dd>
+                          <dt>スキップ率（skip rate）</dt>
+                          <dd class="text-muted mb-0">
+                            <code>スキップイベント数 ÷ 総イベント数</code><br>
+                            操作全体のうちスキップがどれくらいの割合を占めるか。
+                          </dd>
+                        </dl>
+                      </div>
+                    </details>
 
                     <div id="kmeans-loading" class="text-muted small" style="display:none;">
                       <span class="spinner-border spinner-border-sm me-1"></span>クラスタリング実行中…
