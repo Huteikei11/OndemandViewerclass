@@ -694,6 +694,13 @@
                             1.0 = 動画と同じ長さをかけて視聴、0.1 = 動画の1/10の時間で終了（非常に短い視聴）。
                           </dd>
 
+                          <dt>再生速度（playing_speed）</dt>
+                          <dd class="text-muted mb-2">
+                            <code>一時停止中・シークジャンプを除いた Δvideo_time の合計 ÷ 実再生時間の合計</code><br>
+                            <strong>使ったデータ:</strong> <code>video_play</code>→<code>video_pause</code> の各区間を積み上げ。シーク時は <code>additional_data["from"]</code> を使ってジャンプ前後でセグメントを分割し、ジャンプ量は除外する。<br>
+                            1.5 なら「実際に再生していた時間」に対して動画が1.5倍速で進んだことを意味し、有効再生速度（一時停止込み）と比較することで一時停止の多さを推測できる。<br>
+                            <em>play/pause イベントが記録されていないセッションは有効再生速度と同値にフォールバック。</em>
+                          </dd>
                           <dt>スキップ率（skip_rate）</dt>
                           <dd class="text-muted mb-0">
                             <code>前進スキップ回数 ÷ セッション経過時間（分）</code><br>
@@ -715,7 +722,8 @@
                             <tr>
                               <th>色</th>
                               <th>件数</th>
-                              <th title="動画時間 ÷ 経過時間">有効速度</th>
+                              <th title="動画時間 ÷ 経過時間（一時停止含む）">有効速度</th>
+                              <th title="一時停止・シーク除いた再生中の速度">再生速度</th>
                               <th title="スキップした動画時間の割合">スキップ率</th>
                               <th title="経過時間 ÷ 動画長">期間比</th>
                               <th>自動推定</th>
@@ -4485,6 +4493,7 @@ function renderKmeansTable(clusters) {
       '<td><span style="display:inline-block;width:16px;height:16px;border-radius:3px;background:' + color + ';"></span></td>' +
       '<td class="text-center">' + c.count + '件</td>' +
       '<td class="text-end">' + c.centroid.effective_speed.toFixed(2) + 'x</td>' +
+      '<td class="text-end">' + c.centroid.playing_speed.toFixed(2) + 'x</td>' +
       '<td class="text-end">' + (c.centroid.skip_coverage * 100).toFixed(1) + '%</td>' +
       '<td class="text-end">' + c.centroid.duration_ratio.toFixed(2) + '</td>' +
       '<td><span class="badge bg-secondary" style="font-size:0.75rem;">' + sugLabel + '</span></td>' +

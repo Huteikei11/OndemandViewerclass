@@ -1542,18 +1542,70 @@ class VideoManagementController < ApplicationController
 
       skip_count  = 0
       skip_amount = 0.0
-      session.timestamp_events.each do |e|
-        next unless e.event_type == "video_skip" || e.event_type == "video_seek"
-        add = e.additional_data
-        add = JSON.parse(add) rescue nil if add.is_a?(String)
-        next unless add.is_a?(Hash)
-        from_pos = add["from"].to_f
-        to_pos   = add["to"].to_f
-        if to_pos > from_pos
-          skip_count  += 1
-          skip_amount += (to_pos - from_pos)
+
+      # 一時停止を除いた再生速度の計算用
+      playing           = false
+      seg_start_elapsed = nil
+      seg_start_vt      = nil
+      total_play_dt     = 0.0
+      total_play_dv     = 0.0
+
+      session.timestamp_events.order(:session_elapsed).each do |e|
+        et = e.event_type
+        el = e.session_elapsed.to_f
+        vt = e.video_time.to_f
+
+        # シーク/スキップ: スキップジャンプを除いてセグメントを分割
+        if et == "video_skip" || et == "video_seek"
+          add = e.additional_data
+          add = JSON.parse(add) rescue nil if add.is_a?(String)
+          if add.is_a?(Hash)
+            from_pos = add["from"].to_f
+            to_pos   = add["to"].to_f
+            if to_pos > from_pos
+              skip_count  += 1
+              skip_amount += (to_pos - from_pos)
+            end
+            # 再生中なら from 位置までのセグメントを確定し、to 位置から再開
+            if playing && seg_start_elapsed
+              dt = el - seg_start_elapsed
+              dv = from_pos - seg_start_vt
+              if dt > 0.5 && dv >= 0
+                total_play_dt += dt
+                total_play_dv += dv
+              end
+              seg_start_elapsed = el
+              seg_start_vt      = to_pos
+            end
+          end
+          next
+        end
+
+        case et
+        when "video_play", "session_start"
+          playing           = true
+          seg_start_elapsed = el
+          seg_start_vt      = vt
+        when "video_pause", "session_end"
+          if playing && seg_start_elapsed
+            dt = el - seg_start_elapsed
+            dv = vt - seg_start_vt
+            if dt > 0.5 && dv >= 0
+              total_play_dt += dt
+              total_play_dv += dv
+            end
+          end
+          playing           = false
+          seg_start_elapsed = nil
         end
       end
+
+      playing_speed =
+        if total_play_dt > 0
+          (total_play_dv / total_play_dt).round(3)
+        else
+          (video_time / elapsed).round(3)  # フォールバック
+        end
 
       {
         session_id:      session.id,
@@ -1562,12 +1614,13 @@ class VideoManagementController < ApplicationController
           effective_speed:  (video_time / elapsed).round(3),
           skip_coverage:    (skip_amount / video_length).round(3),
           duration_ratio:   (elapsed / video_length).round(3),
-          skip_rate:        (skip_count / [ elapsed / 60.0, 0.1 ].max).round(3)
+          skip_rate:        (skip_count / [ elapsed / 60.0, 0.1 ].max).round(3),
+          playing_speed:    playing_speed
         }
       }
     end
 
-    feature_keys = %i[effective_speed skip_coverage duration_ratio skip_rate]
+    feature_keys = %i[effective_speed skip_coverage duration_ratio skip_rate playing_speed]
     raw_matrix   = session_features.map { |sf| feature_keys.map { |k| sf[:raw][k] } }
 
     # min-max 正規化
