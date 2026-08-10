@@ -695,6 +695,22 @@
                     </div>
                   </div>
 
+                  <!-- 横軸（経過時間）の最大値スライダー -->
+                  <div class="mt-3 mb-3 p-3 border rounded bg-light">
+                    <div class="fw-semibold small mb-2">横軸の最大表示時間</div>
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                      <input type="range" class="form-range" id="ucXAxisMaxSlider"
+                             min="1" max="300" value="120" step="1" style="flex:1; min-width:120px;"
+                             oninput="updateUcXAxisSliderDisplay()">
+                      <span id="ucXAxisMaxDisplay" class="fw-semibold text-nowrap" style="min-width:4.5rem;">120 分</span>
+                      <button type="button" class="btn btn-sm btn-primary" onclick="applyUcXAxisMax()">設定</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetUcXAxisMax()">リセット</button>
+                    </div>
+                    <div class="text-muted mt-1" style="font-size:0.76rem;">
+                      設定した時間より長い視聴履歴は右側が見切れます。リセットで全データに合わせた自動スケールに戻ります。
+                    </div>
+                  </div>
+
                   <!-- グラフ領域 -->
                   <div class="chart-container" style="position: relative; height: 800px; border: 2px dashed #ccc; padding: 10px; border-radius: 5px;">
                     <canvas id="userClassificationChart"></canvas>
@@ -4177,6 +4193,22 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
     // コントロール表示切り替えとグラフ再描画
     switchClassificationMode(savedMode);
   }
+
+  // スライダーの max をデータの最大経過時間に合わせて初期化
+  (function() {
+    var maxSec = 0;
+    (chartInstances.userClassification.data.datasets || []).forEach(function(ds) {
+      (ds.data || []).forEach(function(p) { if ((p.x || 0) > maxSec) maxSec = p.x; });
+    });
+    var maxMin = Math.max(Math.ceil(maxSec / 60), 10);
+    var slider  = document.getElementById('ucXAxisMaxSlider');
+    var display = document.getElementById('ucXAxisMaxDisplay');
+    if (slider) {
+      slider.max   = Math.max(maxMin, parseInt(slider.max, 10));
+      slider.value = maxMin;
+      if (display) display.textContent = maxMin + ' 分';
+    }
+  })();
 }
 
 // ユーザーをグループに分類
@@ -4921,6 +4953,39 @@ document.addEventListener('turbo:before-cache', function() {
       }
     })
     .catch(function() { alert('削除リクエストの送信に失敗しました。'); });
+  };
+
+  // ユーザー分類分析 横軸スライダー
+  window.updateUcXAxisSliderDisplay = function() {
+    var slider  = document.getElementById('ucXAxisMaxSlider');
+    var display = document.getElementById('ucXAxisMaxDisplay');
+    if (slider && display) display.textContent = slider.value + ' 分';
+  };
+
+  window.applyUcXAxisMax = function() {
+    var chart = chartInstances.userClassification;
+    if (!chart) return;
+    var minutes = parseInt(document.getElementById('ucXAxisMaxSlider').value, 10);
+    chart.options.scales.x.max = minutes * 60;
+    chart.update('none');
+  };
+
+  window.resetUcXAxisMax = function() {
+    var chart = chartInstances.userClassification;
+    if (!chart) return;
+    delete chart.options.scales.x.max;
+    chart.update('none');
+    var maxSec = 0;
+    chart.data.datasets.forEach(function(ds) {
+      (ds.data || []).forEach(function(p) { if ((p.x || 0) > maxSec) maxSec = p.x; });
+    });
+    var maxMin = Math.max(Math.ceil(maxSec / 60), 10);
+    var slider  = document.getElementById('ucXAxisMaxSlider');
+    var display = document.getElementById('ucXAxisMaxDisplay');
+    if (slider) {
+      slider.value = maxMin;
+      if (display) display.textContent = maxMin + ' 分';
+    }
   };
 
   // 集中スコア推移 横軸スライダー
