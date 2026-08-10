@@ -764,6 +764,33 @@
                     </div>
                   </div>
 
+                  <!-- グラフ表示フィルター -->
+                  <div class="mb-3 p-2 border rounded" style="background:#f8f9fa;">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <span class="fw-semibold small text-muted me-1">グラフ表示フィルター:</span>
+                      <!-- ビジュアル分類フィルター -->
+                      <div id="uc-visual-filter" class="d-flex flex-wrap gap-1">
+                        <button class="btn btn-sm btn-secondary" id="ucVfAll" onclick="filterUcByGroup(null)">すべて表示</button>
+                        <button class="btn btn-sm btn-outline-primary" id="ucVfA" onclick="filterUcByGroup('groupA')">グループA</button>
+                        <button class="btn btn-sm btn-outline-success" id="ucVfB" onclick="filterUcByGroup('groupB')">グループB</button>
+                        <button class="btn btn-sm btn-outline-warning" id="ucVfC" onclick="filterUcByGroup('groupC')">グループC</button>
+                        <button class="btn btn-sm btn-outline-danger" id="ucVfD" onclick="filterUcByGroup('groupD')">グループD</button>
+                        <button class="btn btn-sm btn-outline-secondary" id="ucVfNull" onclick="filterUcByGroup('__unclassified__')">未分類</button>
+                      </div>
+                      <!-- DBグループ分類フィルター -->
+                      <div id="uc-db-filter" class="d-flex flex-wrap gap-1" style="display:none;">
+                        <button class="btn btn-sm btn-secondary" id="ucDfAll" onclick="filterUcByDbGroup(null)">すべて表示</button>
+                        <button class="btn btn-sm btn-outline-primary" id="ucDfNormal" onclick="filterUcByDbGroup('normal')">等倍</button>
+                        <button class="btn btn-sm" id="ucDfFast" style="border:1px solid #8B5CF6;color:#8B5CF6;" onclick="filterUcByDbGroup('fast_speed')">倍速</button>
+                        <button class="btn btn-sm btn-outline-warning" id="ucDfSkip" onclick="filterUcByDbGroup('skip_heavy')">飛ばしが多い</button>
+                        <button class="btn btn-sm btn-outline-danger" id="ucDfFastSkip" onclick="filterUcByDbGroup('fast_and_skip')">倍速と飛ばしの混在</button>
+                        <button class="btn btn-sm" id="ucDfShort" style="border:1px solid #EC4899;color:#EC4899;" onclick="filterUcByDbGroup('too_short')">異様に視聴が短い</button>
+                        <button class="btn btn-sm" id="ucDfLong" style="border:1px solid #14B8A6;color:#14B8A6;" onclick="filterUcByDbGroup('too_long')">視聴が超長い</button>
+                        <button class="btn btn-sm btn-outline-secondary" id="ucDfNull" onclick="filterUcByDbGroup('__unclassified__')">未分類</button>
+                      </div>
+                    </div>
+                  </div>
+
                   <!-- グラフ領域 -->
                   <div class="chart-container" style="position: relative; height: 800px; border: 2px dashed #ccc; padding: 10px; border-radius: 5px;">
                     <canvas id="userClassificationChart"></canvas>
@@ -4348,14 +4375,17 @@ function classifyUserSession(datasetIndex) {
   
   // チャート更新
   chartInstances.userClassification.update('none');
-  
+
   // 統計を表示
   updateClassificationStats();
-  
+
   // ローカルストレージに分類データを保存
   const storageKey = `userClassification_video_${videoIdGlobal}`;
   localStorage.setItem(storageKey, JSON.stringify(window.userClassifications));
   console.log('[ユーザー分類] ローカルストレージに分類データを保存:', window.userClassifications);
+
+  // アクティブなフィルターを再適用
+  if (ucActiveGroupFilter !== null) filterUcByGroup(ucActiveGroupFilter);
 }
 
 // ===== DBグループ分類 =====
@@ -4431,6 +4461,8 @@ function classifyUserSessionDB(datasetIndex) {
       chartInstances.userClassification.update('none');
       updateDbClassificationStats();
       console.log(`[DBグループ] セッション ${sessionId} → ${newGroup || '解除'}`);
+      // アクティブなフィルターを再適用
+      if (ucActiveDbFilter !== null) filterUcByDbGroup(ucActiveDbFilter);
     } else {
       alert('保存失敗: ' + (data.error || '不明なエラー'));
     }
@@ -4691,6 +4723,13 @@ function switchClassificationMode(mode) {
   localStorage.setItem('classificationMode_video_' + videoIdGlobal, mode);
   document.getElementById('visual-mode-controls').style.display = mode === 'visual' ? '' : 'none';
   document.getElementById('db-mode-controls').style.display    = mode === 'db'     ? '' : 'none';
+  // フィルターパネルを切り替えてリセット
+  var vf = document.getElementById('uc-visual-filter');
+  var df = document.getElementById('uc-db-filter');
+  if (vf) vf.style.display = mode === 'visual' ? '' : 'none';
+  if (df) df.style.display = mode === 'db'     ? '' : 'none';
+  if (mode === 'visual') { ucActiveGroupFilter = null; _applyUcVisualFilterButtons(); }
+  else                   { ucActiveDbFilter    = null; _applyUcDbFilterButtons(); }
   if (!chartInstances.userClassification) return;
 
   const visualGroupColors = {
@@ -4735,6 +4774,81 @@ function switchClassificationMode(mode) {
     if (dbStats)     dbStats.style.display = 'none';
     updateClassificationStats();
   }
+}
+
+// ===== グラフ表示フィルター =====
+
+var ucActiveGroupFilter = null; // null=全表示, 'groupA'/'groupB'/'groupC'/'groupD'/'__unclassified__'
+var ucActiveDbFilter    = null; // null=全表示, 'normal'/'fast_speed'/etc/'__unclassified__'
+
+function _applyUcVisualFilterButtons() {
+  var map = { null: 'ucVfAll', groupA: 'ucVfA', groupB: 'ucVfB', groupC: 'ucVfC', groupD: 'ucVfD', '__unclassified__': 'ucVfNull' };
+  Object.values(map).forEach(function(id) {
+    var btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.remove('btn-secondary', 'btn-primary', 'btn-success', 'btn-warning', 'btn-danger');
+    btn.classList.add('btn-outline-secondary', 'btn-outline-primary', 'btn-outline-success', 'btn-outline-warning', 'btn-outline-danger');
+  });
+  // active ボタンをソリッドに
+  var activeKey = ucActiveGroupFilter === null ? 'null' : ucActiveGroupFilter;
+  var styleMap = { 'null': ['btn-secondary','btn-outline-secondary'], groupA: ['btn-primary','btn-outline-primary'], groupB: ['btn-success','btn-outline-success'], groupC: ['btn-warning','btn-outline-warning'], groupD: ['btn-danger','btn-outline-danger'], '__unclassified__': ['btn-secondary','btn-outline-secondary'] };
+  var activeId = map[activeKey];
+  var activeBtn = document.getElementById(activeId);
+  if (activeBtn && styleMap[activeKey]) {
+    activeBtn.classList.remove(styleMap[activeKey][1]);
+    activeBtn.classList.add(styleMap[activeKey][0]);
+  }
+}
+
+function _applyUcDbFilterButtons() {
+  var allIds = ['ucDfAll','ucDfNormal','ucDfFast','ucDfSkip','ucDfFastSkip','ucDfShort','ucDfLong','ucDfNull'];
+  allIds.forEach(function(id) {
+    var btn = document.getElementById(id);
+    if (btn) { btn.style.fontWeight = 'normal'; btn.style.boxShadow = ''; }
+  });
+  var map = { null: 'ucDfAll', normal: 'ucDfNormal', fast_speed: 'ucDfFast', skip_heavy: 'ucDfSkip', fast_and_skip: 'ucDfFastSkip', too_short: 'ucDfShort', too_long: 'ucDfLong', '__unclassified__': 'ucDfNull' };
+  var activeKey = ucActiveDbFilter === null ? 'null' : ucActiveDbFilter;
+  var activeId = map[activeKey];
+  var activeBtn = document.getElementById(activeId);
+  if (activeBtn) { activeBtn.style.fontWeight = 'bold'; activeBtn.style.boxShadow = '0 0 0 2px currentColor'; }
+  // ucDfAll: ソリッド/アウトライン切り替え
+  var allBtn = document.getElementById('ucDfAll');
+  if (allBtn) {
+    allBtn.classList.toggle('btn-secondary', ucActiveDbFilter === null);
+    allBtn.classList.toggle('btn-outline-secondary', ucActiveDbFilter !== null);
+  }
+}
+
+function filterUcByGroup(group) {
+  ucActiveGroupFilter = group;
+  _applyUcVisualFilterButtons();
+  if (!chartInstances.userClassification) return;
+  chartInstances.userClassification.data.datasets.forEach(function(ds) {
+    if (group === null) {
+      ds.hidden = false;
+    } else if (group === '__unclassified__') {
+      ds.hidden = !!ds.classification;
+    } else {
+      ds.hidden = ds.classification !== group;
+    }
+  });
+  chartInstances.userClassification.update('none');
+}
+
+function filterUcByDbGroup(group) {
+  ucActiveDbFilter = group;
+  _applyUcDbFilterButtons();
+  if (!chartInstances.userClassification) return;
+  chartInstances.userClassification.data.datasets.forEach(function(ds) {
+    if (group === null) {
+      ds.hidden = false;
+    } else if (group === '__unclassified__') {
+      ds.hidden = !!ds.dbGroup;
+    } else {
+      ds.hidden = ds.dbGroup !== group;
+    }
+  });
+  chartInstances.userClassification.update('none');
 }
 
 // ===== 既存ビジュアル分類リセット =====
