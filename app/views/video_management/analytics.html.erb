@@ -1347,9 +1347,14 @@
 
       <!-- 学習セッション一覧 -->
       <div class="card mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
           <h3 class="mb-0">学習セッション履歴</h3>
-          <div class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button type="button" id="bulkDeleteBtn"
+                    class="btn btn-sm btn-danger d-none"
+                    onclick="bulkDeleteSessions()">
+              選択したセッションを削除
+            </button>
             <label class="text-muted small mb-0">グループで絞り込み:</label>
             <select id="sessionGroupFilter" class="form-select form-select-sm" style="width: auto;">
               <option value="">すべて</option>
@@ -1366,6 +1371,10 @@
               <table class="table table-striped" id="sessionTable">
                 <thead>
                   <tr>
+                    <th style="width:2rem;">
+                      <input type="checkbox" class="form-check-input" id="selectAllSessions"
+                             title="全選択" onchange="toggleAllSessionCheckboxes(this.checked)">
+                    </th>
                     <th id="th-name" style="cursor:pointer; user-select:none; white-space:nowrap;"
                         onclick="sortSessionsByName()" title="クリックで名前順ソート">
                       受講者 <span id="name-sort-icon" style="font-size:0.8em; color:#6c757d;">↕</span>
@@ -1391,6 +1400,10 @@
                     <tr data-group="<%= session.session_group || '__unset__' %>"
                         data-name="<%= session.user.name %>"
                         data-idx="<%= idx %>">
+                      <td class="text-center">
+                        <input type="checkbox" class="form-check-input session-row-cb"
+                               value="<%= session.id %>" onchange="onSessionCbChange()">
+                      </td>
                       <td>
                         <%= session.user.name %>
                         <br><small class="text-muted"><%= session.user.email %></small>
@@ -4847,6 +4860,67 @@ document.addEventListener('turbo:before-cache', function() {
     if (icon) icon.textContent = ['↕', '↑', '↓'][nameSortState];
 
     rows.forEach(function(row) { tbody.appendChild(row); });
+  };
+
+  // セッション一括削除
+  window.onSessionCbChange = function() {
+    var checked = document.querySelectorAll('.session-row-cb:checked');
+    var btn     = document.getElementById('bulkDeleteBtn');
+    var all     = document.getElementById('selectAllSessions');
+    var total   = document.querySelectorAll('.session-row-cb').length;
+    if (btn) {
+      if (checked.length > 0) {
+        btn.textContent = '選択した ' + checked.length + ' 件を削除';
+        btn.classList.remove('d-none');
+      } else {
+        btn.classList.add('d-none');
+      }
+    }
+    if (all) {
+      all.indeterminate = checked.length > 0 && checked.length < total;
+      all.checked       = checked.length === total && total > 0;
+    }
+  };
+
+  window.toggleAllSessionCheckboxes = function(state) {
+    document.querySelectorAll('.session-row-cb').forEach(function(cb) {
+      if (cb.closest('tr').style.display !== 'none') cb.checked = state;
+    });
+    onSessionCbChange();
+  };
+
+  window.bulkDeleteSessions = function() {
+    var ids = Array.from(document.querySelectorAll('.session-row-cb:checked')).map(function(cb) {
+      return parseInt(cb.value, 10);
+    });
+    if (!ids.length) return;
+    if (!confirm(ids.length + ' 件のセッションを削除してもよろしいですか？\n関連するすべてのイベントデータも削除されます。この操作は取り消せません。')) return;
+
+    var csrf = document.querySelector('meta[name="csrf-token"]');
+    fetch('/video_management/delete_sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrf ? csrf.content : ''
+      },
+      body: JSON.stringify({ session_ids: ids })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(body) {
+      if (body.success) {
+        // 削除した行を DOM から除去
+        ids.forEach(function(id) {
+          var cb  = document.querySelector('.session-row-cb[value="' + id + '"]');
+          if (cb) cb.closest('tr').remove();
+        });
+        onSessionCbChange();
+        // 全行削除なら「データなし」表示も考慮してリロード
+        if (!document.querySelector('.session-row-cb')) location.reload();
+      } else {
+        alert('削除に失敗しました: ' + (body.error || '不明なエラー'));
+      }
+    })
+    .catch(function() { alert('削除リクエストの送信に失敗しました。'); });
   };
 
   // 集中スコア推移 横軸スライダー
