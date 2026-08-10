@@ -252,6 +252,22 @@
                       <small class="text-muted d-block ms-4">動画が再生される前のデータポイントを除外します</small>
                     </div>
                   </div>
+
+                  <!-- 横軸（経過時間）の最大値スライダー -->
+                  <div class="mt-3 mb-3 p-3 border rounded bg-light">
+                    <div class="fw-semibold small mb-2">横軸の最大表示時間</div>
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                      <input type="range" class="form-range" id="xAxisMaxSlider"
+                             min="1" max="300" value="120" step="1" style="flex:1; min-width:120px;"
+                             oninput="updateXAxisSliderDisplay()">
+                      <span id="xAxisMaxDisplay" class="fw-semibold text-nowrap" style="min-width:4.5rem;">120 分</span>
+                      <button type="button" class="btn btn-sm btn-primary" onclick="applyXAxisMax()">設定</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetXAxisMax()">リセット</button>
+                    </div>
+                    <div class="text-muted mt-1" style="font-size:0.76rem;">
+                      設定した時間より長い視聴履歴は右側が見切れます。リセットで全データに合わせた自動スケールに戻ります。
+                    </div>
+                  </div>
                 </div>
                 <div class="chart-container" style="position: relative; height: 800px;">
                   <canvas id="scoreTimelineChart"></canvas>
@@ -3356,7 +3372,23 @@ function initializeAnalyticsCharts() {
       
       // セッション切り替えトグルを作成
       createSessionToggles('scoreTimeline', scoreTimelineData);
-      
+
+      // スライダーの max をデータの最大経過時間に合わせて初期化
+      (function() {
+        var maxSec = 0;
+        scoreTimelineData.forEach(function(s) {
+          (s.data || []).forEach(function(p) { if ((p.x || 0) > maxSec) maxSec = p.x; });
+        });
+        var maxMin = Math.max(Math.ceil(maxSec / 60), 10);
+        var slider  = document.getElementById('xAxisMaxSlider');
+        var display = document.getElementById('xAxisMaxDisplay');
+        if (slider) {
+          slider.max   = Math.max(maxMin, parseInt(slider.max, 10));
+          slider.value = maxMin;
+          if (display) display.textContent = maxMin + ' 分';
+        }
+      })();
+
       // ダブルクリックでズームリセット
       scoreTimelineCtx.ondblclick = function() {
         chartInstances.scoreTimeline.resetZoom();
@@ -4815,6 +4847,40 @@ document.addEventListener('turbo:before-cache', function() {
     if (icon) icon.textContent = ['↕', '↑', '↓'][nameSortState];
 
     rows.forEach(function(row) { tbody.appendChild(row); });
+  };
+
+  // 集中スコア推移 横軸スライダー
+  window.updateXAxisSliderDisplay = function() {
+    var slider  = document.getElementById('xAxisMaxSlider');
+    var display = document.getElementById('xAxisMaxDisplay');
+    if (slider && display) display.textContent = slider.value + ' 分';
+  };
+
+  window.applyXAxisMax = function() {
+    var chart = chartInstances.scoreTimeline;
+    if (!chart) return;
+    var minutes = parseInt(document.getElementById('xAxisMaxSlider').value, 10);
+    chart.options.scales.x.max = minutes * 60;
+    chart.update('none');
+  };
+
+  window.resetXAxisMax = function() {
+    var chart = chartInstances.scoreTimeline;
+    if (!chart) return;
+    delete chart.options.scales.x.max;
+    chart.update('none');
+    // スライダーをデータの最大値に戻す
+    var maxSec = 0;
+    chart.data.datasets.forEach(function(ds) {
+      (ds.data || []).forEach(function(p) { if ((p.x || 0) > maxSec) maxSec = p.x; });
+    });
+    var maxMin = Math.max(Math.ceil(maxSec / 60), 10);
+    var slider  = document.getElementById('xAxisMaxSlider');
+    var display = document.getElementById('xAxisMaxDisplay');
+    if (slider) {
+      slider.value = maxMin;
+      if (display) display.textContent = maxMin + ' 分';
+    }
   };
 })();
 </script>
