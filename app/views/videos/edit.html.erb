@@ -52,6 +52,24 @@
             </div>
 
             <div class="form-group">
+              <%= form.label :duration, "動画の長さ（秒）" %>
+              <div class="d-flex align-items-center gap-2">
+                <%= form.number_field :duration, min: 0, class: "form-control", id: "video_duration",
+                    placeholder: "例: 3600（1時間）",
+                    style: "max-width: 220px;" %>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="auto-detect-duration">
+                  動画から自動取得
+                </button>
+              </div>
+              <small class="form-text text-muted">
+                自動分類（K-means）の精度向上に使用します。「動画から自動取得」ボタンで右の動画プレイヤーから取得できます。
+                <% if @video.duration %>
+                  現在の設定: <strong><%= @video.duration / 60 %>分 <%= @video.duration % 60 %>秒</strong>
+                <% end %>
+              </small>
+            </div>
+
+            <div class="form-group">
               <%= form.label :pdf_file, "PDF資料 (任意)" %>
               <% if @video.pdf_file.attached? %>
                 <p>現在のPDF: <%= @video.pdf_file.filename %></p>
@@ -903,6 +921,23 @@ function initializeVideoEditor() {
     }
   }
   
+  // 動画の長さ自動取得ボタン
+  const autoDetectBtn = document.getElementById('auto-detect-duration');
+  const durationInput = document.getElementById('video_duration');
+  if (autoDetectBtn && durationInput) {
+    autoDetectBtn.addEventListener('click', function() {
+      const vp = document.getElementById('video-player');
+      if (!vp || !isFinite(vp.duration) || vp.duration <= 0) {
+        alert('動画がまだ読み込まれていません。動画プレイヤーで再生可能な状態にしてから再試行してください。');
+        return;
+      }
+      const secs = Math.round(vp.duration);
+      durationInput.value = secs;
+      const m = Math.floor(secs / 60), s = secs % 60;
+      alert('動画の長さを取得しました: ' + m + '分' + s + '秒（' + secs + '秒）');
+    });
+  }
+
   if (videoPlayer) {
     // 動画の読み込み完了を待つ
     videoPlayer.addEventListener('loadedmetadata', function() {

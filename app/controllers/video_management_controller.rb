@@ -1524,10 +1524,15 @@ class VideoManagementController < ApplicationController
 
     return render json: { ok: false, error: "セッションが不足しています" } if sessions.size < 2
 
-    # 動画長の推定（全セッションの last_video_time の上位 10% 平均）
-    all_vt = sessions.map(&:last_video_time).sort
-    top_n  = [ (all_vt.size * 0.1).ceil, 1 ].max
-    video_length = [ all_vt.last(top_n).sum.to_f / top_n, 1.0 ].max
+    # 動画長：設定値を優先し、未設定なら全セッションの last_video_time 上位 10% 平均で推定
+    video_length =
+      if @video.duration.present? && @video.duration > 0
+        @video.duration.to_f
+      else
+        all_vt = sessions.map(&:last_video_time).sort
+        top_n  = [ (all_vt.size * 0.1).ceil, 1 ].max
+        [ all_vt.last(top_n).sum.to_f / top_n, 1.0 ].max
+      end
 
     # セッションごとの特徴量を計算
     session_features = sessions.filter_map do |session|

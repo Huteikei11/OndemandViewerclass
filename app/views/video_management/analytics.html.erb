@@ -659,29 +659,46 @@
                       実行後にチャートでプレビューし、グループ名を確認してから保存できます。
                     </small>
                     <details class="mb-2">
-                      <summary class="small text-primary" style="cursor:pointer;">📐 使用する指標の定義</summary>
+                      <summary class="small text-primary" style="cursor:pointer;">📐 使用する指標の定義と計算方法</summary>
                       <div class="mt-2 ps-2 border-start border-2" style="font-size:0.8rem; line-height:1.7;">
+
+                        <p class="text-muted mb-2">
+                          各指標はセッション終了時点の記録値（<code>last_video_time</code>・<code>last_session_elapsed</code>）と、
+                          再生中に記録されたイベントログから計算します。<br>
+                          動画の総時間は、動画編集画面で「動画の長さ」を設定している場合はその値を使用します。
+                          未設定の場合は<strong>全セッションの <code>last_video_time</code> 上位10%の平均値</strong>で推定します
+                          （最も遠くまで視聴した受講者の平均到達点を動画長とみなします）。
+                          正確な計算のために、動画編集画面から長さを設定することを推奨します。
+                        </p>
+
                         <dl class="mb-0">
-                          <dt>有効再生速度（effective speed）</dt>
+                          <dt>有効再生速度（effective_speed）</dt>
                           <dd class="text-muted mb-2">
-                            <code>動画の視聴済み時間 ÷ セッション経過時間</code><br>
-                            セッション中に実際に進んだ動画時間を、かかった実時間で割った値。<br>
-                            1.0 = 等倍視聴、1.5 = 動画を1.5倍速で進んだペース（高速再生・飛ばしが多い）、0.5 = 一時停止や繰り返しが多い。
+                            <code>last_video_time ÷ last_session_elapsed</code><br>
+                            <strong>使ったデータ:</strong> セッション最後の動画再生位置（秒）÷ セッション開始からの経過時間（秒）。<br>
+                            1.0 = 等倍視聴、1.5 = 1.5倍ペースで進んだ（高速再生・飛ばしが多い）、0.5 = 一時停止や繰り返しが多い。
                           </dd>
-                          <dt>スキップカバレッジ（skip coverage）</dt>
+
+                          <dt>スキップカバレッジ（skip_coverage）</dt>
                           <dd class="text-muted mb-2">
-                            <code>前進スキップで飛ばした動画時間の合計 ÷ 動画の総時間</code><br>
-                            動画全体のうち何割をスキップしたかを示す。0.1 なら動画の10%を飛ばした。
+                            <code>前進スキップ量の合計 ÷ 動画総時間（推定）</code><br>
+                            <strong>使ったデータ:</strong> イベントログの <code>video_skip</code> / <code>video_seek</code> イベントのうち、
+                            移動先（to）が移動元（from）より後方のもの（前進）について <code>to − from</code> を合計し、推定動画長で割る。<br>
+                            0.1 なら動画全体の10%をスキップした。
                           </dd>
-                          <dt>期間比（duration ratio）</dt>
+
+                          <dt>期間比（duration_ratio）</dt>
                           <dd class="text-muted mb-2">
-                            <code>セッション経過時間 ÷ 動画の総時間</code><br>
-                            動画の長さに対してどれだけの時間をかけて視聴したか。1.0 が動画と同じ長さ、0.1 なら非常に短い視聴。
+                            <code>last_session_elapsed ÷ 動画総時間（推定）</code><br>
+                            <strong>使ったデータ:</strong> セッション経過時間 ÷ 推定動画長。<br>
+                            1.0 = 動画と同じ長さをかけて視聴、0.1 = 動画の1/10の時間で終了（非常に短い視聴）。
                           </dd>
-                          <dt>スキップ率（skip rate）</dt>
+
+                          <dt>スキップ率（skip_rate）</dt>
                           <dd class="text-muted mb-0">
-                            <code>スキップイベント数 ÷ 総イベント数</code><br>
-                            操作全体のうちスキップがどれくらいの割合を占めるか。
+                            <code>前進スキップ回数 ÷ セッション経過時間（分）</code><br>
+                            <strong>使ったデータ:</strong> 前進スキップのイベント件数を、経過時間（分単位、最小0.1分）で割った値。<br>
+                            1分あたり何回スキップしたかを示す。経過時間が極端に短い場合の除算ゼロを防ぐため最小値0.1分を下限とする。
                           </dd>
                         </dl>
                       </div>

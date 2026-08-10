@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_22_024450) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_11_000000) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.string "name", null: false
     t.string "record_type", null: false
@@ -163,6 +163,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_22_024450) do
     t.integer "creator_id"
     t.string "password_digest"
     t.boolean "is_private", default: false
+    t.integer "duration"
     t.index ["creator_id"], name: "index_videos_on_creator_id"
   end
 
