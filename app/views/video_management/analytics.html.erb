@@ -773,7 +773,10 @@
                 <!-- 分類結果・統計表 -->
                 <div class="mt-4">
                   <h5>分類結果と統計</h5>
+                  <!-- ビジュアル分類 (A/B/C/D) -->
                   <div id="classificationStats" class="row"></div>
+                  <!-- DBグループ分類 -->
+                  <div id="dbClassificationStats" class="row" style="display:none;"></div>
                 </div>
               </div>
 
@@ -4262,6 +4265,27 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
       if (display) display.textContent = maxMin + ' 分';
     }
   })();
+
+  // K-meansの結果をlocalStorageから復元
+  (function() {
+    var saved = localStorage.getItem('kmeansResult_video_' + videoIdGlobal);
+    if (!saved) return;
+    try {
+      var data = JSON.parse(saved);
+      if (!data || !data.clusters) return;
+      window.kmeansResult = data;
+      renderKmeansTable(data.clusters);
+      document.getElementById('kmeans-result').style.display = 'block';
+      // k値もスライダーに反映
+      var kInput = document.getElementById('kmeansK');
+      if (kInput && data.clusters.length) kInput.value = data.clusters.length;
+      previewKmeansClusters();
+      console.log('[K-means] localStorage から結果を復元しました');
+    } catch(e) {
+      console.warn('[K-means] 復元失敗:', e);
+      localStorage.removeItem('kmeansResult_video_' + videoIdGlobal);
+    }
+  })();
 }
 
 // ユーザーをグループに分類
@@ -4434,6 +4458,89 @@ function updateDbClassificationStats() {
   container.innerHTML = html;
 }
 
+// DBグループ分類の詳細統計（カード形式）
+function updateDbFullStats() {
+  var container = document.getElementById('dbClassificationStats');
+  if (!container) return;
+  var responseData   = window.responseData  || [];
+  var sessionUserMap = window.sessionUserMap || {};
+  var totalQuestions = window.totalQuestions || 0;
+  var useUniqueUsers = document.getElementById('countUniqueUsersToggle').checked;
+  var SESSION_GROUP_LABELS = <%= raw LearningSession::SESSION_GROUPS.to_json %>;
+
+  // グループ別にセッションIDを集める
+  var groupSessions = {};
+  Object.entries(SESSION_GROUP_LABELS).forEach(function([key]) { groupSessions[key] = []; });
+  groupSessions['__unset__'] = [];
+
+  Object.entries(window.sessionGroupData).forEach(function([sid, g]) {
+    var key = g || '__unset__';
+    if (!groupSessions[key]) groupSessions[key] = [];
+    groupSessions[key].push(parseInt(sid, 10));
+  });
+
+  var allGroupKeys = Object.keys(SESSION_GROUP_LABELS).concat(['__unset__']);
+  var html = '';
+
+  allGroupKeys.forEach(function(groupKey) {
+    var sessionIds = groupSessions[groupKey] || [];
+    var label      = SESSION_GROUP_LABELS[groupKey] || '未分類';
+    var color      = DB_GROUP_COLORS[groupKey] || '#6c757d';
+
+    var memberCount, displayLabel;
+    if (useUniqueUsers) {
+      var uids = new Set(
+        sessionIds.map(function(sid) {
+          return sessionUserMap[sid] && sessionUserMap[sid].user_id;
+        }).filter(Boolean)
+      );
+      memberCount  = uids.size;
+      displayLabel = memberCount + '名（ユーザー数）';
+    } else {
+      memberCount  = sessionIds.length;
+      displayLabel = memberCount + '件（セッション数）';
+    }
+
+    var groupResponses = responseData.filter(function(r) {
+      return sessionIds.includes(r.session_id);
+    });
+
+    var cardBody;
+    if (groupResponses.length === 0) {
+      cardBody = '<p class="text-muted small mb-0">' +
+                 'セッション: ' + displayLabel + '<br>回答なし</p>';
+    } else {
+      var total   = groupResponses.length;
+      var correct = groupResponses.filter(function(r) { return r.correct; }).length;
+      var correctRate = ((correct / total) * 100).toFixed(1);
+      var avgTime = (groupResponses.reduce(function(s, r) { return s + (r.response_time || 0); }, 0) / total / 1000).toFixed(1);
+      var avgPerMember = memberCount > 0 ? (total / memberCount).toFixed(1) : '-';
+      var unitLabel = useUniqueUsers ? '回/ユーザー' : '回/セッション';
+      var overallRate = (totalQuestions > 0 && memberCount > 0)
+        ? ((correct / (totalQuestions * memberCount)) * 100).toFixed(1)
+        : '-';
+
+      cardBody = '<dl class="small mb-0">' +
+        '<dt>セッション数</dt><dd>' + displayLabel + '</dd>' +
+        '<dt>回答数</dt><dd>' + total + '件</dd>' +
+        '<dt>平均回答数</dt><dd><strong>' + avgPerMember + unitLabel + '</strong></dd>' +
+        '<dt>正答率</dt><dd><strong style="color:' + color + '">' + correctRate + '%</strong></dd>' +
+        '<dt>全問正答率</dt><dd><strong style="color:' + color + '">' + overallRate + '%</strong></dd>' +
+        '<dt>平均回答時間</dt><dd>' + avgTime + '秒</dd>' +
+        '</dl>';
+    }
+
+    html += '<div class="col-md-6 col-lg-4 mb-3">' +
+            '<div class="card h-100" style="border-left:4px solid ' + color + '">' +
+            '<div class="card-body py-2 px-3">' +
+            '<h6 class="card-title mb-2">' + label + '</h6>' +
+            cardBody +
+            '</div></div></div>';
+  });
+
+  container.innerHTML = html || '<p class="text-muted">DBグループが設定されていません</p>';
+}
+
 // ===== K-means 自動分類 =====
 
 const KMEANS_CLUSTER_COLORS = [
@@ -4467,6 +4574,7 @@ function runKmeans() {
       loadingEl.style.display = 'none';
       if (!data.ok) { alert('エラー: ' + (data.error || '不明')); return; }
       window.kmeansResult = data;
+      localStorage.setItem('kmeansResult_video_' + videoIdGlobal, JSON.stringify(data));
       renderKmeansTable(data.clusters);
       resultEl.style.display = 'block';
       previewKmeansClusters();
@@ -4564,8 +4672,11 @@ function saveKmeansClusters(overwrite) {
         if (assignments[a.session_id] !== undefined) a.current_group = assignments[a.session_id];
       });
       var msg = document.getElementById('kmeans-save-msg');
-      msg.textContent = data.updated + '件を保存しました';
+      msg.textContent = data.updated + '件を保存しました（保存済みのためK-means結果をリセットします）';
       msg.className = 'mt-2 small text-success';
+      // 保存完了後はlocalStorageのK-means結果を削除（次回は最新DBを反映）
+      localStorage.removeItem('kmeansResult_video_' + videoIdGlobal);
+      window.kmeansResult = null;
       if (window.classificationMode === 'db') loadInitialDbGroups();
     } else {
       alert('保存失敗: ' + (data.error || '不明'));
@@ -4610,7 +4721,20 @@ function switchClassificationMode(mode) {
     }
   });
   chartInstances.userClassification.update('none');
-  if (mode === 'db') updateDbClassificationStats();
+
+  // 統計エリアの切り替え
+  var visualStats = document.getElementById('classificationStats');
+  var dbStats     = document.getElementById('dbClassificationStats');
+  if (mode === 'db') {
+    if (visualStats) visualStats.style.display = 'none';
+    if (dbStats)     dbStats.style.display = '';
+    updateDbClassificationStats();
+    updateDbFullStats();
+  } else {
+    if (visualStats) visualStats.style.display = '';
+    if (dbStats)     dbStats.style.display = 'none';
+    updateClassificationStats();
+  }
 }
 
 // ===== 既存ビジュアル分類リセット =====
