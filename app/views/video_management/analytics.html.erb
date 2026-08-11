@@ -5402,14 +5402,20 @@ document.addEventListener('turbo:before-cache', function() {
     var chart = chartInstances.userClassification;
     if (!chart) return;
     var minutes = parseInt(document.getElementById('ucXAxisMaxSlider').value, 10);
-    chart.options.scales.x.max = minutes * 60;
+    // ① zoom状態をクリア（内部のoriginalスケールをリセット）
     chart.resetZoom();
+    // ② その直後にmaxを上書き（resetZoom後はoriginalが復元されているので上書きが有効）
+    chart.options.scales.x.max = minutes * 60;
+    // ③ zoom pluginに干渉されずに反映（beforeUpdateでpluginが新maxをoriginalとして記憶する）
+    chart.update('none');
   };
 
   window.resetUcXAxisMax = function() {
     var chart = chartInstances.userClassification;
     if (!chart) return;
     delete chart.options.scales.x.max;
+    // zoom pluginのoriginalに max なし状態を記憶させてからリセット
+    chart.update('none');
     chart.resetZoom();
     var maxSec = 0;
     chart.data.datasets.forEach(function(ds) {
@@ -5435,15 +5441,16 @@ document.addEventListener('turbo:before-cache', function() {
     var chart = chartInstances.scoreTimeline;
     if (!chart) return;
     var minutes = parseInt(document.getElementById('xAxisMaxSlider').value, 10);
-    chart.options.scales.x.max = minutes * 60;
-    // zoomプラグインの内部状態をリセットしてから新しいmaxを反映させる
     chart.resetZoom();
+    chart.options.scales.x.max = minutes * 60;
+    chart.update('none');
   };
 
   window.resetXAxisMax = function() {
     var chart = chartInstances.scoreTimeline;
     if (!chart) return;
     delete chart.options.scales.x.max;
+    chart.update('none');
     chart.resetZoom();
     // スライダーをデータの最大値に戻す
     var maxSec = 0;
