@@ -2428,6 +2428,27 @@ async function loadScoreTimelineChunks(initialData, pagination) {
 }
 
 // responseData チャンク読み込み
+// ユーザー分類グラフ用 scoreTimeline 全ページ読み込み（AbortController なし）
+async function loadUcScoreTimelineChunks(initialData, pagination, videoId) {
+  let allData = initialData;
+  for (let page = 1; page < pagination.total_pages; page++) {
+    try {
+      console.log(`[分類グラフ] scoreTimeline チャンク読み込み: ページ ${page + 1}/${pagination.total_pages}`);
+      const response = await fetch(
+        `/video_management/get_chart_data?video_id=${videoId}&chart_type=score_timeline&session_page=${page}`
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      allData = allData.concat(result.data || []);
+    } catch (error) {
+      console.warn(`[分類グラフ] scoreTimeline ページ ${page} 読み込みエラー:`, error);
+      break;
+    }
+  }
+  return allData;
+}
+
+// responseData チャンク読み込み
 async function loadResponseDataChunks(initialData, pagination, videoId) {
   let allData = initialData;
   
@@ -3984,17 +4005,23 @@ function initializeUserClassificationChart() {
   const videoId = <%= @video.id %>;
   
   Promise.all([
-    // scoreTimelineData が未ロードの場合は fetch
+    // scoreTimelineData が未ロードの場合は全ページ fetch
     window.scoreTimelineData ? Promise.resolve(window.scoreTimelineData) :
-      fetch(`/video_management/get_chart_data?video_id=${videoId}&chart_type=score_timeline`)
+      fetch(`/video_management/get_chart_data?video_id=${videoId}&chart_type=score_timeline&session_page=0`)
         .then(response => {
           if (!response.ok) throw new Error(`HTTP ${response.status} from scoreTimeline fetch`);
           return response.json();
         })
-        .then(result => result.data || [])
+        .then(result => {
+          console.log('[分類グラフ初期化] scoreTimeline ページ1取得:', result.pagination);
+          if (result.pagination && result.pagination.has_next) {
+            return loadUcScoreTimelineChunks(result.data || [], result.pagination, videoId);
+          }
+          return result.data || [];
+        })
         .catch(error => {
           console.error('[分類グラフ初期化] scoreTimeline AJAX エラー:', error);
-          return [];  // エラー時は空配列を返す
+          return [];
         }),
     // responseData を fetch（チャンク読 込対応）
     fetch(`/video_management/get_chart_data?video_id=${videoId}&chart_type=response_data&response_page=0`)
