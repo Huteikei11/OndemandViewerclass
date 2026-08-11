@@ -4535,6 +4535,14 @@ function updateDbFullStats() {
     groupSessions[key].push(parseInt(sid, 10));
   });
 
+  // scoreTimelineData にあるが sessionGroupData に含まれていないセッションも未分類に追加
+  var knownSids = new Set(Object.keys(window.sessionGroupData).map(Number));
+  (window.scoreTimelineData || []).forEach(function(s) {
+    if (!knownSids.has(s.session_id)) {
+      groupSessions['__unset__'].push(s.session_id);
+    }
+  });
+
   var allGroupKeys = Object.keys(SESSION_GROUP_LABELS).concat(['__unset__']);
   var html = '';
 
@@ -4972,8 +4980,17 @@ function updateClassificationStats() {
     groupD: '#dc3545'
   };
   
+  // 全セッションIDを scoreTimelineData から収集（未分類計算用）
+  const allSessionIds = new Set(
+    (window.scoreTimelineData || []).map(s => s.session_id)
+  );
+  const classifiedSessionIds = new Set(
+    Object.values(window.userClassifications).flat()
+  );
+  const unclassifiedSessionIds = [...allSessionIds].filter(id => !classifiedSessionIds.has(id));
+
   let html = '';
-  
+
   Object.keys(window.userClassifications).forEach(group => {
     const sessionIds = window.userClassifications[group];
     
@@ -5108,6 +5125,53 @@ function updateClassificationStats() {
     `;
   });
   
+  // 未分類カード
+  {
+    const sessionIds = unclassifiedSessionIds;
+    const useUniqueUsers = document.getElementById('countUniqueUsersToggle').checked;
+    let memberCount, displayLabel;
+    if (useUniqueUsers) {
+      const uids = new Set(sessionIds.map(id => window.sessionUserMap[id]?.user_id).filter(Boolean));
+      memberCount  = uids.size;
+      displayLabel = `${memberCount}名（ユーザー数）`;
+    } else {
+      memberCount  = sessionIds.length;
+      displayLabel = `${memberCount}件（セッション数）`;
+    }
+    const groupResponses = responseData.filter(r => sessionIds.includes(r.session_id));
+    let cardBody;
+    if (groupResponses.length === 0) {
+      cardBody = `<p class="text-muted small mb-0">セッション: ${displayLabel}<br>回答なし</p>`;
+    } else {
+      const total       = groupResponses.length;
+      const correct     = groupResponses.filter(r => r.correct).length;
+      const correctRate = ((correct / total) * 100).toFixed(1);
+      const avgTime     = (groupResponses.reduce((s, r) => s + (r.response_time || 0), 0) / total / 1000).toFixed(1);
+      const avgPer      = memberCount > 0 ? (total / memberCount).toFixed(1) : '-';
+      const unitLabel   = useUniqueUsers ? '回/ユーザー' : '回/セッション';
+      const totalQ      = window.totalQuestions || 0;
+      const overallRate = totalQ > 0 && memberCount > 0 ? ((correct / (totalQ * memberCount)) * 100).toFixed(1) : '-';
+      cardBody = `<dl class="small mb-0">
+        <dt>グループ人数</dt><dd>${displayLabel}</dd>
+        <dt>回答数</dt><dd>${total}件</dd>
+        <dt>平均回答数</dt><dd><strong>${avgPer}${unitLabel}</strong></dd>
+        <dt>正答数</dt><dd>${correct}件</dd>
+        <dt>正答率</dt><dd><strong>${correctRate}%</strong></dd>
+        <dt>全問正答率</dt><dd><strong>${overallRate}%</strong></dd>
+        <dt>平均回答時間</dt><dd>${avgTime}秒</dd>
+      </dl>`;
+    }
+    html += `
+      <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card h-100" style="border-left: 4px solid #6c757d">
+          <div class="card-body">
+            <h6 class="card-title text-muted">未分類</h6>
+            ${cardBody}
+          </div>
+        </div>
+      </div>`;
+  }
+
   statsContainer.innerHTML = html || '<p class="text-muted">分類したユーザーがありません</p>';
 }
 
