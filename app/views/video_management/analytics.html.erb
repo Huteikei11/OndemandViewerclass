@@ -638,7 +638,7 @@
                   <!-- ユーザー数ベースでカウント -->
                   <div class="mt-3 mb-3">
                     <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="countUniqueUsersToggle" onchange="updateClassificationStats()">
+                      <input class="form-check-input" type="checkbox" id="countUniqueUsersToggle" onchange="window.classificationMode === 'db' ? updateDbFullStats() : updateClassificationStats()">
                       <label class="form-check-label" for="countUniqueUsersToggle">
                         <strong>ユーザー数でカウント（セッション数ではなく）</strong>
                       </label>
