@@ -83,7 +83,7 @@ class VideoManagementController < ApplicationController
     @learning_sessions = @video.learning_sessions
       .includes(:user, :timestamp_events)
       .order(session_start_time: :desc)
-      .limit(100)
+      .limit(1000)
 
     # グラフ用データを準備（メモリ節約のため空配列で初期化）
     # 実際のデータは AJAX で get_chart_data アクションから動的に取得する
