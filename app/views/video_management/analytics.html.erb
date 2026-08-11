@@ -549,7 +549,10 @@
                 <div class="mb-3">
                   <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <div><strong>使い方：</strong>グラフのセッションラインをクリックして分類します。ダブルクリックでズームリセット。</div>
-                    <button class="btn btn-sm btn-warning" onclick="resetUserClassification()">ビジュアル分類をリセット</button>
+                    <div class="d-flex gap-2">
+                      <button class="btn btn-sm btn-outline-primary" id="refreshUcChartBtn" onclick="refreshUcChart()">↺ グラフを更新</button>
+                      <button class="btn btn-sm btn-warning" onclick="resetUserClassification()">ビジュアル分類をリセット</button>
+                    </div>
                   </div>
 
                   <!-- モード切り替え -->
@@ -4297,21 +4300,42 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
   (function() {
     var saved = localStorage.getItem('kmeansResult_video_' + videoIdGlobal);
     if (!saved) return;
-    try {
-      var data = JSON.parse(saved);
-      if (!data || !data.clusters) return;
-      window.kmeansResult = data;
-      renderKmeansTable(data.clusters);
-      document.getElementById('kmeans-result').style.display = 'block';
-      // k値もスライダーに反映
-      var kInput = document.getElementById('kmeansK');
-      if (kInput && data.clusters.length) kInput.value = data.clusters.length;
-      previewKmeansClusters();
-      console.log('[K-means] localStorage から結果を復元しました');
-    } catch(e) {
-      console.warn('[K-means] 復元失敗:', e);
+    var data;
+    try { data = JSON.parse(saved); } catch(e) {
       localStorage.removeItem('kmeansResult_video_' + videoIdGlobal);
+      return;
     }
+    if (!data || !Array.isArray(data.clusters) || !Array.isArray(data.session_assignments)) {
+      localStorage.removeItem('kmeansResult_video_' + videoIdGlobal);
+      return;
+    }
+    // 古いデータ（フィールド不足）を弾く: centroid に必須フィールドを確認
+    var firstCentroid = data.clusters[0] && data.clusters[0].centroid;
+    if (firstCentroid && (firstCentroid.effective_speed == null || firstCentroid.playing_speed == null)) {
+      console.warn('[K-means] 古いデータ形式のため復元をスキップしました（再実行してください）');
+      localStorage.removeItem('kmeansResult_video_' + videoIdGlobal);
+      var msg = document.getElementById('kmeans-save-msg');
+      if (msg) msg.textContent = '保存データが古い形式です。再度「実行」してください。';
+      return;
+    }
+    window.kmeansResult = data;
+    try {
+      renderKmeansTable(data.clusters);
+    } catch(e) {
+      console.warn('[K-means] テーブル描画失敗:', e);
+      localStorage.removeItem('kmeansResult_video_' + videoIdGlobal);
+      window.kmeansResult = null;
+      return;
+    }
+    document.getElementById('kmeans-result').style.display = 'block';
+    var kInput = document.getElementById('kmeansK');
+    if (kInput && data.clusters.length) kInput.value = data.clusters.length;
+    try {
+      previewKmeansClusters();
+    } catch(e) {
+      console.warn('[K-means] プレビュー失敗:', e);
+    }
+    console.log('[K-means] localStorage から結果を復元しました（クラスタ数:', data.clusters.length, '）');
   })();
 }
 
@@ -4607,6 +4631,7 @@ function runKmeans() {
       if (!data.ok) { alert('エラー: ' + (data.error || '不明')); return; }
       window.kmeansResult = data;
       localStorage.setItem('kmeansResult_video_' + videoIdGlobal, JSON.stringify(data));
+      document.getElementById('kmeans-save-msg').textContent = '';
       renderKmeansTable(data.clusters);
       resultEl.style.display = 'block';
       previewKmeansClusters();
@@ -4632,10 +4657,10 @@ function renderKmeansTable(clusters) {
     tbody.innerHTML += '<tr>' +
       '<td><span style="display:inline-block;width:16px;height:16px;border-radius:3px;background:' + color + ';"></span></td>' +
       '<td class="text-center">' + c.count + '件</td>' +
-      '<td class="text-end">' + c.centroid.effective_speed.toFixed(2) + 'x</td>' +
-      '<td class="text-end">' + c.centroid.playing_speed.toFixed(2) + 'x</td>' +
-      '<td class="text-end">' + (c.centroid.skip_coverage * 100).toFixed(1) + '%</td>' +
-      '<td class="text-end">' + c.centroid.duration_ratio.toFixed(2) + '</td>' +
+      '<td class="text-end">' + (+(c.centroid.effective_speed || 0)).toFixed(2) + 'x</td>' +
+      '<td class="text-end">' + (+(c.centroid.playing_speed  || 0)).toFixed(2) + 'x</td>' +
+      '<td class="text-end">' + ((+(c.centroid.skip_coverage || 0)) * 100).toFixed(1) + '%</td>' +
+      '<td class="text-end">' + (+(c.centroid.duration_ratio  || 0)).toFixed(2) + '</td>' +
       '<td><span class="badge bg-secondary" style="font-size:0.75rem;">' + sugLabel + '</span></td>' +
       '<td><select class="form-select form-select-sm cluster-group-select" data-cluster-id="' + c.cluster_id + '"' +
         ' onchange="previewKmeansClusters()">' + options + '</select></td>' +
@@ -4849,6 +4874,34 @@ function filterUcByDbGroup(group) {
     }
   });
   chartInstances.userClassification.update('none');
+}
+
+function refreshUcChart() {
+  var btn = document.getElementById('refreshUcChartBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '更新中…'; }
+  var savedGroupFilter = ucActiveGroupFilter;
+  var savedDbFilter    = ucActiveDbFilter;
+  // 既存チャートを明示的に破棄してからポーリング開始（nullにしないと判定が競合する）
+  if (chartInstances.userClassification) {
+    try { chartInstances.userClassification.destroy(); } catch(e) {}
+    chartInstances.userClassification = null;
+  }
+  window.scoreTimelineData = null;
+  initializeUserClassificationChart();
+  var pollCount = 0;
+  var poll = setInterval(function() {
+    pollCount++;
+    if (chartInstances.userClassification || pollCount > 50) {
+      clearInterval(poll);
+      if (btn) { btn.disabled = false; btn.textContent = '↺ グラフを更新'; }
+      if (!chartInstances.userClassification) return;
+      if (window.classificationMode === 'db' && savedDbFilter !== null) {
+        filterUcByDbGroup(savedDbFilter);
+      } else if (window.classificationMode === 'visual' && savedGroupFilter !== null) {
+        filterUcByGroup(savedGroupFilter);
+      }
+    }
+  }, 200);
 }
 
 // ===== 既存ビジュアル分類リセット =====
