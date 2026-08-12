@@ -1383,14 +1383,22 @@ class VideoManagementController < ApplicationController
     question_ids = questions.map(&:id)
     user_ids     = sessions_loaded.map(&:user_id).uniq
 
-    all_responses =
+    # ユーザー×問題ごとの最新回答をまとめて取得（時間フィルターなし）
+    # UserResponse に learning_session_id がないため時間範囲での絞り込みは行わず、
+    # ユーザーがその動画の問題に回答したかどうかだけを見る
+    responses_by_user_q =
       if question_ids.any? && user_ids.any?
-        UserResponse
-          .where(user_id: user_ids, question_id: question_ids)
-          .select(:id, :user_id, :question_id, :is_correct, :created_at)
-          .to_a
+        raw = UserResponse
+                .where(user_id: user_ids, question_id: question_ids)
+                .select(:user_id, :question_id, :is_correct, :created_at)
+                .order(:created_at)
+                .to_a
+        # 同じユーザー×問題が複数あれば最新を優先
+        result = Hash.new { |h, k| h[k] = {} }
+        raw.each { |r| result[r.user_id][r.question_id] = r }
+        result
       else
-        []
+        Hash.new { |h, k| h[k] = {} }
       end
 
     q_headers = questions.each_with_index.map { |q, i| "Q#{i + 1}: #{(q.content || '').truncate(30)}" }
@@ -1399,17 +1407,10 @@ class VideoManagementController < ApplicationController
       csv << [ "メールアドレス", "グループ", "開始時刻", "終了時刻", "学習時間(分)", *q_headers ]
 
       sessions_loaded.each do |session|
-        end_time = session.session_end_time || Time.current
-
-        session_responses = all_responses.select do |r|
-          r.user_id == session.user_id &&
-            r.created_at >= session.session_start_time &&
-            r.created_at <= end_time
-        end
-        response_by_q = session_responses.index_by(&:question_id)
+        user_responses = responses_by_user_q[session.user_id]
 
         q_results = questions.map do |q|
-          r = response_by_q[q.id]
+          r = user_responses[q.id]
           if r.nil?          then "未回答"
           elsif r.is_correct then "○"
           else                    "×"
