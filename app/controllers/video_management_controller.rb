@@ -1369,18 +1369,19 @@ class VideoManagementController < ApplicationController
   def export_classification
     require "csv"
 
-    email_order = params[:email_order] == "desc" ? "desc" : "asc"
+    desc_order = params[:email_order] == "desc"
 
-    sessions = @video.learning_sessions
-                     .joins(:user)
-                     .includes(:user)
-                     .order(Arel.sql("users.email #{email_order}"))
+    sessions_loaded = @video.learning_sessions
+                            .includes(:user)
+                            .to_a
+                            .select { |s| s.user.present? }
+                            .sort_by { |s| s.user.email.to_s.downcase }
+    sessions_loaded.reverse! if desc_order
 
-    questions = @video.questions.order(:time_position)
+    questions = @video.questions.order(:time_position).to_a
 
-    # セッションごとの回答をまとめて取得（N+1防止）
-    question_ids = questions.pluck(:id)
-    user_ids     = sessions.pluck(:user_id).uniq
+    question_ids = questions.map(&:id)
+    user_ids     = sessions_loaded.map(&:user_id).uniq
 
     all_responses =
       if question_ids.any? && user_ids.any?
@@ -1392,13 +1393,12 @@ class VideoManagementController < ApplicationController
         []
       end
 
-    q_headers = questions.each_with_index.map { |q, i| "Q#{i + 1}: #{(q.question_text || '').truncate(30)}" }
+    q_headers = questions.each_with_index.map { |q, i| "Q#{i + 1}: #{(q.content || '').truncate(30)}" }
 
     csv_data = "﻿" + CSV.generate(headers: true, encoding: "UTF-8") do |csv|
       csv << [ "メールアドレス", "グループ", "開始時刻", "終了時刻", "学習時間(分)", *q_headers ]
 
-      sessions.each do |session|
-        next unless session.user.present?
+      sessions_loaded.each do |session|
         end_time = session.session_end_time || Time.current
 
         session_responses = all_responses.select do |r|
@@ -1419,7 +1419,7 @@ class VideoManagementController < ApplicationController
         csv << [
           session.user.email,
           session.session_group_label,
-          session.session_start_time.strftime("%Y-%m-%d %H:%M:%S"),
+          session.session_start_time&.strftime("%Y-%m-%d %H:%M:%S") || "",
           session.session_end_time&.strftime("%Y-%m-%d %H:%M:%S") || "進行中",
           session.duration_in_minutes.round(1),
           *q_results
