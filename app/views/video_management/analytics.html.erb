@@ -5036,14 +5036,19 @@ async function previewManualClassification() {
       matched++;
       ds.hidden = false;
       ds._mc_highlight = true;
-      ds.borderColor          = '#f59e0b';
+      ds.borderColor          = '#22D3EE';
       ds.borderWidth          = 3;
-      ds.pointBackgroundColor = '#f59e0b';
-      ds.pointBorderColor     = '#f59e0b';
-      ds.pointRadius          = 3;
+      ds.pointBackgroundColor = '#22D3EE';
+      ds.pointBorderColor     = '#ffffff';
+      ds.pointBorderWidth     = 1.5;
+      ds.pointRadius          = 5;
     } else {
-      ds.hidden = true;
+      ds.hidden = false;
       ds._mc_highlight = false;
+      ds.borderColor          = 'rgba(150,150,150,0.12)';
+      ds.pointBackgroundColor = 'rgba(150,150,150,0.12)';
+      ds.pointBorderColor     = 'rgba(150,150,150,0.12)';
+      ds.pointRadius          = 2;
     }
   });
   chartInstances.userClassification.update('none');
@@ -5059,11 +5064,13 @@ function clearManualPreview() {
   });
   if (window.classificationMode === 'db') {
     chartInstances.userClassification.data.datasets.forEach(function(ds) {
+      ds.pointBorderWidth = 1;
       applyDbGroupColor(ds, ds.dbGroup || null);
     });
   } else {
     var groupColors = { groupA:'rgba(13,110,253,0.8)', groupB:'rgba(40,167,69,0.8)', groupC:'rgba(255,193,7,0.8)', groupD:'rgba(220,53,69,0.8)' };
     chartInstances.userClassification.data.datasets.forEach(function(ds) {
+      ds.pointBorderWidth = 1;
       if (ds.classification && groupColors[ds.classification]) {
         ds.borderColor = groupColors[ds.classification];
         ds.pointBackgroundColor = groupColors[ds.classification];
