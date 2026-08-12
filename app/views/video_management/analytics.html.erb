@@ -665,6 +665,31 @@
                     </div>
                   </div>
 
+                  <!-- 指標の統計サマリー -->
+                  <div class="border rounded p-3 mb-3" style="background:#f8f0ff;">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                      <span class="fw-semibold">📈 指標の統計サマリー</span>
+                      <button class="btn btn-sm btn-outline-primary" onclick="showMetricStats()">統計を計算</button>
+                    </div>
+                    <div id="metric-stats-panel" style="display:none;">
+                      <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-1" style="font-size:0.82rem;">
+                          <thead class="table-light">
+                            <tr>
+                              <th>指標</th>
+                              <th class="text-end">平均</th>
+                              <th class="text-end">中央値</th>
+                              <th class="text-end text-muted">最小</th>
+                              <th class="text-end text-muted">最大</th>
+                            </tr>
+                          </thead>
+                          <tbody id="metric-stats-tbody"></tbody>
+                        </table>
+                      </div>
+                      <small class="text-muted" id="metric-stats-count"></small>
+                    </div>
+                  </div>
+
                   <!-- K-means 自動分類 -->
                   <div class="border rounded p-3 mb-3" style="background:#f8fafc;">
                     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
@@ -5214,6 +5239,60 @@ async function loadSessionMetricsIntoTable() {
   });
 
   if (btn) { btn.disabled = false; btn.textContent = '📊 指標を再取得'; }
+}
+
+async function showMetricStats() {
+  var panel = document.getElementById('metric-stats-panel');
+  var tbody = document.getElementById('metric-stats-tbody');
+  var countEl = document.getElementById('metric-stats-count');
+  if (countEl) countEl.textContent = '取得中…';
+  if (panel) panel.style.display = '';
+  tbody.innerHTML = '';
+
+  var metrics = await fetchSessionMetrics();
+  if (!metrics) {
+    if (countEl) countEl.textContent = '取得失敗';
+    return;
+  }
+
+  var values = Object.values(metrics);
+  if (values.length === 0) {
+    if (countEl) countEl.textContent = 'データなし';
+    return;
+  }
+
+  var defs = [
+    { key: 'effective_speed', label: '有効速度',           fmt: function(v) { return v.toFixed(2) + 'x'; } },
+    { key: 'playing_speed',   label: '再生速度',           fmt: function(v) { return v.toFixed(2) + 'x'; } },
+    { key: 'skip_coverage',   label: 'スキップカバレッジ', fmt: function(v) { return v.toFixed(1) + '%'; } },
+    { key: 'skip_rate',       label: 'スキップ率',         fmt: function(v) { return v.toFixed(2) + '回/分'; } },
+    { key: 'duration_ratio',  label: '期間比',             fmt: function(v) { return v.toFixed(2); } }
+  ];
+
+  defs.forEach(function(d) {
+    var vals = values
+      .map(function(m) { return m[d.key]; })
+      .filter(function(v) { return v != null && !isNaN(v); })
+      .sort(function(a, b) { return a - b; });
+    if (vals.length === 0) return;
+
+    var mean   = vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
+    var mid    = vals.length / 2;
+    var median = vals.length % 2 === 0
+      ? (vals[Math.floor(mid) - 1] + vals[Math.ceil(mid)]) / 2
+      : vals[Math.floor(mid)];
+
+    tbody.innerHTML +=
+      '<tr>' +
+      '<td class="fw-semibold">' + d.label + '</td>' +
+      '<td class="text-end">' + d.fmt(mean) + '</td>' +
+      '<td class="text-end">' + d.fmt(median) + '</td>' +
+      '<td class="text-end text-muted">' + d.fmt(vals[0]) + '</td>' +
+      '<td class="text-end text-muted">' + d.fmt(vals[vals.length - 1]) + '</td>' +
+      '</tr>';
+  });
+
+  if (countEl) countEl.textContent = values.length + ' セッション分のデータ';
 }
 
 function refreshUcChart() {
