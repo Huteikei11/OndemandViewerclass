@@ -1366,6 +1366,67 @@ class VideoManagementController < ApplicationController
     send_data csv_data, filename: "sessions_detail_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv", type: "text/csv; charset=utf-8"
   end
 
+  def export_classification
+    require "csv"
+
+    email_order = params[:email_order] == "desc" ? :desc : :asc
+
+    sessions = @video.learning_sessions
+                     .joins(:user)
+                     .includes(:user, :timestamp_events)
+                     .order("users.email #{email_order}")
+
+    questions = @video.questions.includes(:options).order(:time_position)
+
+    # セッションごとの回答をまとめて取得（N+1防止）
+    question_ids = questions.pluck(:id)
+    user_ids     = sessions.map(&:user_id).uniq
+    all_responses = UserResponse
+                      .where(user_id: user_ids, question_id: question_ids)
+                      .select(:id, :user_id, :question_id, :is_correct, :created_at)
+                      .to_a
+
+    # session_start / session_end を使って「このセッション中の回答」を特定
+    q_headers = questions.each_with_index.map { |q, i| "Q#{i + 1}: #{q.question_text.truncate(30)}" }
+
+    csv_data = "﻿" + CSV.generate(headers: true, encoding: "UTF-8") do |csv|
+      csv << [ "メールアドレス", "グループ", "開始時刻", "終了時刻", "学習時間(分)", *q_headers ]
+
+      sessions.each do |session|
+        end_time = session.session_end_time || Time.current
+
+        # このセッション時間帯にこのユーザーが行った回答を抽出
+        session_responses = all_responses.select do |r|
+          r.user_id == session.user_id &&
+            r.created_at >= session.session_start_time &&
+            r.created_at <= end_time
+        end
+        response_by_q = session_responses.index_by(&:question_id)
+
+        q_results = questions.map do |q|
+          r = response_by_q[q.id]
+          if r.nil?   then "未回答"
+          elsif r.is_correct then "○"
+          else "×"
+          end
+        end
+
+        csv << [
+          session.user.email,
+          session.session_group_label,
+          session.session_start_time.strftime("%Y-%m-%d %H:%M:%S"),
+          session.session_end_time&.strftime("%Y-%m-%d %H:%M:%S") || "進行中",
+          session.duration_in_minutes.round(1),
+          *q_results
+        ]
+      end
+    end
+
+    send_data csv_data,
+              filename: "classification_#{@video.id}_#{Time.current.strftime('%Y%m%d')}.csv",
+              type: "text/csv; charset=utf-8"
+  end
+
   def export_events
     require "csv"
 

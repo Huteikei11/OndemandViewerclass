@@ -549,9 +549,17 @@
                 <div class="mb-3">
                   <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <div><strong>使い方：</strong>グラフのセッションラインをクリックして分類します。ダブルクリックでズームリセット。</div>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 flex-wrap">
                       <button class="btn btn-sm btn-outline-primary" id="refreshUcChartBtn" onclick="refreshUcChart()">↺ グラフを更新</button>
                       <button class="btn btn-sm btn-warning" onclick="resetUserClassification()">ビジュアル分類をリセット</button>
+                      <div class="dropdown">
+                        <%= link_to "📥 CSV出力", "#", class: "btn btn-sm btn-outline-success dropdown-toggle", "data-bs-toggle": "dropdown" %>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                          <li><span class="dropdown-header small">メールアドレス順</span></li>
+                          <li><%= link_to "↑ 昇順 (A→Z)", video_management_export_classification_path(video_id: @video, email_order: "asc", format: :csv), class: "dropdown-item", data: { turbo: false } %></li>
+                          <li><%= link_to "↓ 降順 (Z→A)", video_management_export_classification_path(video_id: @video, email_order: "desc", format: :csv), class: "dropdown-item", data: { turbo: false } %></li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
 
