@@ -1404,7 +1404,7 @@ class VideoManagementController < ApplicationController
     q_headers = questions.each_with_index.map { |q, i| "Q#{i + 1}: #{(q.content || '').truncate(30)}" }
 
     csv_data = "﻿" + CSV.generate(headers: true, encoding: "UTF-8") do |csv|
-      csv << [ "メールアドレス", "グループ", "開始時刻", "終了時刻", "学習時間(分)", *q_headers ]
+      csv << [ "メールアドレス", "グループ", "開始時刻", "終了時刻", "学習時間(分)", "セッション経過時間(分)", *q_headers ]
 
       sessions_loaded.each do |session|
         user_responses = responses_by_user_q[session.user_id]
@@ -1423,6 +1423,7 @@ class VideoManagementController < ApplicationController
           session.session_start_time&.strftime("%Y-%m-%d %H:%M:%S") || "",
           session.session_end_time&.strftime("%Y-%m-%d %H:%M:%S") || "進行中",
           session.duration_in_minutes.round(1),
+          (session.last_session_elapsed.to_f / 60.0).round(1),
           *q_results
         ]
       end
