@@ -751,6 +751,53 @@
                     </div>
                   </div>
 
+                  <!-- 手動分類 -->
+                  <div class="border rounded p-3 mb-3" style="background:#f0f7ff;">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                      <span class="fw-semibold">🔧 手動分類（条件でフィルタリング）</span>
+                      <span class="text-muted small">条件を設定してプレビュー → 保存でDBグループに一括登録</span>
+                    </div>
+                    <table class="table table-sm table-borderless mb-2" style="max-width:600px;">
+                      <thead><tr class="text-muted small"><th>指標</th><th>条件</th><th>閾値</th></tr></thead>
+                      <tbody>
+                        <% [
+                          ['effective_speed', '有効速度 (×)',   '1.3',  '0.01'],
+                          ['playing_speed',   '再生速度 (×)',   '1.3',  '0.01'],
+                          ['skip_coverage',   'スキップ率 (%)', '12',   '1'   ],
+                          ['duration_ratio',  '期間比',         '0.15', '0.01']
+                        ].each do |key, label, default_val, step| %>
+                          <tr>
+                            <td class="align-middle small fw-semibold" style="width:160px;"><%= label %></td>
+                            <td class="align-middle" style="width:130px;">
+                              <select id="mcOp_<%= key %>" class="form-select form-select-sm">
+                                <option value="none">使わない</option>
+                                <option value="gte">以上 (≥)</option>
+                                <option value="lte">以下 (≤)</option>
+                              </select>
+                            </td>
+                            <td class="align-middle">
+                              <input type="number" id="mcVal_<%= key %>" class="form-control form-control-sm"
+                                     style="width:100px;" value="<%= default_val %>" step="<%= step %>">
+                            </td>
+                          </tr>
+                        <% end %>
+                      </tbody>
+                    </table>
+                    <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
+                      <label class="small fw-semibold mb-0">保存先グループ:</label>
+                      <select id="mcTargetGroup" class="form-select form-select-sm" style="width:auto;">
+                        <% LearningSession::SESSION_GROUPS.each do |key, label| %>
+                          <option value="<%= key %>"><%= label %></option>
+                        <% end %>
+                      </select>
+                      <button class="btn btn-sm btn-outline-primary" onclick="previewManualClassification()">プレビュー</button>
+                      <button class="btn btn-sm btn-success" onclick="saveManualClassification()">保存</button>
+                      <button class="btn btn-sm btn-outline-secondary" onclick="clearManualPreview()">プレビュー解除</button>
+                      <span id="mc-msg" class="small text-muted ms-1"></span>
+                    </div>
+                    <div id="mc-preview-count" class="mt-1 small text-muted"></div>
+                  </div>
+
                   <!-- 横軸（経過時間）の最大値スライダー -->
                   <div class="mt-3 mb-3 p-3 border rounded bg-light">
                     <div class="fw-semibold small mb-2">横軸の最大表示時間</div>
@@ -4911,6 +4958,168 @@ function filterUcByDbGroup(group) {
   chartInstances.userClassification.update('none');
 }
 
+// ===== 手動分類 =====
+
+var sessionMetricsCache = null; // { session_id(number): { effective_speed, playing_speed, skip_coverage, duration_ratio } }
+
+async function fetchSessionMetrics() {
+  if (sessionMetricsCache) return sessionMetricsCache;
+  var msg = document.getElementById('mc-msg');
+  if (msg) msg.textContent = '指標データを取得中…';
+  try {
+    var url = '/videos/' + videoIdGlobal + '/management/session_metrics';
+    var resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || '不明');
+    sessionMetricsCache = {};
+    data.session_metrics.forEach(function(m) {
+      // skip_coverage は % 表示用に100倍して保存
+      sessionMetricsCache[m.session_id] = {
+        effective_speed: m.effective_speed,
+        playing_speed:   m.playing_speed,
+        skip_coverage:   +(m.skip_coverage * 100).toFixed(2),
+        duration_ratio:  m.duration_ratio
+      };
+    });
+    if (msg) msg.textContent = '';
+    return sessionMetricsCache;
+  } catch(e) {
+    if (msg) msg.textContent = '取得失敗: ' + e.message;
+    return null;
+  }
+}
+
+function getManualConditions() {
+  var metrics = ['effective_speed', 'playing_speed', 'skip_coverage', 'duration_ratio'];
+  return metrics.map(function(key) {
+    var op  = document.getElementById('mcOp_'  + key).value;
+    var val = parseFloat(document.getElementById('mcVal_' + key).value);
+    return { key: key, op: op, val: val };
+  }).filter(function(c) { return c.op !== 'none' && !isNaN(c.val); });
+}
+
+function matchesConditions(metrics, conditions) {
+  return conditions.every(function(c) {
+    var v = metrics[c.key];
+    if (v == null) return false;
+    if (c.op === 'gte') return v >= c.val;
+    if (c.op === 'lte') return v <= c.val;
+    return true;
+  });
+}
+
+async function previewManualClassification() {
+  var conditions = getManualConditions();
+  var countEl = document.getElementById('mc-preview-count');
+  if (conditions.length === 0) {
+    if (countEl) countEl.textContent = '条件を1つ以上設定してください。';
+    return;
+  }
+  var metrics = await fetchSessionMetrics();
+  if (!metrics || !chartInstances.userClassification) return;
+
+  var matched = 0, total = 0;
+  chartInstances.userClassification.data.datasets.forEach(function(ds) {
+    var m = metrics[ds.sessionId];
+    total++;
+    if (m && matchesConditions(m, conditions)) {
+      matched++;
+      ds.hidden = false;
+      ds._mc_highlight = true;
+      ds.borderColor          = '#f59e0b';
+      ds.borderWidth          = 3;
+      ds.pointBackgroundColor = '#f59e0b';
+      ds.pointBorderColor     = '#f59e0b';
+      ds.pointRadius          = 3;
+    } else {
+      ds.hidden = true;
+      ds._mc_highlight = false;
+    }
+  });
+  chartInstances.userClassification.update('none');
+  if (countEl) countEl.textContent = '条件に合致: ' + matched + ' / ' + total + ' セッション';
+}
+
+function clearManualPreview() {
+  if (!chartInstances.userClassification) return;
+  // 現在のモードに応じて色をリセット
+  chartInstances.userClassification.data.datasets.forEach(function(ds) {
+    ds.hidden = false;
+    ds._mc_highlight = false;
+  });
+  if (window.classificationMode === 'db') {
+    chartInstances.userClassification.data.datasets.forEach(function(ds) {
+      applyDbGroupColor(ds, ds.dbGroup || null);
+    });
+  } else {
+    var groupColors = { groupA:'rgba(13,110,253,0.8)', groupB:'rgba(40,167,69,0.8)', groupC:'rgba(255,193,7,0.8)', groupD:'rgba(220,53,69,0.8)' };
+    chartInstances.userClassification.data.datasets.forEach(function(ds) {
+      if (ds.classification && groupColors[ds.classification]) {
+        ds.borderColor = groupColors[ds.classification];
+        ds.pointBackgroundColor = groupColors[ds.classification];
+        ds.pointBorderColor = groupColors[ds.classification];
+        ds.borderWidth = 3; ds.pointRadius = 3;
+      } else {
+        ds.borderColor = 'rgba(128,128,128,0.3)';
+        ds.pointBackgroundColor = '#999'; ds.pointBorderColor = '#999';
+        ds.borderWidth = 2; ds.pointRadius = 2;
+      }
+    });
+  }
+  chartInstances.userClassification.update('none');
+  var countEl = document.getElementById('mc-preview-count');
+  if (countEl) countEl.textContent = '';
+}
+
+async function saveManualClassification() {
+  var conditions = getManualConditions();
+  var group = document.getElementById('mcTargetGroup').value;
+  var msg   = document.getElementById('mc-msg');
+  if (conditions.length === 0) { if (msg) msg.textContent = '条件を1つ以上設定してください。'; return; }
+  if (!group)                   { if (msg) msg.textContent = 'グループを選択してください。'; return; }
+
+  var metrics = await fetchSessionMetrics();
+  if (!metrics) return;
+
+  var assignments = {};
+  Object.entries(metrics).forEach(function([sid, m]) {
+    if (matchesConditions(m, conditions)) {
+      assignments[parseInt(sid, 10)] = group;
+    }
+  });
+
+  if (Object.keys(assignments).length === 0) {
+    if (msg) msg.textContent = '条件に合致するセッションがありません。';
+    return;
+  }
+
+  var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  var url = '<%= video_management_bulk_update_groups_path(video_id: @video) %>';
+  if (msg) msg.textContent = '保存中…';
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify({ assignments: assignments })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.ok) {
+      Object.assign(window.sessionGroupData, assignments);
+      // DB グループ色を再適用
+      loadInitialDbGroups();
+      if (msg) msg.textContent = Object.keys(assignments).length + '件を「' + (SESSION_GROUP_LABELS_JS[group] || group) + '」に保存しました。';
+      var countEl = document.getElementById('mc-preview-count');
+      if (countEl) countEl.textContent = '';
+      updateDbClassificationStats();
+      updateDbFullStats();
+    } else {
+      if (msg) msg.textContent = '保存失敗: ' + (data.error || '不明');
+    }
+  })
+  .catch(function() { if (msg) msg.textContent = '通信エラー。'; });
+}
+
 function refreshUcChart() {
   var btn = document.getElementById('refreshUcChartBtn');
   if (btn) { btn.disabled = true; btn.textContent = '更新中…'; }
@@ -4922,6 +5131,7 @@ function refreshUcChart() {
     chartInstances.userClassification = null;
   }
   window.scoreTimelineData = null;
+  sessionMetricsCache = null; // 手動分類の指標キャッシュもクリア
   initializeUserClassificationChart();
   var pollCount = 0;
   var poll = setInterval(function() {

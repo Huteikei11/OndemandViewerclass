@@ -1515,6 +1515,20 @@ class VideoManagementController < ApplicationController
   # ============================================================
   # K-meansクラスタリング
   # ============================================================
+  def session_metrics
+    sessions = @video.learning_sessions
+                     .where("last_session_elapsed > 0")
+                     .includes(:timestamp_events)
+    video_length = resolve_video_length(sessions)
+    features     = compute_session_features(sessions, video_length)
+    render json: {
+      ok: true,
+      session_metrics: features.map { |f|
+        { session_id: f[:session_id], current_group: f[:current_group], **f[:raw] }
+      }
+    }
+  end
+
   def cluster_sessions
     k = (params[:k] || 6).to_i.clamp(2, 8)
 
@@ -1524,101 +1538,8 @@ class VideoManagementController < ApplicationController
 
     return render json: { ok: false, error: "セッションが不足しています" } if sessions.size < 2
 
-    # 動画長：設定値を優先し、未設定なら全セッションの last_video_time 上位 10% 平均で推定
-    video_length =
-      if @video.duration.present? && @video.duration > 0
-        @video.duration.to_f
-      else
-        all_vt = sessions.map(&:last_video_time).sort
-        top_n  = [ (all_vt.size * 0.1).ceil, 1 ].max
-        [ all_vt.last(top_n).sum.to_f / top_n, 1.0 ].max
-      end
-
-    # セッションごとの特徴量を計算
-    session_features = sessions.filter_map do |session|
-      elapsed    = session.last_session_elapsed.to_f
-      video_time = session.last_video_time.to_f
-      next if elapsed <= 0
-
-      skip_count  = 0
-      skip_amount = 0.0
-
-      # 一時停止を除いた再生速度の計算用
-      playing           = false
-      seg_start_elapsed = nil
-      seg_start_vt      = nil
-      total_play_dt     = 0.0
-      total_play_dv     = 0.0
-
-      session.timestamp_events.order(:session_elapsed).each do |e|
-        et = e.event_type
-        el = e.session_elapsed.to_f
-        vt = e.video_time.to_f
-
-        # シーク/スキップ: スキップジャンプを除いてセグメントを分割
-        if et == "video_skip" || et == "video_seek"
-          add = e.additional_data
-          add = JSON.parse(add) rescue nil if add.is_a?(String)
-          if add.is_a?(Hash)
-            from_pos = add["from"].to_f
-            to_pos   = add["to"].to_f
-            if to_pos > from_pos
-              skip_count  += 1
-              skip_amount += (to_pos - from_pos)
-            end
-            # 再生中なら from 位置までのセグメントを確定し、to 位置から再開
-            if playing && seg_start_elapsed
-              dt = el - seg_start_elapsed
-              dv = from_pos - seg_start_vt
-              if dt > 0.5 && dv >= 0
-                total_play_dt += dt
-                total_play_dv += dv
-              end
-              seg_start_elapsed = el
-              seg_start_vt      = to_pos
-            end
-          end
-          next
-        end
-
-        case et
-        when "video_play", "session_start"
-          playing           = true
-          seg_start_elapsed = el
-          seg_start_vt      = vt
-        when "video_pause", "session_end"
-          if playing && seg_start_elapsed
-            dt = el - seg_start_elapsed
-            dv = vt - seg_start_vt
-            if dt > 0.5 && dv >= 0
-              total_play_dt += dt
-              total_play_dv += dv
-            end
-          end
-          playing           = false
-          seg_start_elapsed = nil
-        end
-      end
-
-      playing_speed =
-        if total_play_dt > 0
-          (total_play_dv / total_play_dt).round(3)
-        else
-          (video_time / elapsed).round(3)  # フォールバック
-        end
-
-      {
-        session_id:      session.id,
-        current_group:   session.session_group,
-        raw: {
-          effective_speed:  (video_time / elapsed).round(3),
-          skip_coverage:    (skip_amount / video_length).round(3),
-          duration_ratio:   (elapsed / video_length).round(3),
-          skip_rate:        (skip_count / [ elapsed / 60.0, 0.1 ].max).round(3),
-          playing_speed:    playing_speed
-        }
-      }
-    end
+    video_length     = resolve_video_length(sessions)
+    session_features = compute_session_features(sessions, video_length)
 
     feature_keys = %i[effective_speed skip_coverage duration_ratio skip_rate playing_speed]
     raw_matrix   = session_features.map { |sf| feature_keys.map { |k| sf[:raw][k] } }
@@ -1855,6 +1776,101 @@ class VideoManagementController < ApplicationController
   def check_management_permission
     unless current_user.can_manage_video?(@video)
       redirect_to root_path, alert: "この動画を管理する権限がありません。"
+    end
+  end
+
+  # ---- 共通：特徴量計算 ----
+
+  def resolve_video_length(sessions)
+    if @video.duration.present? && @video.duration > 0
+      @video.duration.to_f
+    else
+      all_vt = sessions.map(&:last_video_time).sort
+      top_n  = [ (all_vt.size * 0.1).ceil, 1 ].max
+      [ all_vt.last(top_n).sum.to_f / top_n, 1.0 ].max
+    end
+  end
+
+  def compute_session_features(sessions, video_length)
+    sessions.filter_map do |session|
+      elapsed    = session.last_session_elapsed.to_f
+      video_time = session.last_video_time.to_f
+      next if elapsed <= 0
+
+      skip_count  = 0
+      skip_amount = 0.0
+      playing           = false
+      seg_start_elapsed = nil
+      seg_start_vt      = nil
+      total_play_dt     = 0.0
+      total_play_dv     = 0.0
+
+      session.timestamp_events.order(:session_elapsed).each do |e|
+        et = e.event_type
+        el = e.session_elapsed.to_f
+        vt = e.video_time.to_f
+
+        if et == "video_skip" || et == "video_seek"
+          add = e.additional_data
+          add = JSON.parse(add) rescue nil if add.is_a?(String)
+          if add.is_a?(Hash)
+            from_pos = add["from"].to_f
+            to_pos   = add["to"].to_f
+            if to_pos > from_pos
+              skip_count  += 1
+              skip_amount += (to_pos - from_pos)
+            end
+            if playing && seg_start_elapsed
+              dt = el - seg_start_elapsed
+              dv = from_pos - seg_start_vt
+              if dt > 0.5 && dv >= 0
+                total_play_dt += dt
+                total_play_dv += dv
+              end
+              seg_start_elapsed = el
+              seg_start_vt      = to_pos
+            end
+          end
+          next
+        end
+
+        case et
+        when "video_play", "session_start"
+          playing           = true
+          seg_start_elapsed = el
+          seg_start_vt      = vt
+        when "video_pause", "session_end"
+          if playing && seg_start_elapsed
+            dt = el - seg_start_elapsed
+            dv = vt - seg_start_vt
+            if dt > 0.5 && dv >= 0
+              total_play_dt += dt
+              total_play_dv += dv
+            end
+          end
+          playing           = false
+          seg_start_elapsed = nil
+        end
+      end
+
+      playing_speed =
+        if total_play_dt > 0
+          (total_play_dv / total_play_dt).round(3)
+        else
+          (video_time / elapsed).round(3)
+        end
+
+      {
+        session_id:    session.id,
+        current_group: session.session_group,
+        raw: {
+          effective_speed: (video_time / elapsed).round(3),
+          skip_coverage:   (skip_amount / video_length).round(3),
+          duration_ratio:  (elapsed / video_length).round(3),
+          skip_rate:       (skip_count / [ elapsed / 60.0, 0.1 ].max).round(3),
+          playing_speed:   playing_speed
+        }
+      }
     end
   end
 
