@@ -679,6 +679,7 @@
                               <th>指標</th>
                               <th class="text-end">平均</th>
                               <th class="text-end">中央値</th>
+                              <th class="text-end">分散</th>
                               <th class="text-end text-muted">最小</th>
                               <th class="text-end text-muted">最大</th>
                             </tr>
@@ -5291,12 +5292,14 @@ async function showMetricStats() {
     var median = vals.length % 2 === 0
       ? (vals[Math.floor(mid) - 1] + vals[Math.ceil(mid)]) / 2
       : vals[Math.floor(mid)];
+    var variance = vals.reduce(function(acc, v) { return acc + (v - mean) * (v - mean); }, 0) / vals.length;
 
     tbody.innerHTML +=
       '<tr>' +
       '<td class="fw-semibold">' + d.label + '</td>' +
       '<td class="text-end">' + d.fmt(mean) + '</td>' +
       '<td class="text-end">' + d.fmt(median) + '</td>' +
+      '<td class="text-end">' + variance.toFixed(4) + '</td>' +
       '<td class="text-end text-muted">' + d.fmt(vals[0]) + '</td>' +
       '<td class="text-end text-muted">' + d.fmt(vals[vals.length - 1]) + '</td>' +
       '</tr>';
