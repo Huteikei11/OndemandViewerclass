@@ -622,19 +622,19 @@
                         <label class="btn btn-sm btn-outline-primary" for="dbGroupNormal">等倍</label>
 
                         <input type="radio" class="btn-check" name="dbClassificationGroup" id="dbGroupFast" value="fast_speed">
-                        <label class="btn btn-sm" for="dbGroupFast" style="border:1px solid #8B5CF6;color:#8B5CF6;">倍速</label>
+                        <label class="btn btn-sm btn-outline-success" for="dbGroupFast">倍速</label>
 
                         <input type="radio" class="btn-check" name="dbClassificationGroup" id="dbGroupSkip" value="skip_heavy">
                         <label class="btn btn-sm btn-outline-warning" for="dbGroupSkip">飛ばしが多い</label>
 
                         <input type="radio" class="btn-check" name="dbClassificationGroup" id="dbGroupFastSkip" value="fast_and_skip">
-                        <label class="btn btn-sm btn-outline-danger" for="dbGroupFastSkip">倍速と飛ばしの混在</label>
+                        <label class="btn btn-sm" for="dbGroupFastSkip" style="border:1px solid #F97316;color:#F97316;">倍速と飛ばしの混在</label>
 
                         <input type="radio" class="btn-check" name="dbClassificationGroup" id="dbGroupShort" value="too_short">
-                        <label class="btn btn-sm" for="dbGroupShort" style="border:1px solid #EC4899;color:#EC4899;">異様に視聴が短い</label>
+                        <label class="btn btn-sm btn-outline-danger" for="dbGroupShort">異様に視聴が短い</label>
 
                         <input type="radio" class="btn-check" name="dbClassificationGroup" id="dbGroupLong" value="too_long">
-                        <label class="btn btn-sm" for="dbGroupLong" style="border:1px solid #14B8A6;color:#14B8A6;">視聴が超長い（その他）</label>
+                        <label class="btn btn-sm" for="dbGroupLong" style="border:1px solid #8B5CF6;color:#8B5CF6;">視聴が超長い（その他）</label>
 
                         <input type="radio" class="btn-check" name="dbClassificationGroup" id="dbGroupNone" value="">
                         <label class="btn btn-sm btn-outline-secondary" for="dbGroupNone">× 解除</label>
@@ -878,11 +878,11 @@
                       <div id="uc-db-filter" class="d-flex flex-wrap gap-1" style="display:none;">
                         <button class="btn btn-sm btn-secondary" id="ucDfAll" onclick="filterUcByDbGroup(null)">すべて表示</button>
                         <button class="btn btn-sm btn-outline-primary" id="ucDfNormal" onclick="filterUcByDbGroup('normal')">等倍</button>
-                        <button class="btn btn-sm" id="ucDfFast" style="border:1px solid #8B5CF6;color:#8B5CF6;" onclick="filterUcByDbGroup('fast_speed')">倍速</button>
+                        <button class="btn btn-sm btn-outline-success" id="ucDfFast" onclick="filterUcByDbGroup('fast_speed')">倍速</button>
                         <button class="btn btn-sm btn-outline-warning" id="ucDfSkip" onclick="filterUcByDbGroup('skip_heavy')">飛ばしが多い</button>
-                        <button class="btn btn-sm btn-outline-danger" id="ucDfFastSkip" onclick="filterUcByDbGroup('fast_and_skip')">倍速と飛ばしの混在</button>
-                        <button class="btn btn-sm" id="ucDfShort" style="border:1px solid #EC4899;color:#EC4899;" onclick="filterUcByDbGroup('too_short')">異様に視聴が短い</button>
-                        <button class="btn btn-sm" id="ucDfLong" style="border:1px solid #14B8A6;color:#14B8A6;" onclick="filterUcByDbGroup('too_long')">視聴が超長い</button>
+                        <button class="btn btn-sm" id="ucDfFastSkip" style="border:1px solid #F97316;color:#F97316;" onclick="filterUcByDbGroup('fast_and_skip')">倍速と飛ばしの混在</button>
+                        <button class="btn btn-sm btn-outline-danger" id="ucDfShort" onclick="filterUcByDbGroup('too_short')">異様に視聴が短い</button>
+                        <button class="btn btn-sm" id="ucDfLong" style="border:1px solid #8B5CF6;color:#8B5CF6;" onclick="filterUcByDbGroup('too_long')">視聴が超長い</button>
                         <button class="btn btn-sm btn-outline-secondary" id="ucDfNull" onclick="filterUcByDbGroup('__unclassified__')">未分類</button>
                       </div>
                     </div>
@@ -4552,12 +4552,12 @@ function classifyUserSession(datasetIndex) {
 
 // DBグループの色定義
 const DB_GROUP_COLORS = {
-  'normal':        'rgba(59, 130, 246, 0.9)',
-  'fast_speed':    'rgba(139, 92, 246, 0.9)',
-  'skip_heavy':    'rgba(245, 158, 11, 0.9)',
-  'fast_and_skip': 'rgba(239, 68, 68, 0.9)',
-  'too_short':     'rgba(236, 72, 153, 0.9)',
-  'too_long':      'rgba(20, 184, 166, 0.9)'
+  'normal':        'rgba(59, 130, 246, 0.9)',   // 青
+  'fast_speed':    'rgba(34, 197, 94, 0.9)',    // 緑
+  'skip_heavy':    'rgba(245, 158, 11, 0.9)',   // 黄
+  'fast_and_skip': 'rgba(249, 115, 22, 0.9)',   // 橙
+  'too_short':     'rgba(239, 68, 68, 0.9)',    // 赤
+  'too_long':      'rgba(139, 92, 246, 0.9)'    // 紫
 };
 
 function applyDbGroupColor(dataset, group) {
