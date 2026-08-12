@@ -1653,6 +1653,11 @@ class VideoManagementController < ApplicationController
     }
   end
 
+  def reset_all_groups
+    @video.learning_sessions.update_all(session_group: nil)
+    render json: { ok: true }
+  end
+
   def bulk_update_groups
     assignments = params[:assignments]
     return render json: { ok: false, error: "データなし" }, status: :bad_request unless assignments

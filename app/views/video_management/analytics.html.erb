@@ -552,6 +552,7 @@
                     <div class="d-flex gap-2 flex-wrap">
                       <button class="btn btn-sm btn-outline-primary" id="refreshUcChartBtn" onclick="refreshUcChart()">↺ グラフを更新</button>
                       <button class="btn btn-sm btn-warning" onclick="resetUserClassification()">ビジュアル分類をリセット</button>
+                      <button class="btn btn-sm btn-outline-danger" onclick="resetAllDbGroups()">DBグループ分類をリセット</button>
                     </div>
                   </div>
 
@@ -5267,6 +5268,43 @@ function resetUserClassification() {
   console.log('[ユーザー分類] ローカルストレージの分類データを削除');
   
   document.getElementById('classificationStats').innerHTML = '';
+}
+
+// DBに保存されたグループ分類をすべてリセット
+async function resetAllDbGroups() {
+  if (!confirm('DBに保存されたすべてのグループ分類をリセットします。\nこの操作は取り消せません。よろしいですか？')) return;
+
+  var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  var url = '<%= video_management_reset_all_groups_path(video_id: @video) %>';
+  try {
+    var resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }
+    });
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || '不明');
+
+    // sessionGroupData をクリア
+    Object.keys(window.sessionGroupData).forEach(function(k) {
+      delete window.sessionGroupData[k];
+    });
+
+    // グラフのデータセット色を未分類（グレー）に戻す
+    if (chartInstances.userClassification) {
+      chartInstances.userClassification.data.datasets.forEach(function(ds) {
+        ds.dbGroup = null;
+        if (window.classificationMode === 'db') {
+          applyDbGroupColor(ds, null);
+        }
+      });
+      chartInstances.userClassification.update('none');
+    }
+
+    updateDbClassificationStats();
+    updateDbFullStats();
+  } catch(e) {
+    alert('リセットに失敗しました: ' + e.message);
+  }
 }
 
 // 分類ごとの統計を計算・表示

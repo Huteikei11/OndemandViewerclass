@@ -63,6 +63,7 @@ Rails.application.routes.draw do
     get  "management/cluster_sessions",    to: "video_management#cluster_sessions",    as: "management_cluster_sessions"
     get  "management/session_metrics",     to: "video_management#session_metrics",     as: "management_session_metrics"
     post "management/bulk_update_groups",  to: "video_management#bulk_update_groups",  as: "management_bulk_update_groups"
+    post "management/reset_all_groups",    to: "video_management#reset_all_groups",    as: "management_reset_all_groups"
     post "management/save_session", to: "video_management#save_session_data", as: "management_save_session"
     delete "management/session/:session_id", to: "video_management#destroy_session", as: "management_destroy_session"
 
