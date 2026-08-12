@@ -1854,13 +1854,27 @@ class VideoManagementController < ApplicationController
   # ---- 共通：特徴量計算 ----
 
   def resolve_video_length(sessions)
-    if @video.duration.present? && @video.duration > 0
-      @video.duration.to_f
+    return @video.duration.to_f if @video.duration.present? && @video.duration > 0
+
+    all_vt     = sessions.map { |s| s.last_video_time.to_f }.select { |v| v > 0 }.sort
+    vt_estimate = if all_vt.any?
+      top_n = [ (all_vt.size * 0.1).ceil, 1 ].max
+      all_vt.last(top_n).sum.to_f / top_n
     else
-      all_vt = sessions.map(&:last_video_time).sort
-      top_n  = [ (all_vt.size * 0.1).ceil, 1 ].max
-      [ all_vt.last(top_n).sum.to_f / top_n, 1.0 ].max
+      0.0
     end
+
+    # last_video_time が不正確な場合に備え、スキップイベントの最大位置を下限に使う
+    max_event_pos = sessions.flat_map(&:timestamp_events)
+                            .select { |e| e.event_type == "video_skip" || e.event_type == "video_seek" }
+                            .filter_map { |e|
+                              add = e.additional_data
+                              add = JSON.parse(add) rescue nil if add.is_a?(String)
+                              next unless add.is_a?(Hash)
+                              [ add["to"].to_f, add["from"].to_f ].max
+                            }.max || 0.0
+
+    [ vt_estimate, max_event_pos, 1.0 ].max
   end
 
   def compute_session_features(sessions, video_length)
@@ -1937,7 +1951,7 @@ class VideoManagementController < ApplicationController
         current_group: session.session_group,
         raw: {
           effective_speed: (video_time / elapsed).round(3),
-          skip_coverage:   (skip_amount / video_length).round(3),
+          skip_coverage:   [ (skip_amount / video_length), 1.0 ].min.round(3),
           duration_ratio:  (elapsed / video_length).round(3),
           skip_rate:       (skip_count / [ elapsed / 60.0, 0.1 ].max).round(3),
           playing_speed:   playing_speed
@@ -1996,13 +2010,14 @@ class VideoManagementController < ApplicationController
   def suggest_group_from_centroid(c)
     speed     = c[:effective_speed]
     skip_cov  = c[:skip_coverage]
+    skip_r    = c[:skip_rate].to_f
     dur_ratio = c[:duration_ratio]
 
     return "too_short"     if dur_ratio < 0.15
     return "too_long"      if dur_ratio > 3.0
-    return "fast_and_skip" if speed > 1.3 && skip_cov > 0.12
+    return "fast_and_skip" if speed > 1.3 && (skip_cov > 0.12 || skip_r > 2.0)
     return "fast_speed"    if speed > 1.3
-    return "skip_heavy"    if skip_cov > 0.12
+    return "skip_heavy"    if skip_cov > 0.12 || skip_r > 2.0
     "normal"
   end
 end

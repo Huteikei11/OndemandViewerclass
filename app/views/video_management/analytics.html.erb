@@ -746,7 +746,8 @@
                               <th>件数</th>
                               <th title="動画時間 ÷ 経過時間（一時停止含む）">有効速度</th>
                               <th title="一時停止・シーク除いた再生中の速度">再生速度</th>
-                              <th title="スキップした動画時間の割合">スキップ率</th>
+                              <th title="スキップした動画時間の割合（前進スキップ量 ÷ 動画長）">スキップカバレッジ (%)</th>
+                              <th title="1分あたりの前進スキップ回数">スキップ率 (回/分)</th>
                               <th title="経過時間 ÷ 動画長">期間比</th>
                               <th>自動推定</th>
                               <th>グループ名（確定）</th>
@@ -782,8 +783,9 @@
                         <% [
                           ['effective_speed', '有効速度 (×)',   '1.3',  '0.01'],
                           ['playing_speed',   '再生速度 (×)',   '1.3',  '0.01'],
-                          ['skip_coverage',   'スキップ率 (%)', '12',   '1'   ],
-                          ['duration_ratio',  '期間比',         '0.15', '0.01']
+                          ['skip_coverage',   'スキップカバレッジ (%)', '12',   '1'   ],
+                          ['skip_rate',       'スキップ率 (回/分)',     '2',    '0.1' ],
+                          ['duration_ratio',  '期間比',                 '0.15', '0.01']
                         ].each do |key, label, default_val, step| %>
                           <tr>
                             <td class="align-middle small fw-semibold" style="width:160px;"><%= label %></td>
@@ -1559,7 +1561,8 @@
                     <th title="再生速度変更回数">⚡</th>
                     <th class="metric-col" title="有効速度 = 動画再生時間 ÷ セッション経過時間" style="display:none; white-space:nowrap;">有効速度</th>
                     <th class="metric-col" title="再生速度（一時停止除く）" style="display:none; white-space:nowrap;">再生速度</th>
-                    <th class="metric-col" title="スキップ率 = スキップ量 ÷ 動画長 × 100" style="display:none; white-space:nowrap;">スキップ率</th>
+                    <th class="metric-col" title="スキップカバレッジ = 前進スキップ量 ÷ 動画長 × 100" style="display:none; white-space:nowrap;">スキップカバレッジ</th>
+                    <th class="metric-col" title="スキップ率 = 前進スキップ回数 ÷ 経過時間(分)" style="display:none; white-space:nowrap;">スキップ率(回/分)</th>
                     <th class="metric-col" title="期間比 = セッション時間 ÷ 動画長" style="display:none; white-space:nowrap;">期間比</th>
                     <th>グループ</th>
                     <th>エクスポート</th>
@@ -1607,6 +1610,7 @@
                       <td class="metric-col metric-effective-speed text-end" data-sid="<%= session.id %>" style="display:none; font-size:0.82rem;">-</td>
                       <td class="metric-col metric-playing-speed   text-end" data-sid="<%= session.id %>" style="display:none; font-size:0.82rem;">-</td>
                       <td class="metric-col metric-skip-coverage   text-end" data-sid="<%= session.id %>" style="display:none; font-size:0.82rem;">-</td>
+                      <td class="metric-col metric-skip-rate       text-end" data-sid="<%= session.id %>" style="display:none; font-size:0.82rem;">-</td>
                       <td class="metric-col metric-duration-ratio  text-end" data-sid="<%= session.id %>" style="display:none; font-size:0.82rem;">-</td>
                       <td style="min-width: 160px;">
                         <div class="d-flex align-items-center gap-1">
@@ -4770,6 +4774,7 @@ function renderKmeansTable(clusters) {
       '<td class="text-end">' + (+(c.centroid.effective_speed || 0)).toFixed(2) + 'x</td>' +
       '<td class="text-end">' + (+(c.centroid.playing_speed  || 0)).toFixed(2) + 'x</td>' +
       '<td class="text-end">' + ((+(c.centroid.skip_coverage || 0)) * 100).toFixed(1) + '%</td>' +
+      '<td class="text-end">' + (+(c.centroid.skip_rate      || 0)).toFixed(2) + '</td>' +
       '<td class="text-end">' + (+(c.centroid.duration_ratio  || 0)).toFixed(2) + '</td>' +
       '<td><span class="badge bg-secondary" style="font-size:0.75rem;">' + sugLabel + '</span></td>' +
       '<td><select class="form-select form-select-sm cluster-group-select" data-cluster-id="' + c.cluster_id + '"' +
@@ -4988,7 +4993,7 @@ function filterUcByDbGroup(group) {
 
 // ===== 手動分類 =====
 
-var sessionMetricsCache = null; // { session_id(number): { effective_speed, playing_speed, skip_coverage, duration_ratio } }
+var sessionMetricsCache = null; // { session_id(number): { effective_speed, playing_speed, skip_coverage(%), skip_rate(回/分), duration_ratio } }
 
 async function fetchSessionMetrics() {
   if (sessionMetricsCache) return sessionMetricsCache;
@@ -5002,11 +5007,12 @@ async function fetchSessionMetrics() {
     if (!data.ok) throw new Error(data.error || '不明');
     sessionMetricsCache = {};
     data.session_metrics.forEach(function(m) {
-      // skip_coverage は % 表示用に100倍して保存
+      // skip_coverage は % 表示用に100倍して保存。skip_rate は回/分のまま
       sessionMetricsCache[m.session_id] = {
         effective_speed: m.effective_speed,
         playing_speed:   m.playing_speed,
         skip_coverage:   +(m.skip_coverage * 100).toFixed(2),
+        skip_rate:       +(m.skip_rate || 0),
         duration_ratio:  m.duration_ratio
       };
     });
@@ -5019,7 +5025,7 @@ async function fetchSessionMetrics() {
 }
 
 function getManualConditions() {
-  var metrics = ['effective_speed', 'playing_speed', 'skip_coverage', 'duration_ratio'];
+  var metrics = ['effective_speed', 'playing_speed', 'skip_coverage', 'skip_rate', 'duration_ratio'];
   return metrics.map(function(key) {
     var op  = document.getElementById('mcOp_'  + key).value;
     var val = parseFloat(document.getElementById('mcVal_' + key).value);
@@ -5195,6 +5201,11 @@ async function loadSessionMetricsIntoTable() {
     var sid = parseInt(td.dataset.sid, 10);
     var m   = metrics[sid];
     td.textContent = m ? m.skip_coverage.toFixed(1) + '%' : '-';
+  });
+  document.querySelectorAll('.metric-skip-rate[data-sid]').forEach(function(td) {
+    var sid = parseInt(td.dataset.sid, 10);
+    var m   = metrics[sid];
+    td.textContent = m ? m.skip_rate.toFixed(2) : '-';
   });
   document.querySelectorAll('.metric-duration-ratio[data-sid]').forEach(function(td) {
     var sid = parseInt(td.dataset.sid, 10);
