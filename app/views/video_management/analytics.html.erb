@@ -552,14 +552,24 @@
                     <div class="d-flex gap-2 flex-wrap">
                       <button class="btn btn-sm btn-outline-primary" id="refreshUcChartBtn" onclick="refreshUcChart()">↺ グラフを更新</button>
                       <button class="btn btn-sm btn-warning" onclick="resetUserClassification()">ビジュアル分類をリセット</button>
-                      <div class="dropdown">
-                        <%= link_to "📥 CSV出力", "#", class: "btn btn-sm btn-outline-success dropdown-toggle", "data-bs-toggle": "dropdown" %>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                          <li><span class="dropdown-header small">メールアドレス順</span></li>
-                          <li><%= link_to "↑ 昇順 (A→Z)", video_management_export_classification_path(video_id: @video, email_order: "asc", format: :csv), class: "dropdown-item", data: { turbo: false } %></li>
-                          <li><%= link_to "↓ 降順 (Z→A)", video_management_export_classification_path(video_id: @video, email_order: "desc", format: :csv), class: "dropdown-item", data: { turbo: false } %></li>
-                        </ul>
-                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 分類結果CSVエクスポート -->
+                  <div class="mb-3 p-3 border rounded d-flex align-items-center justify-content-between flex-wrap gap-3" style="background:#f0fff4; border-color:#6fcf97 !important;">
+                    <div>
+                      <span class="fw-semibold">📥 分類結果 CSV エクスポート</span>
+                      <span class="text-muted small ms-2">ユーザー名・グループ・開始/終了時刻・学習時間・問題回答結果</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                      <%= link_to video_management_export_classification_path(video_id: @video, email_order: "asc", format: :csv),
+                            class: "btn btn-success", data: { turbo: false } do %>
+                        ↑ メール昇順 (A→Z)
+                      <% end %>
+                      <%= link_to video_management_export_classification_path(video_id: @video, email_order: "desc", format: :csv),
+                            class: "btn btn-success", data: { turbo: false } do %>
+                        ↓ メール降順 (Z→A)
+                      <% end %>
                     </div>
                   </div>
 
