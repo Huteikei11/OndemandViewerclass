@@ -5036,6 +5036,8 @@ function matchesConditions(metrics, conditions) {
   });
 }
 
+var _previewGen = 0; // 並行実行を防ぐ世代カウンタ
+
 async function previewManualClassification() {
   var conditions = getManualConditions();
   var countEl = document.getElementById('mc-preview-count');
@@ -5043,7 +5045,11 @@ async function previewManualClassification() {
     if (countEl) countEl.textContent = '条件を1つ以上設定してください。';
     return;
   }
+
+  var myGen = ++_previewGen; // この呼び出しの世代番号を記録
+
   var metrics = await fetchSessionMetrics();
+  if (myGen !== _previewGen) return; // 後から呼ばれた実行があれば中止
   if (!metrics || !chartInstances.userClassification) return;
 
   var matched = 0, total = 0;
@@ -5052,20 +5058,22 @@ async function previewManualClassification() {
     total++;
     if (m && matchesConditions(m, conditions)) {
       matched++;
-      ds.hidden = false;
-      ds._mc_highlight = true;
+      ds.hidden           = false;
+      ds._mc_highlight    = true;
       ds.borderColor          = '#22D3EE';
-      ds.borderWidth          = 3;
+      ds.borderWidth          = 2;
       ds.pointBackgroundColor = '#22D3EE';
-      ds.pointBorderColor     = '#ffffff';
-      ds.pointBorderWidth     = 1.5;
+      ds.pointBorderColor     = '#22D3EE'; // 白ハロなし
+      ds.pointBorderWidth     = 1;
       ds.pointRadius          = 5;
     } else {
-      ds.hidden = false;
-      ds._mc_highlight = false;
+      ds.hidden           = false;
+      ds._mc_highlight    = false;
       ds.borderColor          = 'rgba(150,150,150,0.12)';
+      ds.borderWidth          = 1;               // ← 明示的リセット
       ds.pointBackgroundColor = 'rgba(150,150,150,0.12)';
       ds.pointBorderColor     = 'rgba(150,150,150,0.12)';
+      ds.pointBorderWidth     = 1;               // ← 明示的リセット
       ds.pointRadius          = 2;
     }
   });
@@ -5075,6 +5083,7 @@ async function previewManualClassification() {
 
 function clearManualPreview() {
   if (!chartInstances.userClassification) return;
+  _previewGen++; // 進行中のプレビュー非同期処理をキャンセル
   // 現在のモードに応じて色をリセット
   chartInstances.userClassification.data.datasets.forEach(function(ds) {
     ds.hidden = false;
