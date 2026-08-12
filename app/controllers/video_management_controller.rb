@@ -1950,11 +1950,12 @@ class VideoManagementController < ApplicationController
         session_id:    session.id,
         current_group: session.session_group,
         raw: {
-          effective_speed: (video_time / elapsed).round(3),
-          skip_coverage:   [ (skip_amount / video_length), 1.0 ].min.round(3),
-          duration_ratio:  (elapsed / video_length).round(3),
-          skip_rate:       (skip_count / [ elapsed / 60.0, 0.1 ].max).round(3),
-          playing_speed:   playing_speed
+          effective_speed:        (video_time / elapsed).round(3),
+          skip_coverage:          [ (skip_amount / video_length), 1.0 ].min.round(3),
+          duration_ratio:         (elapsed / video_length).round(3),
+          skip_rate:              (skip_count / [ elapsed / 60.0, 0.1 ].max).round(3),
+          playing_speed:          playing_speed,
+          session_elapsed_min:    (elapsed / 60.0).round(2)
         }
       }
     end

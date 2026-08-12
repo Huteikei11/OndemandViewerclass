@@ -808,9 +808,10 @@
                         <% [
                           ['effective_speed', '有効速度 (×)',   '1.3',  '0.01'],
                           ['playing_speed',   '再生速度 (×)',   '1.3',  '0.01'],
-                          ['skip_coverage',   'スキップカバレッジ (%)', '12',   '1'   ],
-                          ['skip_rate',       'スキップ率 (回/分)',     '2',    '0.1' ],
-                          ['duration_ratio',  '期間比',                 '0.15', '0.01']
+                          ['skip_coverage',        'スキップカバレッジ (%)', '12',   '1'   ],
+                          ['skip_rate',            'スキップ率 (回/分)',     '2',    '0.1' ],
+                          ['duration_ratio',       '期間比',                 '0.15', '0.01'],
+                          ['session_elapsed_min',  'セッション時間 (分)',    '30',   '0.5' ]
                         ].each do |key, label, default_val, step| %>
                           <tr>
                             <td class="align-middle small fw-semibold" style="width:160px;"><%= label %></td>
@@ -5034,11 +5035,12 @@ async function fetchSessionMetrics() {
     data.session_metrics.forEach(function(m) {
       // skip_coverage は % 表示用に100倍して保存。skip_rate は回/分のまま
       sessionMetricsCache[m.session_id] = {
-        effective_speed: m.effective_speed,
-        playing_speed:   m.playing_speed,
-        skip_coverage:   +(m.skip_coverage * 100).toFixed(2),
-        skip_rate:       +(m.skip_rate || 0),
-        duration_ratio:  m.duration_ratio
+        effective_speed:     m.effective_speed,
+        playing_speed:       m.playing_speed,
+        skip_coverage:       +(m.skip_coverage * 100).toFixed(2),
+        skip_rate:           +(m.skip_rate || 0),
+        duration_ratio:      m.duration_ratio,
+        session_elapsed_min: +(m.session_elapsed_min || 0)
       };
     });
     if (msg) msg.textContent = '';
@@ -5050,7 +5052,7 @@ async function fetchSessionMetrics() {
 }
 
 function getManualConditions() {
-  var metrics = ['effective_speed', 'playing_speed', 'skip_coverage', 'skip_rate', 'duration_ratio'];
+  var metrics = ['effective_speed', 'playing_speed', 'skip_coverage', 'skip_rate', 'duration_ratio', 'session_elapsed_min'];
   return metrics.map(function(key) {
     var op  = document.getElementById('mcOp_'  + key).value;
     var val = parseFloat(document.getElementById('mcVal_' + key).value);
@@ -5266,7 +5268,8 @@ async function showMetricStats() {
     { key: 'playing_speed',   label: '再生速度',           fmt: function(v) { return v.toFixed(2) + 'x'; } },
     { key: 'skip_coverage',   label: 'スキップカバレッジ', fmt: function(v) { return v.toFixed(1) + '%'; } },
     { key: 'skip_rate',       label: 'スキップ率',         fmt: function(v) { return v.toFixed(2) + '回/分'; } },
-    { key: 'duration_ratio',  label: '期間比',             fmt: function(v) { return v.toFixed(2); } }
+    { key: 'duration_ratio',      label: '期間比',             fmt: function(v) { return v.toFixed(2); } },
+    { key: 'session_elapsed_min', label: 'セッション時間',     fmt: function(v) { return v.toFixed(1) + '分'; } }
   ];
 
   defs.forEach(function(d) {
