@@ -1499,6 +1499,7 @@
         <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
           <h3 class="mb-0">学習セッション履歴</h3>
           <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button type="button" class="btn btn-sm btn-outline-info" id="loadMetricsBtn" onclick="loadSessionMetricsIntoTable()">📊 指標を表示</button>
             <button type="button" id="bulkDeleteBtn"
                     class="btn btn-sm btn-danger d-none"
                     onclick="bulkDeleteSessions()">
@@ -1537,6 +1538,10 @@
                     <th title="前進スキップ回数">⏩</th>
                     <th title="後退スキップ回数">⏪</th>
                     <th title="再生速度変更回数">⚡</th>
+                    <th class="metric-col" title="有効速度 = 動画再生時間 ÷ セッション経過時間" style="display:none; white-space:nowrap;">有効速度</th>
+                    <th class="metric-col" title="再生速度（一時停止除く）" style="display:none; white-space:nowrap;">再生速度</th>
+                    <th class="metric-col" title="スキップ率 = スキップ量 ÷ 動画長 × 100" style="display:none; white-space:nowrap;">スキップ率</th>
+                    <th class="metric-col" title="期間比 = セッション時間 ÷ 動画長" style="display:none; white-space:nowrap;">期間比</th>
                     <th>グループ</th>
                     <th>エクスポート</th>
                     <th>詳細</th>
@@ -1580,6 +1585,10 @@
                       <td class="text-center"><%= operation_stats[:forward_seek_count] %></td>
                       <td class="text-center"><%= operation_stats[:backward_seek_count] %></td>
                       <td class="text-center"><%= operation_stats[:playback_rate_change_count] %></td>
+                      <td class="metric-col metric-effective-speed text-end" data-sid="<%= session.id %>" style="display:none; font-size:0.82rem;">-</td>
+                      <td class="metric-col metric-playing-speed   text-end" data-sid="<%= session.id %>" style="display:none; font-size:0.82rem;">-</td>
+                      <td class="metric-col metric-skip-coverage   text-end" data-sid="<%= session.id %>" style="display:none; font-size:0.82rem;">-</td>
+                      <td class="metric-col metric-duration-ratio  text-end" data-sid="<%= session.id %>" style="display:none; font-size:0.82rem;">-</td>
                       <td style="min-width: 160px;">
                         <div class="d-flex align-items-center gap-1">
                           <select class="form-select form-select-sm session-group-select"
@@ -5118,6 +5127,47 @@ async function saveManualClassification() {
     }
   })
   .catch(function() { if (msg) msg.textContent = '通信エラー。'; });
+}
+
+async function loadSessionMetricsIntoTable() {
+  var btn = document.getElementById('loadMetricsBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '取得中…'; }
+
+  var metrics = await fetchSessionMetrics();
+
+  if (!metrics) {
+    if (btn) { btn.disabled = false; btn.textContent = '📊 指標を表示'; }
+    return;
+  }
+
+  // ヘッダー＋各セルを表示
+  document.querySelectorAll('.metric-col').forEach(function(el) {
+    el.style.display = '';
+  });
+
+  // 各行のセルに値を埋める
+  document.querySelectorAll('.metric-effective-speed[data-sid]').forEach(function(td) {
+    var sid = parseInt(td.dataset.sid, 10);
+    var m   = metrics[sid];
+    td.textContent = m ? m.effective_speed.toFixed(2) : '-';
+  });
+  document.querySelectorAll('.metric-playing-speed[data-sid]').forEach(function(td) {
+    var sid = parseInt(td.dataset.sid, 10);
+    var m   = metrics[sid];
+    td.textContent = m ? m.playing_speed.toFixed(2) : '-';
+  });
+  document.querySelectorAll('.metric-skip-coverage[data-sid]').forEach(function(td) {
+    var sid = parseInt(td.dataset.sid, 10);
+    var m   = metrics[sid];
+    td.textContent = m ? m.skip_coverage.toFixed(1) + '%' : '-';
+  });
+  document.querySelectorAll('.metric-duration-ratio[data-sid]').forEach(function(td) {
+    var sid = parseInt(td.dataset.sid, 10);
+    var m   = metrics[sid];
+    td.textContent = m ? m.duration_ratio.toFixed(2) : '-';
+  });
+
+  if (btn) { btn.disabled = false; btn.textContent = '📊 指標を再取得'; }
 }
 
 function refreshUcChart() {
