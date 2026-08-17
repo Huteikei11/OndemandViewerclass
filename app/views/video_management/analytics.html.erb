@@ -282,6 +282,9 @@
                               class="btn-close ms-2" style="font-size:0.65rem; flex-shrink:0;"></button>
                     </div>
                     <div id="stPopupInfo" class="text-muted mb-2" style="font-size:0.76rem;"></div>
+                    <button id="stPopupTimelineBtn" type="button" class="btn btn-primary btn-sm w-100 mb-1">
+                      📊 詳細タイムライン表示
+                    </button>
                     <a id="stPopupEditLink" href="#" class="btn btn-warning btn-sm w-100 mb-1">
                       ✏️ イベント編集画面へ
                     </a>
@@ -892,6 +895,25 @@
                   <!-- グラフ領域 -->
                   <div class="chart-container" style="position: relative; height: 800px; border: 2px dashed #ccc; padding: 10px; border-radius: 5px;">
                     <canvas id="userClassificationChart"></canvas>
+                    <div id="ucPopup" style="display:none; position:absolute; z-index:200;
+                         background:#fff; border:1px solid #dee2e6; border-radius:8px;
+                         padding:10px 12px; box-shadow:0 4px 16px rgba(0,0,0,0.15); min-width:220px;">
+                      <div class="d-flex justify-content-between align-items-start mb-1">
+                        <strong id="ucPopupLabel" style="font-size:0.82rem; word-break:break-all;"></strong>
+                        <button type="button" onclick="document.getElementById('ucPopup').style.display='none'"
+                                class="btn-close ms-2" style="font-size:0.65rem; flex-shrink:0;"></button>
+                      </div>
+                      <div id="ucPopupInfo" class="text-muted mb-2" style="font-size:0.76rem;"></div>
+                      <button id="ucPopupTimelineBtn" type="button" class="btn btn-primary btn-sm w-100 mb-1">
+                        📊 詳細タイムライン表示
+                      </button>
+                      <a id="ucPopupEditLink" href="#" class="btn btn-warning btn-sm w-100 mb-1">
+                        ✏️ イベント編集画面へ
+                      </a>
+                      <button id="ucPopupDeleteBtn" type="button" class="btn btn-outline-danger btn-sm w-100">
+                        🗑️ このセッションを削除
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -3669,6 +3691,7 @@ function initializeAnalyticsCharts() {
             sessionInfo && sessionInfo.user_email
               ? sessionInfo.user_email + ' (ID: ' + sessionId + ')'
               : 'セッションID: ' + sessionId;
+          document.getElementById('stPopupTimelineBtn').dataset.sessionId = sessionId;
           document.getElementById('stPopupEditLink').href =
             '/videos/' + videoIdGlobal + '/management/session/' + sessionId + '/events';
           document.getElementById('stPopupDeleteBtn').dataset.sessionId = sessionId;
@@ -3686,6 +3709,14 @@ function initializeAnalyticsCharts() {
           popup.style.left    = x + 'px';
           popup.style.top     = y + 'px';
           popup.style.display = 'block';
+        });
+
+        // 詳細タイムラインボタン
+        document.getElementById('stPopupTimelineBtn').addEventListener('click', function() {
+          var sid = parseInt(this.dataset.sessionId, 10);
+          if (!sid) return;
+          popup.style.display = 'none';
+          showSessionDetail(sid);
         });
 
         // セッション削除ボタン
@@ -4469,6 +4500,88 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
     if (kInput && data.clusters.length) kInput.value = data.clusters.length;
     // チャートへの自動プレビューは行わない（DBグループ色を上書きしないよう）
     console.log('[K-means] localStorage から結果を復元しました（クラスタ数:', data.clusters.length, '）');
+  })();
+
+  // クリックポップアップ
+  (function() {
+    var popup    = document.getElementById('ucPopup');
+    var ucCanvas = document.getElementById('userClassificationChart');
+    if (!popup || !ucCanvas) return;
+
+    var lastClickTime = 0;
+
+    ucCanvas.addEventListener('click', function(event) {
+      var now = Date.now();
+      if (now - lastClickTime < 300) { lastClickTime = 0; return; }
+      lastClickTime = now;
+
+      var chart = chartInstances.userClassification;
+      if (!chart) return;
+
+      var elements = chart.getElementsAtEventForMode(event, 'nearest', { intersect: false }, true);
+      if (!elements.length) { popup.style.display = 'none'; return; }
+
+      var ds = chart.data.datasets[elements[0].datasetIndex];
+      if (!ds || !ds.sessionId) return;
+
+      var sessionId = ds.sessionId;
+      var sessionInfo = (window.scoreTimelineData || []).find(function(s) {
+        return s.session_id === sessionId;
+      });
+
+      document.getElementById('ucPopupLabel').textContent = ds.label || ('セッション ' + sessionId);
+      document.getElementById('ucPopupInfo').textContent  =
+        sessionInfo && sessionInfo.user_email
+          ? sessionInfo.user_email + ' (ID: ' + sessionId + ')'
+          : 'セッションID: ' + sessionId;
+      document.getElementById('ucPopupTimelineBtn').dataset.sessionId = sessionId;
+      document.getElementById('ucPopupEditLink').href =
+        '/videos/' + videoIdGlobal + '/management/session/' + sessionId + '/events';
+      document.getElementById('ucPopupDeleteBtn').dataset.sessionId = sessionId;
+
+      var container    = ucCanvas.parentElement;
+      var containerRect = container.getBoundingClientRect();
+      var x = event.clientX - containerRect.left + 12;
+      var y = event.clientY - containerRect.top  + 12;
+      if (x + 244 > container.offsetWidth)  x = container.offsetWidth  - 248;
+      if (y + 160 > container.offsetHeight) y = event.clientY - containerRect.top - 165;
+
+      popup.style.left    = x + 'px';
+      popup.style.top     = y + 'px';
+      popup.style.display = 'block';
+    });
+
+    document.getElementById('ucPopupTimelineBtn').addEventListener('click', function() {
+      var sid = parseInt(this.dataset.sessionId, 10);
+      if (!sid) return;
+      popup.style.display = 'none';
+      showSessionDetail(sid);
+    });
+
+    document.getElementById('ucPopupDeleteBtn').addEventListener('click', function() {
+      var sid = this.dataset.sessionId;
+      if (!sid) return;
+      if (!confirm('セッション ID:' + sid + ' を削除してもよろしいですか？\nこの操作は取り消せません。')) return;
+      var csrf = document.querySelector('meta[name="csrf-token"]');
+      fetch('/videos/' + videoIdGlobal + '/management/session/' + sid, {
+        method: 'DELETE',
+        headers: { 'X-CSRF-Token': csrf ? csrf.content : '', 'Accept': 'application/json' }
+      }).then(function(res) {
+        return res.json().then(function(body) {
+          if (res.ok && body.success) {
+            window.location.href = '<%= video_management_analytics_path(video_id: @video) %>';
+          } else {
+            alert('削除に失敗しました: ' + (body.error || res.status));
+          }
+        });
+      }).catch(function() { alert('削除リクエストの送信に失敗しました。'); });
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!popup.contains(e.target) && e.target !== ucCanvas) {
+        popup.style.display = 'none';
+      }
+    }, { capture: true });
   })();
 }
 
