@@ -4467,11 +4467,7 @@ function initializeUserClassificationChartInternal(ctx, scoreTimelineData, respo
     document.getElementById('kmeans-result').style.display = 'block';
     var kInput = document.getElementById('kmeansK');
     if (kInput && data.clusters.length) kInput.value = data.clusters.length;
-    try {
-      previewKmeansClusters();
-    } catch(e) {
-      console.warn('[K-means] プレビュー失敗:', e);
-    }
+    // チャートへの自動プレビューは行わない（DBグループ色を上書きしないよう）
     console.log('[K-means] localStorage から結果を復元しました（クラスタ数:', data.clusters.length, '）');
   })();
 }
@@ -5193,16 +5189,31 @@ async function saveManualClassification() {
       Object.assign(window.sessionGroupData, assignments);
       // DB グループ色を再適用
       loadInitialDbGroups();
-      if (msg) msg.textContent = Object.keys(assignments).length + '件を「' + (SESSION_GROUP_LABELS_JS[group] || group) + '」に保存しました。';
+      // 学習セッション履歴テーブルのグループセレクトも即時反映
+      Object.entries(assignments).forEach(function([sid, g]) {
+        var sel = document.querySelector('.session-group-select[data-session-id="' + sid + '"]');
+        if (sel) sel.value = g || '';
+      });
+      var savedCount = Object.keys(assignments).length;
+      if (msg) {
+        msg.textContent = '✓ ' + savedCount + '件を「' + (SESSION_GROUP_LABELS_JS[group] || group) + '」に保存しました。';
+        msg.className = 'small ms-1 fw-semibold text-success';
+        setTimeout(function() { msg.textContent = ''; msg.className = 'small text-muted ms-1'; }, 4000);
+      }
       var countEl = document.getElementById('mc-preview-count');
       if (countEl) countEl.textContent = '';
       updateDbClassificationStats();
       updateDbFullStats();
     } else {
-      if (msg) msg.textContent = '保存失敗: ' + (data.error || '不明');
+      if (msg) {
+        msg.textContent = '保存失敗: ' + (data.error || '不明');
+        msg.className = 'small ms-1 text-danger';
+      }
     }
   })
-  .catch(function() { if (msg) msg.textContent = '通信エラー。'; });
+  .catch(function() {
+    if (msg) { msg.textContent = '通信エラー。'; msg.className = 'small ms-1 text-danger'; }
+  });
 }
 
 async function loadSessionMetricsIntoTable() {
@@ -5402,6 +5413,11 @@ async function resetAllDbGroups() {
       });
       chartInstances.userClassification.update('none');
     }
+
+    // 学習セッション履歴テーブルのグループセレクトをすべて未分類に戻す
+    document.querySelectorAll('.session-group-select').forEach(function(sel) {
+      sel.value = '';
+    });
 
     updateDbClassificationStats();
     updateDbFullStats();
