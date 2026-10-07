@@ -1820,7 +1820,12 @@ class VideoManagementController < ApplicationController
 
   def session_events_page
     @session   = @video.learning_sessions.includes(:user).find(params[:session_id])
-    @events    = @session.timestamp_events.order(:session_elapsed)
+    allowed_cols = %w[session_elapsed video_time timestamp]
+    sort_col  = allowed_cols.include?(params[:sort]) ? params[:sort] : "session_elapsed"
+    sort_dir  = params[:dir] == "desc" ? :desc : :asc
+    @sort_col = sort_col
+    @sort_dir = sort_dir
+    @events    = @session.timestamp_events.order(sort_col => sort_dir)
     @responses = @session.associated_user_responses.includes(:question).order(:created_at)
   end
 

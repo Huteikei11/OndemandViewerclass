@@ -71,15 +71,23 @@
 
       <div class="table-responsive">
         <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
+          <% sort_lnk = ->(col, label) {
+               active   = col == @sort_col
+               next_dir = (active && @sort_dir == :asc) ? "desc" : "asc"
+               arrow    = active ? (@sort_dir == :asc ? " ▲" : " ▼") : ""
+               url      = video_management_session_events_path(video_id: @video, session_id: @session, sort: col, dir: next_dir)
+               css      = "text-decoration-none " + (active ? "fw-bold text-dark" : "text-muted")
+               link_to(label + arrow, url, class: css)
+             } %>
           <thead class="table-light">
             <tr>
               <th style="width:2.5rem;"></th>
-              <th style="width:5rem;">経過(s)</th>
-              <th style="width:5rem;">動画時刻(s)</th>
+              <th style="width:5rem;"><%= sort_lnk.call("session_elapsed", "経過(s)") %></th>
+              <th style="width:5rem;"><%= sort_lnk.call("video_time", "動画時刻(s)") %></th>
               <th style="width:12rem;">イベント種別</th>
               <th>説明</th>
               <th style="width:5rem;">スコア</th>
-              <th style="width:10rem;">記録日時</th>
+              <th style="width:10rem;"><%= sort_lnk.call("timestamp", "記録日時") %></th>
             </tr>
           </thead>
           <tbody>
