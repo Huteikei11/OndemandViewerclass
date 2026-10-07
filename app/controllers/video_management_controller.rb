@@ -1850,30 +1850,31 @@ class VideoManagementController < ApplicationController
   end
 
   def shift_elapsed
-    @session    = @video.learning_sessions.find(params[:session_id])
-    event_ids   = Array(params[:event_ids]).map(&:to_i).select(&:positive?)
-    shift       = params[:shift_amount].to_f
+    @session  = @video.learning_sessions.find(params[:session_id])
+    event_ids = Array(params[:event_ids]).map(&:to_i).select(&:positive?)
+    shift     = params[:shift_amount].to_f
 
     if event_ids.blank?
       redirect_to video_management_session_events_path(video_id: @video, session_id: @session),
         alert: "シフトするイベントを選択してください。"
       return
     end
-    if shift.zero?
+    if shift.zero? || !shift.finite?
       redirect_to video_management_session_events_path(video_id: @video, session_id: @session),
-        alert: "シフト量（0以外）を入力してください。"
+        alert: "シフト量（0以外の数値）を入力してください。"
       return
     end
 
-    events = @session.timestamp_events.where(id: event_ids)
-    # Undo 用にシフト前の値を保存（セッションに1段階分）
+    count = @session.timestamp_events.where(id: event_ids)
+                    .update_all("session_elapsed = COALESCE(session_elapsed, 0) + #{shift.round(3)}")
+
+    # Undo 用: イベントIDとシフト量だけ保存（Cookie サイズを抑える）
     session[:undo_shift] = {
       "video_id"   => @video.id,
       "session_id" => @session.id,
-      "data"       => events.pluck(:id, :session_elapsed).to_h.transform_keys(&:to_s)
+      "event_ids"  => event_ids,
+      "shift"      => shift.round(3)
     }
-
-    count = events.update_all("session_elapsed = session_elapsed + #{shift.round(3)}")
 
     sign = shift.positive? ? "+" : ""
     redirect_to video_management_session_events_path(video_id: @video, session_id: @session),
@@ -1892,14 +1893,14 @@ class VideoManagementController < ApplicationController
       return
     end
 
-    undo["data"].each do |event_id, old_elapsed|
-      @session.timestamp_events.where(id: event_id.to_i)
-              .update_all(session_elapsed: old_elapsed)
-    end
+    reverse = -undo["shift"].to_f
+    count = @session.timestamp_events.where(id: undo["event_ids"])
+                    .update_all("session_elapsed = COALESCE(session_elapsed, 0) + #{reverse.round(3)}")
 
     session[:undo_shift] = nil
+    sign = reverse.positive? ? "+" : ""
     redirect_to video_management_session_events_path(video_id: @video, session_id: @session),
-      notice: "#{undo["data"].size}件の経過時間を元に戻しました。"
+      notice: "#{count}件の経過時間を #{sign}#{reverse.round(3)}秒 シフトして元に戻しました。"
   end
 
   private
