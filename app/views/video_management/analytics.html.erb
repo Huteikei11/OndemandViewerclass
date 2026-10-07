@@ -253,6 +253,21 @@
                     </div>
                   </div>
 
+                  <!-- DB分類フィルター -->
+                  <div class="mt-3 mb-3 p-3 border rounded bg-light">
+                    <div class="fw-semibold small mb-2">DB分類で絞り込み</div>
+                    <div class="d-flex flex-wrap gap-1">
+                      <button class="btn btn-sm btn-secondary st-db-filter-btn active" id="stDfAll" onclick="filterScoreTimelineByDbGroup(null)">すべて表示</button>
+                      <button class="btn btn-sm btn-outline-primary st-db-filter-btn" id="stDf_normal" onclick="filterScoreTimelineByDbGroup('normal')">等倍</button>
+                      <button class="btn btn-sm btn-outline-success st-db-filter-btn" id="stDf_fast_speed" onclick="filterScoreTimelineByDbGroup('fast_speed')">倍速</button>
+                      <button class="btn btn-sm btn-outline-warning st-db-filter-btn" id="stDf_skip_heavy" onclick="filterScoreTimelineByDbGroup('skip_heavy')">飛ばしが多い</button>
+                      <button class="btn btn-sm st-db-filter-btn" id="stDf_fast_and_skip" style="border:1px solid #F97316;color:#F97316;" onclick="filterScoreTimelineByDbGroup('fast_and_skip')">倍速と飛ばしの混在</button>
+                      <button class="btn btn-sm btn-outline-danger st-db-filter-btn" id="stDf_too_short" onclick="filterScoreTimelineByDbGroup('too_short')">異様に視聴が短い</button>
+                      <button class="btn btn-sm st-db-filter-btn" id="stDf_too_long" style="border:1px solid #8B5CF6;color:#8B5CF6;" onclick="filterScoreTimelineByDbGroup('too_long')">視聴が超長い</button>
+                      <button class="btn btn-sm btn-outline-secondary st-db-filter-btn" id="stDfNull" onclick="filterScoreTimelineByDbGroup('__unclassified__')">未分類</button>
+                    </div>
+                  </div>
+
                   <!-- 横軸（経過時間）の最大値スライダー -->
                   <div class="mt-3 mb-3 p-3 border rounded bg-light">
                     <div class="fw-semibold small mb-2">横軸の最大表示時間</div>
@@ -5113,6 +5128,53 @@ function filterUcByGroup(group) {
     }
   });
   chartInstances.userClassification.update('none');
+}
+
+function filterScoreTimelineByDbGroup(group) {
+  var chart = chartInstances.scoreTimeline;
+  if (!chart) return;
+
+  // ボタンのアクティブ状態を更新
+  document.querySelectorAll('.st-db-filter-btn').forEach(function(btn) {
+    btn.classList.remove('active');
+    btn.style.fontWeight = '';
+  });
+  var activeId = group === null ? 'stDfAll'
+    : group === '__unclassified__' ? 'stDfNull'
+    : 'stDf_' + group;
+  var activeBtn = document.getElementById(activeId);
+  if (activeBtn) { activeBtn.classList.add('active'); activeBtn.style.fontWeight = 'bold'; }
+
+  // 各データセットの表示/非表示を切り替え
+  chart.data.datasets.forEach(function(ds, index) {
+    var meta = chart.getDatasetMeta(index);
+    var sid  = ds.sessionId;
+    if (group === null) {
+      meta.hidden = false;
+    } else {
+      var g = (sid != null) ? window.sessionGroupData[sid] : undefined;
+      if (group === '__unclassified__') {
+        meta.hidden = (g != null && g !== '' && g !== undefined);
+      } else {
+        meta.hidden = (g !== group);
+      }
+    }
+  });
+  chart.update('none');
+
+  // 個別チェックボックスの状態を同期（id 属性: "scoreTimeline_session_<id>"）
+  var togglesEl = document.getElementById('scoreTimelineSessionToggles');
+  if (togglesEl) {
+    togglesEl.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+      var m = cb.id.match(/_session_(\d+)$/);
+      if (!m) return;
+      var sid = parseInt(m[1], 10);
+      var found = chart.data.datasets.find(function(d) { return d.sessionId === sid; });
+      if (!found) return;
+      var idx = chart.data.datasets.indexOf(found);
+      cb.checked = !chart.getDatasetMeta(idx).hidden;
+    });
+  }
 }
 
 function filterUcByDbGroup(group) {
