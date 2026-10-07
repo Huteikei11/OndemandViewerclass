@@ -76,8 +76,9 @@
           <input type="number" id="shift-amount" step="0.1" placeholder="例: 5 または -3"
                  class="form-control form-control-sm" style="width:10rem;">
           <span class="small text-muted">秒シフト</span>
-          <button type="button" class="btn btn-outline-primary btn-sm" id="shift-btn"
+          <button type="button" class="btn btn-outline-primary btn-sm"
                   onclick="submitShift()">適用</button>
+          <span id="undo-btn-placeholder"></span>
         </div>
       </div>
 
@@ -122,6 +123,14 @@
         </table>
       </div>
     </div>
+  <% end %>
+
+  <% if @can_undo %>
+    <%= form_with url: video_management_undo_shift_path(video_id: @video, session_id: @session),
+                  method: :post,
+                  id: "undo-shift-form",
+                  style: "display:none;" do %>
+    <% end %>
   <% end %>
 </div>
 
@@ -431,6 +440,20 @@
       lastClickedIdx = i;
     });
   });
+})();
+
+// Undo ボタンを placeholder に差し込む（ネスト form 回避）
+(function() {
+  var undoForm = document.getElementById('undo-shift-form');
+  var placeholder = document.getElementById('undo-btn-placeholder');
+  if (undoForm && placeholder) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-outline-secondary btn-sm';
+    btn.textContent = '↩ 元に戻す';
+    btn.addEventListener('click', function() { undoForm.submit(); });
+    placeholder.appendChild(btn);
+  }
 })();
 
 // 経過時間シフト

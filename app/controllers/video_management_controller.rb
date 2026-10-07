@@ -1823,10 +1823,14 @@ class VideoManagementController < ApplicationController
     allowed_cols = %w[session_elapsed video_time timestamp]
     sort_col  = allowed_cols.include?(params[:sort]) ? params[:sort] : "session_elapsed"
     sort_dir  = params[:dir] == "desc" ? :desc : :asc
-    @sort_col = sort_col
-    @sort_dir = sort_dir
+    @sort_col  = sort_col
+    @sort_dir  = sort_dir
     @events    = @session.timestamp_events.order(sort_col => sort_dir)
     @responses = @session.associated_user_responses.includes(:question).order(:created_at)
+    undo = session[:undo_shift]
+    @can_undo  = undo.present? &&
+                 undo["video_id"].to_i   == @video.id &&
+                 undo["session_id"].to_i == @session.id
   end
 
   def destroy_events
@@ -1861,12 +1865,41 @@ class VideoManagementController < ApplicationController
       return
     end
 
-    count = @session.timestamp_events.where(id: event_ids)
-                    .update_all("session_elapsed = session_elapsed + #{shift.round(3)}")
+    events = @session.timestamp_events.where(id: event_ids)
+    # Undo 用にシフト前の値を保存（セッションに1段階分）
+    session[:undo_shift] = {
+      "video_id"   => @video.id,
+      "session_id" => @session.id,
+      "data"       => events.pluck(:id, :session_elapsed).to_h.transform_keys(&:to_s)
+    }
+
+    count = events.update_all("session_elapsed = session_elapsed + #{shift.round(3)}")
 
     sign = shift.positive? ? "+" : ""
     redirect_to video_management_session_events_path(video_id: @video, session_id: @session),
       notice: "#{count}件の経過時間を #{sign}#{shift.round(3)}秒 シフトしました。"
+  end
+
+  def undo_shift
+    @session = @video.learning_sessions.find(params[:session_id])
+    undo = session[:undo_shift]
+
+    unless undo &&
+           undo["video_id"].to_i   == @video.id &&
+           undo["session_id"].to_i == @session.id
+      redirect_to video_management_session_events_path(video_id: @video, session_id: @session),
+        alert: "元に戻すデータがありません。"
+      return
+    end
+
+    undo["data"].each do |event_id, old_elapsed|
+      @session.timestamp_events.where(id: event_id.to_i)
+              .update_all(session_elapsed: old_elapsed)
+    end
+
+    session[:undo_shift] = nil
+    redirect_to video_management_session_events_path(video_id: @video, session_id: @session),
+      notice: "#{undo["data"].size}件の経過時間を元に戻しました。"
   end
 
   private

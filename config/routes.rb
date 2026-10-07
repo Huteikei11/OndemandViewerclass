@@ -60,6 +60,7 @@ Rails.application.routes.draw do
     get "management/session/:session_id/events", to: "video_management#session_events_page", as: "management_session_events"
     delete "management/session/:session_id/events", to: "video_management#destroy_events", as: "management_destroy_events"
     patch  "management/session/:session_id/events/shift_elapsed", to: "video_management#shift_elapsed", as: "management_shift_elapsed"
+    post   "management/session/:session_id/events/undo_shift",    to: "video_management#undo_shift",    as: "management_undo_shift"
     patch  "management/session/:session_id/group",  to: "video_management#update_session_group", as: "management_update_session_group"
     get  "management/cluster_sessions",    to: "video_management#cluster_sessions",    as: "management_cluster_sessions"
     get  "management/session_metrics",     to: "video_management#session_metrics",     as: "management_session_metrics"
