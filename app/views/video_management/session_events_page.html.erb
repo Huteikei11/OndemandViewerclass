@@ -55,18 +55,30 @@
                 method: :delete,
                 id: "events-form" do %>
     <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <div class="d-flex gap-2 flex-wrap align-items-center">
-          <button type="button" class="btn btn-outline-secondary btn-sm" id="select-all">全選択</button>
-          <button type="button" class="btn btn-outline-secondary btn-sm" id="deselect-all">全解除</button>
-          <button type="button" class="btn btn-outline-warning btn-sm" id="range-mode-btn">範囲選択</button>
-          <span id="range-status" class="text-muted small"></span>
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div class="d-flex gap-2 flex-wrap align-items-center">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="select-all">全選択</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="deselect-all">全解除</button>
+            <button type="button" class="btn btn-outline-warning btn-sm" id="range-mode-btn">範囲選択</button>
+            <span id="range-status" class="text-muted small"></span>
+          </div>
+          <button type="submit"
+                  class="btn btn-danger btn-sm"
+                  onclick="return confirm('選択したイベントを削除しますか？この操作は取り消せません。')">
+            選択したイベントを削除
+          </button>
         </div>
-        <button type="submit"
-                class="btn btn-danger btn-sm"
-                onclick="return confirm('選択したイベントを削除しますか？この操作は取り消せません。')">
-          選択したイベントを削除
-        </button>
+
+        <!-- 経過時間シフト -->
+        <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+          <span class="small text-muted">選択イベントの経過時間を</span>
+          <input type="number" id="shift-amount" step="0.1" placeholder="例: 5 または -3"
+                 class="form-control form-control-sm" style="width:10rem;">
+          <span class="small text-muted">秒シフト</span>
+          <button type="button" class="btn btn-outline-primary btn-sm" id="shift-btn"
+                  onclick="submitShift()">適用</button>
+        </div>
       </div>
 
       <div class="table-responsive">
@@ -420,4 +432,37 @@
     });
   });
 })();
+
+// 経過時間シフト
+function submitShift() {
+  var amount = parseFloat(document.getElementById('shift-amount').value);
+  if (isNaN(amount) || amount === 0) {
+    alert('シフト量（0以外の数値）を入力してください。');
+    return;
+  }
+  var ids = Array.from(document.querySelectorAll('.event-checkbox:checked')).map(function(cb) { return cb.value; });
+  if (ids.length === 0) {
+    alert('シフトするイベントを選択してください。');
+    return;
+  }
+  var sign = amount > 0 ? '+' : '';
+  if (!confirm(ids.length + '件の経過時間を ' + sign + amount + '秒 シフトしますか？')) return;
+
+  var form = document.getElementById('shift-form');
+  // 既存の event_ids[] hidden inputs を削除して再生成
+  form.querySelectorAll('input[name="event_ids[]"]').forEach(function(el) { el.remove(); });
+  ids.forEach(function(id) {
+    var inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = 'event_ids[]'; inp.value = id;
+    form.appendChild(inp);
+  });
+  form.querySelector('#shift-amount-input').value = amount;
+  form.submit();
+}
 </script>
+
+<%= form_with url: video_management_shift_elapsed_path(video_id: @video, session_id: @session),
+              method: :patch,
+              id: "shift-form" do %>
+  <input type="hidden" id="shift-amount-input" name="shift_amount" value="">
+<% end %>
